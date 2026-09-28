@@ -49,6 +49,7 @@ export const useAuthStore = defineStore('auth', () => {
             await authApi.logout();
         } finally {
             user.value = null;
+            bootstrapPromise = null;
         }
     }
 

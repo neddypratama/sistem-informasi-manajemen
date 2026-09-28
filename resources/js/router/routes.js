@@ -186,18 +186,6 @@ export const routes = [
                 meta: { permission: 'menu.stok.opname' },
             },
             {
-                path: 'stok/riwayat',
-                name: 'stok.riwayat',
-                component: () => import('../pages/stok/StokRiwayatListPage.vue'),
-                meta: { permission: 'menu.stok.riwayat' },
-            },
-            {
-                path: 'stok/riwayat/:id(\\d+)',
-                name: 'stok.riwayat.show',
-                component: () => import('../pages/stok/StokRiwayatDetailPage.vue'),
-                meta: { permission: 'menu.stok.riwayat' },
-            },
-            {
                 path: 'stok/laporan',
                 name: 'stok.laporan',
                 component: () => import('../pages/stok/StokLaporanPage.vue'),

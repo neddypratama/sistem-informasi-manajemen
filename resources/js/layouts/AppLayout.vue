@@ -123,13 +123,11 @@ const sections = computed(() => [
             { to: '/stok', icon: '📊', label: 'Stok Barang', show: auth.hasPermission('menu.stok.barang') },
             { to: '/stok/fifo', icon: '🧮', label: 'FIFO', show: auth.hasPermission('menu.stok.fifo') },
             { to: '/stok/opname', icon: '📋', label: 'Stok Opname', show: auth.hasPermission('menu.stok.opname') },
-            { to: '/stok/riwayat', icon: '📜', label: 'Riwayat Stok', show: auth.hasPermission('menu.stok.riwayat') },
             { to: '/stok/laporan', icon: '📑', label: 'Laporan Stok', show: auth.hasPermission('menu.stok.laporan') },
         ],
         show: auth.hasPermission('menu.stok.barang')
             || auth.hasPermission('menu.stok.fifo')
             || auth.hasPermission('menu.stok.opname')
-            || auth.hasPermission('menu.stok.riwayat')
             || auth.hasPermission('menu.stok.laporan'),
     },
     {
@@ -282,7 +280,7 @@ function toggleCollapsed() {
 
 async function handleLogout() {
     await auth.logout();
-    router.push('/login');
+    window.location.href = '/login';
 }
 </script>
 
