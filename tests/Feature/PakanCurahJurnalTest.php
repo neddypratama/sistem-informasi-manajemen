@@ -43,7 +43,7 @@ class PakanCurahJurnalTest extends TestCase
         $this->customer = $this->buatClient('Pembeli Curah', 'Pedagang');
     }
 
-    public function test_pembelian_curah_memakai_stok_pakan_curah_dan_hutang_pakan_curah(): void
+    public function test_pembelian_curah_memakai_stok_pakan_curah_dan_saldo_bp_supriyadi(): void
     {
         $this->simpanTransaksi($this->user, 'pembelian', $this->supplier, [
             ['barang_id' => $this->barangCurah->id, 'kuantitas' => 100, 'harga' => 2000],
@@ -52,7 +52,7 @@ class PakanCurahJurnalTest extends TestCase
         $this->assertSame(1, Jurnal::count());
 
         $stok = Akun::system('stok_pakan_curah');
-        $hutang = Akun::system('hutang_pakan_curah');
+        $hutang = Akun::where('nama', 'Saldo Bp.Supriyadi')->first() ?? Akun::system('hutang_pakan_curah');
 
         $this->assertDatabaseHas('jurnal_details', [
             'akun_id' => $stok->id,
@@ -126,7 +126,7 @@ class PakanCurahJurnalTest extends TestCase
             ['barang_id' => $this->barangCurah->id, 'kuantitas' => 20, 'harga' => 2000],
         ]);
 
-        $hutang = Akun::system('hutang_pakan_curah');
+        $hutang = Akun::where('nama', 'Saldo Bp.Supriyadi')->first() ?? Akun::system('hutang_pakan_curah');
         $stok = Akun::system('stok_pakan_curah');
 
         // Dr Hutang Pakan Curah

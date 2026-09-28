@@ -763,7 +763,10 @@ class JurnalService
         $kelompok = $jenisBarang?->kelompok;
 
         if ($this->isPakanCurah($jenisBarang)) {
-            return Akun::system('hutang_pakan_curah') ?? $this->cariAkun('Hutang Pakan Curah');
+            return $this->cariAkun('Saldo Bp.Supriyadi')
+                ?? Akun::system('hutang_pakan_curah')
+                ?? $this->cariAkun('Hutang Pakan Curah')
+                ?? $this->cariAkun('Hutang Supplier');
         }
 
         if ($client !== null && in_array($kelompok, ['pakan', 'obat', 'tray'], true)) {

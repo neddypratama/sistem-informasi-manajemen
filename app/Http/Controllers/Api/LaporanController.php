@@ -191,6 +191,15 @@ class LaporanController extends Controller
         );
     }
 
+    protected function isCurahAkun($akun): bool
+    {
+        $systemCode = is_array($akun) ? ($akun['system_code'] ?? null) : $akun->system_code;
+        $nama = is_array($akun) ? ($akun['nama'] ?? '') : $akun->nama;
+
+        return in_array($systemCode, self::CURAH_SYSTEM_CODES, true)
+            || $nama === 'Saldo Bp.Supriyadi';
+    }
+
     public function neraca(Request $request): JsonResponse
     {
         $tanggal = $request->input('tanggal', now()->toDateString());
@@ -200,7 +209,7 @@ class LaporanController extends Controller
             ->get();
 
         $akuns = $semua
-            ->reject(fn ($akun) => in_array($akun->system_code, self::CURAH_SYSTEM_CODES, true))
+            ->reject(fn ($akun) => $this->isCurahAkun($akun))
             ->map(fn ($akun) => [
                 'id' => $akun->id,
                 'kode' => $akun->kode,
@@ -213,7 +222,7 @@ class LaporanController extends Controller
             ->values();
 
         $curahAkuns = $semua
-            ->filter(fn ($akun) => in_array($akun->system_code, self::CURAH_SYSTEM_CODES, true))
+            ->filter(fn ($akun) => $this->isCurahAkun($akun))
             ->map(fn ($akun) => [
                 'id' => $akun->id,
                 'kode' => $akun->kode,
@@ -273,11 +282,11 @@ class LaporanController extends Controller
                 ];
             });
 
-        $akuns = $semua->reject(fn ($akun) => in_array($akun['system_code'], self::CURAH_SYSTEM_CODES, true))
+        $akuns = $semua->reject(fn ($akun) => $this->isCurahAkun($akun))
             ->filter(fn ($akun) => $akun['saldo'] != 0)
             ->values();
 
-        $curahAkuns = $semua->filter(fn ($akun) => in_array($akun['system_code'], self::CURAH_SYSTEM_CODES, true));
+        $curahAkuns = $semua->filter(fn ($akun) => $this->isCurahAkun($akun));
 
         $saldo = function (string $jenis) use ($akuns): float {
             return (float) $akuns->where('jenis', $jenis)->sum('saldo');
@@ -578,6 +587,7 @@ class LaporanController extends Controller
         $akuns = Akun::with('kategori')
             ->whereHas('kategori', fn ($q) => $q->where('jenis', $jenis))
             ->where('status', 'aktif')
+            ->where('nama', '!=', 'Saldo Bp.Supriyadi')
             ->where(fn ($q) => $q->whereNull('system_code')
                 ->orWhereNotIn('system_code', self::CURAH_SYSTEM_CODES))
             ->orderBy('kode')

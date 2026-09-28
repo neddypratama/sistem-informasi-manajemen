@@ -86,6 +86,7 @@ trait BuatDataUji
             ['nama' => 'Hutang Peternak', 'kategori_id' => $liabilitas->id, 'saldo_normal' => 'kredit'],
             ['nama' => 'Hutang Supplier', 'kategori_id' => $liabilitas->id, 'saldo_normal' => 'kredit'],
             // Hutang Pakan Curah (unit terpisah)
+            ['nama' => 'Saldo Bp.Supriyadi', 'kategori_id' => $liabilitas->id, 'saldo_normal' => 'kredit'],
             ['nama' => 'Hutang Pakan Curah', 'kategori_id' => $liabilitas->id, 'saldo_normal' => 'kredit', 'system_code' => 'hutang_pakan_curah'],
             // Piutang per tipe client
             ['nama' => 'Piutang Pedagang', 'kategori_id' => $aset->id, 'saldo_normal' => 'debit'],

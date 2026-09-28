@@ -166,19 +166,20 @@ class DatabaseSeeder extends Seeder
                 'menu.akses.log',
             ],
             'Pembelian Telur' => [
-                'menu.pembelian.telur',
+                'menu.pembelian.telur', 'menu.stok.laporan',
             ],
             'Penjualan Pakan dan Obat' => [
-                'menu.penjualan.pakan', 'menu.penjualan.obat',
+                'menu.penjualan.pakan', 'menu.penjualan.obat', 'menu.stok.laporan',
             ],
             'Kas Tunai' => [
                 'menu.akuntansi.saldo_client', 'menu.akuntansi.hutang', 'menu.akuntansi.piutang', 'menu.akuntansi.jurnal', 'menu.akuntansi.kas',
-                'menu.jurnal.kas', 'menu.jurnal.beban', 'menu.jurnal.pendapatan', 'menu.jurnal.akun', 'menu.jurnal.kategori',
-                'menu.laporan.buku_besar', 'menu.laporan.neraca', 'menu.laporan.laba_rugi', 'menu.laporan.laba_rugi_curah',
+                'menu.jurnal.kas', 'menu.jurnal.beban', 'menu.jurnal.pendapatan',
             ],
             'Kas Transfer' => [
                 'menu.pembelian.pakan', 'menu.pembelian.obat', 'menu.pembelian.tray',
-                'menu.penjualan.telur', 'menu.penjualan.tray',
+                'menu.penjualan.telur', 'menu.penjualan.tray', 'menu.stok.laporan',
+                'menu.akuntansi.saldo_client', 'menu.akuntansi.hutang', 'menu.akuntansi.piutang', 'menu.akuntansi.jurnal', 'menu.akuntansi.kas',
+                'menu.jurnal.kas', 'menu.jurnal.beban', 'menu.jurnal.pendapatan', 
             ],
         ];
 
