@@ -190,7 +190,6 @@ class AkunDetailSeeder extends Seeder
             ['name' => 'Hutang Sentrat SK', 'detail_kategori_id' => 33, 'deskripsi' => 'Hutang pakan SK'],
             ['name' => 'Hutang Sentrat Ponggok', 'detail_kategori_id' => 33, 'deskripsi' => 'Hutang pakan Ponggok'],
             ['name' => 'Hutang Sentrat Random', 'detail_kategori_id' => 33, 'deskripsi' => 'Hutang pakan umum'],
-            ['name' => 'Hutang Pakan Curah', 'detail_kategori_id' => 33, 'deskripsi' => 'Hutang pakan curah'],
 
             // --- EKUITAS (detail_kategori_id: 34) ---
             ['name' => 'Modal', 'detail_kategori_id' => 34, 'deskripsi' => 'Saldo modal awal bisnis'],
