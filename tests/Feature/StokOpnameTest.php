@@ -61,6 +61,7 @@ class StokOpnameTest extends TestCase
         $this->actingAsApi($this->user)
             ->postJson('/api/stok-opname', [
                 'tanggal' => '2026-08-20',
+                'jenis_opname' => 'Telur',
                 'keterangan' => 'Opname bulanan',
                 'items' => [
                     [
@@ -111,6 +112,7 @@ class StokOpnameTest extends TestCase
         $this->actingAsApi($this->user)
             ->postJson('/api/stok-opname', [
                 'tanggal' => '2026-08-20',
+                'jenis_opname' => 'Telur',
                 'items' => [
                     [
                         'barang_id' => $this->barang->id,
@@ -167,6 +169,7 @@ class StokOpnameTest extends TestCase
         $this->actingAsApi($this->user)
             ->postJson('/api/stok-opname', [
                 'tanggal' => '2026-08-20',
+                'jenis_opname' => 'Telur',
                 'items' => [
                     [
                         'barang_id' => $this->barang->id,
@@ -210,6 +213,7 @@ class StokOpnameTest extends TestCase
         $this->actingAsApi($this->user)
             ->postJson('/api/stok-opname', [
                 'tanggal' => '2026-08-20',
+                'jenis_opname' => 'Telur',
                 'items' => [
                     [
                         'barang_id' => $this->barang->id,
@@ -233,6 +237,7 @@ class StokOpnameTest extends TestCase
         $this->actingAsApi($this->user)
             ->postJson('/api/stok-opname', [
                 'tanggal' => '2026-08-20',
+                'jenis_opname' => 'Telur',
                 'keterangan' => 'Opname bulanan',
                 'items' => [
                     [
@@ -279,6 +284,7 @@ class StokOpnameTest extends TestCase
         $this->actingAsApi($this->user)
             ->postJson('/api/stok-opname', [
                 'tanggal' => '2026-08-20',
+                'jenis_opname' => 'Telur',
                 'items' => [
                     [
                         'barang_id' => $telur->id,

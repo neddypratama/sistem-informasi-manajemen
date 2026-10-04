@@ -3,12 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Akun;
-use App\Models\Hutang;
 use App\Models\Jurnal;
 use App\Models\Kategori;
-use App\Models\PembayaranHutang;
-use App\Models\PembayaranPiutang;
-use App\Models\Piutang;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\BuatDataUji;
@@ -45,17 +41,13 @@ class HutangPiutangApiTest extends TestCase
         $response->assertCreated()
             ->assertJsonPath('message', 'Transaksi tambah hutang berhasil disimpan.');
 
-        $this->assertDatabaseHas('hutangs', [
+        $this->assertDatabaseHas('jurnals', [
             'client_id' => $supplier->id,
-            'total' => 500000,
-            'status' => 'belum_lunas',
+            'entitas_type' => 'hutang',
             'keterangan' => 'Pembelian kredit manual',
         ]);
 
-        $hutang = Hutang::first();
-        $this->assertNotNull($hutang->jurnal_id);
-
-        $jurnal = Jurnal::find($hutang->jurnal_id);
+        $jurnal = Jurnal::where('entitas_type', 'hutang')->first();
         $this->assertNotNull($jurnal);
 
         // Tambah hutang: Debit Kas, Kredit Hutang
@@ -70,23 +62,8 @@ class HutangPiutangApiTest extends TestCase
     {
         $supplier = $this->buatClient('Supplier FIFO', 'supplier');
 
-        Hutang::create([
-            'no_hutang' => 'HT-20260901-0001',
-            'tanggal' => '2026-09-01',
-            'client_id' => $supplier->id,
-            'total' => 300000,
-            'status' => 'belum_lunas',
-            'created_by' => $this->user->id,
-        ]);
-
-        Hutang::create([
-            'no_hutang' => 'HT-20260902-0001',
-            'tanggal' => '2026-09-02',
-            'client_id' => $supplier->id,
-            'total' => 200000,
-            'status' => 'belum_lunas',
-            'created_by' => $this->user->id,
-        ]);
+        $this->buatHutang($supplier, 300000, $this->user, '2026-09-01');
+        $this->buatHutang($supplier, 200000, $this->user, '2026-09-02');
 
         $response = $this->actingAsApi($this->user)
             ->postJson('/api/hutang/bayar', [
@@ -100,14 +77,14 @@ class HutangPiutangApiTest extends TestCase
         $response->assertCreated()
             ->assertJsonPath('message', 'Pembayaran hutang berhasil disimpan.');
 
-        $this->assertSame(2, PembayaranHutang::count());
+        $this->assertSame(2, Jurnal::where('journalable_type', Jurnal::class)->count());
 
-        $hutangs = Hutang::orderBy('tanggal')->get();
-        $this->assertSame('lunas', $hutangs[0]->status);
-        $this->assertSame(0.0, $hutangs[0]->sisa());
+        $hutangs = Jurnal::where('entitas_type', 'hutang')->orderBy('tanggal')->get();
+        $this->assertSame('lunas', $hutangs[0]->statusEntitas());
+        $this->assertSame(0.0, $hutangs[0]->sisaEntitas());
 
-        $this->assertSame('belum_lunas', $hutangs[1]->status);
-        $this->assertSame(100000.0, $hutangs[1]->sisa());
+        $this->assertSame('belum_lunas', $hutangs[1]->statusEntitas());
+        $this->assertSame(100000.0, $hutangs[1]->sisaEntitas());
     }
 
     public function test_tambah_piutang_berhasil_membuat_record_dan_jurnal(): void
@@ -126,17 +103,13 @@ class HutangPiutangApiTest extends TestCase
         $response->assertCreated()
             ->assertJsonPath('message', 'Transaksi tambah piutang berhasil disimpan.');
 
-        $this->assertDatabaseHas('piutangs', [
+        $this->assertDatabaseHas('jurnals', [
             'client_id' => $customer->id,
-            'total' => 750000,
-            'status' => 'belum_lunas',
+            'entitas_type' => 'piutang',
             'keterangan' => 'Penjualan kredit manual',
         ]);
 
-        $piutang = Piutang::first();
-        $this->assertNotNull($piutang->jurnal_id);
-
-        $jurnal = Jurnal::find($piutang->jurnal_id);
+        $jurnal = Jurnal::where('entitas_type', 'piutang')->first();
         $this->assertNotNull($jurnal);
 
         // Tambah piutang: Debit Piutang, Kredit Kas
@@ -151,14 +124,7 @@ class HutangPiutangApiTest extends TestCase
     {
         $customer = $this->buatClient('Customer FIFO', 'customer');
 
-        Piutang::create([
-            'no_piutang' => 'PT-20260901-0001',
-            'tanggal' => '2026-09-01',
-            'client_id' => $customer->id,
-            'total' => 400000,
-            'status' => 'belum_lunas',
-            'created_by' => $this->user->id,
-        ]);
+        $this->buatPiutang($customer, 400000, $this->user, '2026-09-01');
 
         $response = $this->actingAsApi($this->user)
             ->postJson('/api/piutang/bayar', [
@@ -172,25 +138,18 @@ class HutangPiutangApiTest extends TestCase
         $response->assertCreated()
             ->assertJsonPath('message', 'Penerimaan piutang berhasil disimpan.');
 
-        $this->assertSame(1, PembayaranPiutang::count());
+        $this->assertSame(1, Jurnal::where('journalable_type', Jurnal::class)->count());
 
-        $piutang = Piutang::first();
-        $this->assertSame('lunas', $piutang->status);
-        $this->assertSame(0.0, $piutang->sisa());
+        $piutang = Jurnal::where('entitas_type', 'piutang')->first();
+        $this->assertSame('lunas', $piutang->statusEntitas());
+        $this->assertSame(0.0, $piutang->sisaEntitas());
     }
 
     public function test_bayar_hutang_gagal_jika_melebihi_sisa(): void
     {
         $supplier = $this->buatClient('Supplier Overpay', 'supplier');
 
-        Hutang::create([
-            'no_hutang' => 'HT-20260901-0001',
-            'tanggal' => '2026-09-01',
-            'client_id' => $supplier->id,
-            'total' => 100000,
-            'status' => 'belum_lunas',
-            'created_by' => $this->user->id,
-        ]);
+        $this->buatHutang($supplier, 100000, $this->user, '2026-09-01');
 
         $response = $this->actingAsApi($this->user)
             ->postJson('/api/hutang/bayar', [
@@ -200,7 +159,7 @@ class HutangPiutangApiTest extends TestCase
             ]);
 
         $response->assertStatus(422);
-        $this->assertSame(0, PembayaranHutang::count());
+        $this->assertSame(0, Jurnal::where('journalable_type', Jurnal::class)->count());
     }
 
     public function test_bayar_hutang_dengan_akun_bank_mencatat_kas_bank_terpilih(): void
@@ -217,14 +176,7 @@ class HutangPiutangApiTest extends TestCase
             'system_code' => null,
         ]);
 
-        Hutang::create([
-            'no_hutang' => 'HT-20260903-0001',
-            'tanggal' => '2026-09-01',
-            'client_id' => $supplier->id,
-            'total' => 250000,
-            'status' => 'belum_lunas',
-            'created_by' => $this->user->id,
-        ]);
+        $this->buatHutang($supplier, 250000, $this->user, '2026-09-01');
 
         $this->actingAsApi($this->user)
             ->postJson('/api/hutang/bayar', [
@@ -235,13 +187,12 @@ class HutangPiutangApiTest extends TestCase
             ])
             ->assertCreated();
 
-        $pembayaran = PembayaranHutang::first();
-        $this->assertSame($akunBank->id, $pembayaran->akun_pembayaran_id);
+        $pembayaran = Jurnal::where('journalable_type', Jurnal::class)->first();
+        $this->assertNotNull($pembayaran);
 
-        $jurnal = Jurnal::find($pembayaran->jurnal_id);
-        $detailKas = $jurnal->details->firstWhere('akun_id', Akun::system('kas')->id);
-        $detailBank = $jurnal->details->firstWhere('akun_id', $akunBank->id);
-        $detailHutang = $jurnal->details->firstWhere('akun_id', Akun::system('hutang')->id);
+        $detailKas = $pembayaran->details->firstWhere('akun_id', Akun::system('kas')->id);
+        $detailBank = $pembayaran->details->firstWhere('akun_id', $akunBank->id);
+        $detailHutang = $pembayaran->details->firstWhere('akun_id', Akun::system('hutang')->id);
 
         $this->assertNull($detailKas);
         $this->assertSame(250000.0, (float) $detailBank->kredit);
@@ -261,7 +212,7 @@ class HutangPiutangApiTest extends TestCase
             ->assertStatus(422)
             ->assertJsonValidationErrors('akun_pembayaran_id');
 
-        $this->assertSame(0, Hutang::count());
+        $this->assertSame(0, Jurnal::where('entitas_type', 'hutang')->count());
     }
 
     public function test_kas_bank_options_memuat_akun_kas_dan_bank(): void

@@ -57,6 +57,7 @@ class HalamanDataTest extends TestCase
             'stok' => ['/api/stok'],
             'stok fifo' => ['/api/stok/fifo'],
             'riwayat stok' => ['/api/stok/riwayat'],
+            'laporan stok' => ['/api/stok/laporan'],
             'saldo client' => ['/api/tagihan'],
             'monitoring kas' => ['/api/kas'],
             'jurnal umum' => ['/api/jurnal'],

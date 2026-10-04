@@ -113,6 +113,18 @@ class AkunDetailSeeder extends Seeder
             ['name' => 'Pendapatan Truk', 'detail_kategori_id' => 8, 'deskripsi' => 'Hasil operasional truk'],
             ['name' => 'Pendapatan Pengadaan Jasa', 'detail_kategori_id' => 9, 'deskripsi' => 'Hasil jasa pengadaan'],
 
+            // HPP per kelompok jenis barang (detail_kategori_id: 35-39)
+            ['name' => 'HPP Telur Horn', 'detail_kategori_id' => 35, 'deskripsi' => 'HPP penjualan telur'],
+            ['name' => 'HPP Telur Bebek', 'detail_kategori_id' => 35, 'deskripsi' => 'HPP penjualan telur'],
+            ['name' => 'HPP Telur Puyuh', 'detail_kategori_id' => 35, 'deskripsi' => 'HPP penjualan telur'],
+            ['name' => 'HPP Telur Arab', 'detail_kategori_id' => 35, 'deskripsi' => 'HPP penjualan telur'],
+            ['name' => 'HPP Telur Asin', 'detail_kategori_id' => 35, 'deskripsi' => 'HPP penjualan telur'],
+            ['name' => 'HPP Pakan Sentrat/Pabrikan', 'detail_kategori_id' => 38, 'deskripsi' => 'HPP penjualan pakan'],
+            ['name' => 'HPP Pakan Kucing', 'detail_kategori_id' => 38, 'deskripsi' => 'HPP penjualan pakan'],
+            ['name' => 'HPP Curah', 'detail_kategori_id' => 39, 'deskripsi' => 'HPP penjualan pakan curah'],
+            ['name' => 'HPP Obat-Obatan', 'detail_kategori_id' => 37, 'deskripsi' => 'HPP penjualan obat-obatan'],
+            ['name' => 'HPP Tray', 'detail_kategori_id' => 36, 'deskripsi' => 'HPP penjualan tray'],
+
             // --- PENGELUARAN (detail_kategori_id: 10-18) ---
             ['name' => 'Beban Transport', 'detail_kategori_id' => 10, 'deskripsi' => 'Biaya transportasi'],
             ['name' => 'Beban Bunga', 'detail_kategori_id' => 11, 'deskripsi' => 'Beban bunga pinjaman'],
@@ -133,12 +145,6 @@ class AkunDetailSeeder extends Seeder
             ['name' => 'Peralatan', 'detail_kategori_id' => 12, 'deskripsi' => 'Pembelian peralatan kecil'],
             ['name' => 'Perlengkapan', 'detail_kategori_id' => 12, 'deskripsi' => 'Pembelian perlengkapan'],
             ['name' => 'ZIS', 'detail_kategori_id' => 15, 'deskripsi' => 'Zakat, Infaq, Sedekah'],
-            // HPP per kelompok jenis barang (detail_kategori_id: 35-39)
-            ['name' => 'HPP Telur', 'detail_kategori_id' => 35, 'deskripsi' => 'HPP penjualan telur'],
-            ['name' => 'HPP Tray', 'detail_kategori_id' => 36, 'deskripsi' => 'HPP penjualan tray'],
-            ['name' => 'HPP Obat-Obatan', 'detail_kategori_id' => 37, 'deskripsi' => 'HPP penjualan obat-obatan'],
-            ['name' => 'HPP Pakan', 'detail_kategori_id' => 38, 'deskripsi' => 'HPP penjualan pakan'],
-            ['name' => 'HPP Curah', 'detail_kategori_id' => 39, 'deskripsi' => 'HPP penjualan pakan curah'],
             ['name' => 'Beban Pajak Kendaraan', 'detail_kategori_id' => 11, 'deskripsi' => 'Pajak STNK/Kendaraan'],
             ['name' => 'Pengeluaran Truk', 'detail_kategori_id' => 17, 'deskripsi' => 'Biaya operasional truk'],
             ['name' => 'Beban Tray Terpakai', 'detail_kategori_id' => 13, 'deskripsi' => 'Pemakaian tray dalam produksi'],

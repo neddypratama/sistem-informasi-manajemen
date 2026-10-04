@@ -124,8 +124,8 @@ export const kasApi = {
 };
 
 export const tagihanApi = {
-    index: () => wrap.get('/tagihan'),
-    exportExcel: () => exportExcel('/tagihan/export-excel', {}, 'saldo-client.xlsx'),
+    index: (params) => wrap.get('/tagihan', { params }),
+    exportExcel: (params) => exportExcel('/tagihan/export-excel', params, 'saldo-client.xlsx'),
     show: (clientId) => wrap.get(`/tagihan/${clientId}`),
 };
 

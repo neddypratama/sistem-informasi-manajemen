@@ -5,11 +5,9 @@ namespace App\Services;
 use App\Models\Akun;
 use App\Models\Barang;
 use App\Models\Client;
-use App\Models\Hutang;
 use App\Models\JenisBarang;
 use App\Models\Jurnal;
 use App\Models\Kategori;
-use App\Models\Piutang;
 use App\Models\Transaksi;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -55,7 +53,7 @@ class DataImportService
 
             case 'hutang_piutang':
                 $sheet->setTitle('Template Tagihan');
-                $headers = ['Jenis (Hutang/Piutang)', 'Nomor Tagihan', 'Tanggal (YYYY-MM-DD)', 'Nama Client', 'Total Tagihan', 'Kode/Nama Akun Lawan', 'Keterangan'];
+                $headers = ['Jenis (Hutang/Piutang/Bayar Hutang/Terima Piutang)', 'Nomor Tagihan', 'Tanggal (YYYY-MM-DD)', 'Nama Client', 'Total Tagihan', 'Kode/Nama Akun Lawan', 'Keterangan'];
                 $example = ['Hutang', 'HT-20261001-0001', date('Y-m-d'), 'Supplier A', 5000000, 'Kas Utama', 'Hutang saldo awal'];
                 break;
 
@@ -313,9 +311,17 @@ class DataImportService
                 continue;
             }
 
-            if (! in_array($jenis, ['hutang', 'piutang'], true)) {
+            $jenisNorm = match ($jenis) {
+                'hutang', 'tambah_hutang', 'tambah hutang' => 'hutang',
+                'piutang', 'tambah_piutang', 'tambah piutang' => 'piutang',
+                'bayar_hutang', 'bayar hutang', 'pelunasan_hutang', 'pelunasan hutang', 'bayar' => 'bayar_hutang',
+                'terima_piutang', 'terima piutang', 'penerimaan_piutang', 'penerimaan piutang', 'terima' => 'terima_piutang',
+                default => null,
+            };
+
+            if ($jenisNorm === null) {
                 $gagal++;
-                $errors[] = "Baris {$lineNum}: Jenis tagihan harus 'Hutang' atau 'Piutang'.";
+                $errors[] = "Baris {$lineNum}: Jenis tagihan harus 'Hutang', 'Piutang', 'Bayar Hutang', atau 'Terima Piutang'.";
 
                 continue;
             }
@@ -330,7 +336,9 @@ class DataImportService
 
             $akunKas = Akun::where('kode', $akunLawanInput)
                 ->orWhere('nama', $akunLawanInput)
-                ->first() ?? Akun::system('kas');
+                ->first()
+                ?? Akun::system('kas')
+                ?? Akun::query()->KasBank()->orderBy('kode')->first();
 
             if (! $akunKas) {
                 $gagal++;
@@ -340,36 +348,90 @@ class DataImportService
             }
 
             try {
-                DB::transaction(function () use ($jenis, $nomor, $tanggal, $client, $total, $akunKas, $keterangan, $userId): void {
+                DB::transaction(function () use ($jenisNorm, $nomor, $tanggal, $client, $total, $akunKas, $keterangan, $userId): void {
                     $tgl = $tanggal ?: date('Y-m-d');
                     $datePart = str_replace('-', '', $tgl);
 
-                    if ($jenis === 'hutang') {
+                    if ($jenisNorm === 'hutang') {
                         $noTagihan = $nomor ?: 'HT-'.$datePart.'-'.sprintf('%04d', rand(1, 9999));
-                        $tagihan = Hutang::create([
-                            'no_hutang' => $noTagihan,
-                            'tanggal' => $tgl,
-                            'client_id' => $client->id,
-                            'total' => $total,
-                            'keterangan' => $keterangan ?: 'Impor saldo awal hutang',
-                            'status' => 'belum_lunas',
-                            'created_by' => $userId,
-                            'akun_pembayaran_id' => $akunKas->id,
-                        ]);
-                        $this->jurnalService->postTambahHutang($tagihan);
-                    } else {
+                        $this->jurnalService->postTambahHutang(
+                            $tgl,
+                            $client->id,
+                            $total,
+                            $keterangan ?: 'Impor saldo awal hutang',
+                            $userId,
+                            $akunKas->id,
+                            $noTagihan,
+                        );
+                    } elseif ($jenisNorm === 'piutang') {
                         $noTagihan = $nomor ?: 'PT-'.$datePart.'-'.sprintf('%04d', rand(1, 9999));
-                        $tagihan = Piutang::create([
-                            'no_piutang' => $noTagihan,
-                            'tanggal' => $tgl,
-                            'client_id' => $client->id,
-                            'total' => $total,
-                            'keterangan' => $keterangan ?: 'Impor saldo awal piutang',
-                            'status' => 'belum_lunas',
-                            'created_by' => $userId,
-                            'akun_pembayaran_id' => $akunKas->id,
-                        ]);
-                        $this->jurnalService->postTambahPiutang($tagihan);
+                        $this->jurnalService->postTambahPiutang(
+                            $tgl,
+                            $client->id,
+                            $total,
+                            $keterangan ?: 'Impor saldo awal piutang',
+                            $userId,
+                            $akunKas->id,
+                            $noTagihan,
+                        );
+                    } elseif ($jenisNorm === 'bayar_hutang') {
+                        $faktur = Jurnal::where('entitas_type', 'hutang')
+                            ->where('client_id', $client->id)
+                            ->get()
+                            ->filter(fn (Jurnal $e) => $e->sisaEntitas() > 0)
+                            ->first();
+
+                        if ($faktur) {
+                            $this->jurnalService->postPembayaranHutang(
+                                $faktur,
+                                $tgl,
+                                min($total, $faktur->sisaEntitas()),
+                                $keterangan ?: 'Impor pembayaran hutang',
+                                $userId,
+                                $akunKas->id,
+                            );
+                        } else {
+                            $noBayar = $nomor ?: 'BYR-HT-'.$datePart.'-'.sprintf('%04d', rand(1, 9999));
+                            $hutangAkun = $this->jurnalService->resolveAkunHutang();
+                            $jurnal = Jurnal::create([
+                                'nomor_jurnal' => $noBayar,
+                                'tanggal' => $tgl,
+                                'client_id' => $client->id,
+                                'keterangan' => $keterangan ?: 'Impor pelunasan hutang',
+                                'created_by' => $userId,
+                            ]);
+                            $jurnal->details()->create(['akun_id' => $hutangAkun->id, 'debit' => $total, 'kredit' => 0]);
+                            $jurnal->details()->create(['akun_id' => $akunKas->id, 'debit' => 0, 'kredit' => $total]);
+                        }
+                    } elseif ($jenisNorm === 'terima_piutang') {
+                        $faktur = Jurnal::where('entitas_type', 'piutang')
+                            ->where('client_id', $client->id)
+                            ->get()
+                            ->filter(fn (Jurnal $e) => $e->sisaEntitas() > 0)
+                            ->first();
+
+                        if ($faktur) {
+                            $this->jurnalService->postPembayaranPiutang(
+                                $faktur,
+                                $tgl,
+                                min($total, $faktur->sisaEntitas()),
+                                $keterangan ?: 'Impor penerimaan piutang',
+                                $userId,
+                                $akunKas->id,
+                            );
+                        } else {
+                            $noBayar = $nomor ?: 'BYR-PT-'.$datePart.'-'.sprintf('%04d', rand(1, 9999));
+                            $piutangAkun = $this->jurnalService->resolveAkunPiutang();
+                            $jurnal = Jurnal::create([
+                                'nomor_jurnal' => $noBayar,
+                                'tanggal' => $tgl,
+                                'client_id' => $client->id,
+                                'keterangan' => $keterangan ?: 'Impor penerimaan piutang',
+                                'created_by' => $userId,
+                            ]);
+                            $jurnal->details()->create(['akun_id' => $akunKas->id, 'debit' => $total, 'kredit' => 0]);
+                            $jurnal->details()->create(['akun_id' => $piutangAkun->id, 'debit' => 0, 'kredit' => $total]);
+                        }
                     }
                 });
                 $sukses++;

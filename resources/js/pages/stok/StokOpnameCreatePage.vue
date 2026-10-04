@@ -1,5 +1,6 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { refDebounced } from '@vueuse/core';
+import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import BaseButton from '../../components/ui/BaseButton.vue';
 import BaseInput from '../../components/ui/BaseInput.vue';
@@ -23,7 +24,8 @@ import { apiErrorMessage, formatIDR, today } from '../../lib/utils';
 const router = useRouter();
 
 const tanggal = ref(today());
-const jenisOpname = ref('');
+const jenisOpnameInput = ref('');
+const jenisOpname = refDebounced(jenisOpnameInput, 300);
 const keterangan = ref('');
 const error = ref('');
 const saving = ref(false);
@@ -32,12 +34,18 @@ const selectedBarangId = ref(null);
 const rows = ref([]);
 
 const { data, isLoading } = useQuery({
-    queryKey: ['stok-opname-create-data'],
-    queryFn: stokOpnameApi.createData,
+    queryKey: () => ['stok-opname-create-data', jenisOpname.value],
+    queryFn: () => stokOpnameApi.createData({ jenis_opname: jenisOpname.value || undefined }),
+});
+
+watch(jenisOpname, () => {
+    rows.value = [];
+    selectedBarangId.value = null;
 });
 
 const barangs = computed(() => data.value?.barangs ?? []);
 const bebanOptions = computed(() => data.value?.beban_options ?? {});
+const jenisOptions = computed(() => data.value?.jenis_list ?? []);
 
 const barangMap = computed(() => {
     const map = new Map();
@@ -249,6 +257,10 @@ async function handleSubmit() {
 
         <PageLoader v-if="isLoading" />
         <form v-else class="mt-6 space-y-6" @submit.prevent="handleSubmit">
+            <div v-if="!jenisOpname" class="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
+                <p class="font-semibold">⚠️ Perhatian</p>
+                <p class="mt-1">Pilih jenis opname terlebih dahulu agar barang yang muncul sesuai dengan jenis yang dipilih.</p>
+            </div>
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
                     <BaseLabel for="tanggal">Tanggal Opname</BaseLabel>

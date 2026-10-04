@@ -5,11 +5,10 @@ namespace Tests\Concerns;
 use App\Models\Akun;
 use App\Models\Barang;
 use App\Models\Client;
-use App\Models\Hutang;
 use App\Models\JenisBarang;
+use App\Models\Jurnal;
 use App\Models\Kategori;
 use App\Models\Permission;
-use App\Models\Piutang;
 use App\Models\Role;
 use App\Models\Transaksi;
 use App\Models\User;
@@ -177,35 +176,51 @@ trait BuatDataUji
     }
 
     /**
-     * Buat tagihan hutang langsung (tanpa jurnal) untuk uji agregat dashboard.
+     * Buat tagihan hutang langsung via Jurnal untuk uji agregat.
      */
-    protected function buatHutang(Client $client, float $total, User $user, string $tanggal = '2026-08-10'): Hutang
+    protected function buatHutang(Client $client, float $total, User $user, string $tanggal = '2026-08-10'): Jurnal
     {
-        return Hutang::create([
-            'no_hutang' => 'HT-'.Str::upper(Str::random(8)),
+        $noHutang = 'HT-'.Str::upper(Str::random(8));
+        $stok = Akun::system('stok') ?? Akun::system('kas');
+        $hutangAkun = Akun::system('hutang');
+
+        $jurnal = Jurnal::create([
+            'nomor_jurnal' => $noHutang,
             'tanggal' => $tanggal,
             'client_id' => $client->id,
-            'total' => $total,
             'keterangan' => 'Hutang uji',
-            'status' => 'belum_lunas',
             'created_by' => $user->id,
+            'entitas_type' => 'hutang',
         ]);
+
+        $jurnal->details()->create(['akun_id' => $stok->id, 'debit' => $total, 'kredit' => 0]);
+        $jurnal->details()->create(['akun_id' => $hutangAkun->id, 'debit' => 0, 'kredit' => $total]);
+
+        return $jurnal;
     }
 
     /**
-     * Buat tagihan piutang langsung (tanpa jurnal) untuk uji agregat dashboard.
+     * Buat tagihan piutang langsung via Jurnal untuk uji agregat.
      */
-    protected function buatPiutang(Client $client, float $total, User $user, string $tanggal = '2026-08-10'): Piutang
+    protected function buatPiutang(Client $client, float $total, User $user, string $tanggal = '2026-08-10'): Jurnal
     {
-        return Piutang::create([
-            'no_piutang' => 'PT-'.Str::upper(Str::random(8)),
+        $noPiutang = 'PT-'.Str::upper(Str::random(8));
+        $penjualan = Akun::system('penjualan') ?? Akun::system('kas');
+        $piutangAkun = Akun::system('piutang');
+
+        $jurnal = Jurnal::create([
+            'nomor_jurnal' => $noPiutang,
             'tanggal' => $tanggal,
             'client_id' => $client->id,
-            'total' => $total,
             'keterangan' => 'Piutang uji',
-            'status' => 'belum_lunas',
             'created_by' => $user->id,
+            'entitas_type' => 'piutang',
         ]);
+
+        $jurnal->details()->create(['akun_id' => $piutangAkun->id, 'debit' => $total, 'kredit' => 0]);
+        $jurnal->details()->create(['akun_id' => $penjualan->id, 'debit' => 0, 'kredit' => $total]);
+
+        return $jurnal;
     }
 
     /**

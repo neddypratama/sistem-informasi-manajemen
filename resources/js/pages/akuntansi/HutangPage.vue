@@ -224,8 +224,7 @@ function handleExport() {
 </script>
 
 <template>
-    <PageLoader v-if="isLoading && !data" />
-    <div v-else class="space-y-6">
+    <div>
         <PageHeader title="Transaksi Hutang" description="Kelola seluruh transaksi hutang masuk dan pembayaran hutang per client.">
             <template #actions>
                 <div class="flex gap-2">
@@ -297,7 +296,12 @@ function handleExport() {
                 </TableHeader>
 
                 <TableBody>
-                    <TableRow v-if="hutangsData.length === 0">
+                    <TableRow v-if="isLoading">
+                        <TableCell :colspan="canManage ? 9 : 8">
+                            <PageLoader />
+                        </TableCell>
+                    </TableRow>
+                    <TableRow v-else-if="hutangsData.length === 0">
                         <TableCell :colspan="canManage ? 9 : 8">
                             <EmptyState message="Belum ada transaksi hutang." />
                         </TableCell>

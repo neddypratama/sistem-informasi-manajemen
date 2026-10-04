@@ -631,6 +631,8 @@ class LaporanController extends Controller
             ];
         }
 
+        usort($result, fn ($a, $b) => strnatcmp($a['akun']['kode'], $b['akun']['kode']));
+
         return $result;
     }
 }

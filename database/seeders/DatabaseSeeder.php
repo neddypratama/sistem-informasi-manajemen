@@ -21,9 +21,9 @@ class DatabaseSeeder extends Seeder
         $this->seedRoles();
         $this->call(KategoriSeeder::class);
         $this->call(AkunDetailSeeder::class);
-        $this->call(JenisBarangSeeder::class);
-        $this->call(BarangSeeder::class);
-        $this->call(ClientSeeder::class);
+        // $this->call(JenisBarangSeeder::class);
+        // $this->call(BarangSeeder::class);
+        // $this->call(ClientSeeder::class);
 
         $roles = Role::pluck('id', 'name');
 

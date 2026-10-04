@@ -25,11 +25,17 @@ class StokOpnameController extends Controller
         private JurnalService $jurnalService,
     ) {}
 
-    public function createData(): JsonResponse
+    public function createData(Request $request): JsonResponse
     {
-        $barangs = Barang::with('jenisBarang')
-            ->where('status', 'aktif')
-            ->get()
+        $jenisOpname = $request->query('jenis_opname');
+        $barangsQuery = Barang::with('jenisBarang')->where('status', 'aktif');
+
+        if ($jenisOpname && in_array($jenisOpname, ['Telur', 'Pakan', 'Obat', 'Tray'], true)) {
+            $kelompok = $this->jenisToKelompok($jenisOpname);
+            $barangsQuery->whereHas('jenisBarang', fn ($q) => $q->where('kelompok', $kelompok));
+        }
+
+        $barangs = $barangsQuery->get()
             ->map(fn ($b) => [
                 'barang_id' => $b->id,
                 'kode_barang' => $b->kode_barang,
@@ -43,10 +49,29 @@ class StokOpnameController extends Controller
 
         $bebanOptions = $this->bebanOptions();
 
+        $jenisOptions = [
+            ['value' => 'Telur', 'prefix' => 'TEL'],
+            ['value' => 'Pakan', 'prefix' => 'PAK'],
+            ['value' => 'Obat', 'prefix' => 'OBT'],
+            ['value' => 'Tray', 'prefix' => 'TRY'],
+        ];
+
         return response()->json([
             'barangs' => $barangs,
             'beban_options' => $bebanOptions,
+            'jenis_list' => $jenisOptions,
         ]);
+    }
+
+    protected function jenisToKelompok(string $jenisOpname): ?string
+    {
+        return match ($jenisOpname) {
+            'Telur' => 'telur',
+            'Pakan' => 'pakan',
+            'Obat' => 'obat',
+            'Tray' => 'tray',
+            default => null,
+        };
     }
 
     /**
@@ -286,7 +311,7 @@ class StokOpnameController extends Controller
     {
         $validated = request()->validate([
             'tanggal' => ['required', 'date'],
-            'jenis_opname' => ['nullable', 'string', 'in:Telur,Pakan,Obat,Tray'],
+            'jenis_opname' => ['required', 'string', 'in:Telur,Pakan,Obat,Tray'],
             'keterangan' => ['nullable', 'string', 'max:255'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.barang_id' => ['required', 'integer', 'exists:barangs,id'],
@@ -295,9 +320,24 @@ class StokOpnameController extends Controller
             'items.*.jumlah' => ['required', 'numeric', 'gt:0'],
         ]);
 
+        $jenisOpname = $validated['jenis_opname'];
+        $kelompok = $this->jenisToKelompok($jenisOpname);
+
+        $barangIds = collect($validated['items'])->pluck('barang_id')->unique();
+        $invalidBarangs = Barang::whereIn('id', $barangIds)
+            ->whereHas('jenisBarang', fn ($q) => $q->where('kelompok', '!=', $kelompok))
+            ->pluck('id')
+            ->toArray();
+
+        if (count($invalidBarangs) > 0) {
+            throw ValidationException::withMessages([
+                'items' => 'Barang ber-ID '.implode(', ', $invalidBarangs)." tidak cocok dengan jenis opname '{$jenisOpname}'.",
+            ]);
+        }
+
         return [
             'tanggal' => $validated['tanggal'],
-            'jenis_opname' => $validated['jenis_opname'] ?? null,
+            'jenis_opname' => $validated['jenis_opname'],
             'keterangan' => $validated['keterangan'] ?? null,
             'items' => collect($validated['items'])
                 ->map(fn ($row) => [

@@ -36,8 +36,7 @@ function handleExport() {
 </script>
 
 <template>
-    <PageLoader v-if="isLoading && !data" />
-    <div v-else>
+    <div>
         <PageHeader title="Saldo Per Client" description="Ringkasan hutang &amp; piutang per client.">
             <template #actions>
                 <BaseButton variant="outline" @click="handleExport">Excel</BaseButton>
@@ -87,7 +86,12 @@ function handleExport() {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    <TableRow v-if="!data?.items?.length">
+                    <TableRow v-if="isLoading">
+                        <TableCell colspan="7">
+                            <PageLoader />
+                        </TableCell>
+                    </TableRow>
+                    <TableRow v-else-if="!data?.items?.length">
                         <TableCell colspan="7">
                             <EmptyState message="Belum ada tagihan." />
                         </TableCell>

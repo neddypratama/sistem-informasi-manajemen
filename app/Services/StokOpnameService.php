@@ -26,10 +26,10 @@ class StokOpnameService
         array $items,
         ?string $keterangan,
         int $createdBy,
-        ?string $jenisOpname = null,
+        string $jenisOpname,
     ): StokOpname {
         $opname = StokOpname::create([
-            'no_opname' => $this->generateNomor($tanggal),
+            'no_opname' => $this->generateNomor($tanggal, $jenisOpname),
             'tanggal' => $tanggal,
             'jenis_opname' => $jenisOpname,
             'keterangan' => $keterangan,
@@ -186,16 +186,23 @@ class StokOpnameService
         });
     }
 
-    protected function generateNomor(string $tanggal): string
+    protected function generateNomor(string $tanggal, string $jenisOpname): string
     {
         $datePart = str_replace('-', '', $tanggal);
+        $prefix = match ($jenisOpname) {
+            'Telur' => 'TEL',
+            'Pakan' => 'PAK',
+            'Obat' => 'OBT',
+            'Tray' => 'TRY',
+            default => 'XXX',
+        };
 
-        $last = StokOpname::where('no_opname', 'like', "SO-{$datePart}-%")
+        $last = StokOpname::where('no_opname', 'like', "SO-{$prefix}-{$datePart}-%")
             ->orderByDesc('id')
             ->value('no_opname');
 
         $sequence = $last ? (int) substr($last, -4) + 1 : 1;
 
-        return sprintf('SO-%s-%04d', $datePart, $sequence);
+        return sprintf('SO-%s-%s-%04d', $prefix, $datePart, $sequence);
     }
 }

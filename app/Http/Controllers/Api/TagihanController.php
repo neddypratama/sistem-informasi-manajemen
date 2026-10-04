@@ -4,8 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Client;
-use App\Models\Hutang;
-use App\Models\Piutang;
+use App\Models\Jurnal;
 use App\Services\ExcelExportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,18 +17,26 @@ class TagihanController extends Controller
     {
         $search = trim((string) $request->query('search'));
 
-        $hutangs = Hutang::with('client');
-        $piutangs = Piutang::with('client');
+        $hutangs = Jurnal::with(['client', 'details.akun.kategori', 'pembayarans.details.akun'])
+            ->where('entitas_type', 'hutang');
+        $piutangs = Jurnal::with(['client', 'details.akun.kategori', 'pembayarans.details.akun'])
+            ->where('entitas_type', 'piutang');
 
         $this->scopeKepemilikan($hutangs);
         $this->scopeKepemilikan($piutangs);
 
         if ($search !== '') {
             $hutangs->whereHas('client', function ($q) use ($search): void {
-                $q->where('nama', 'like', "%{$search}%");
+                $q->where('nama', 'like', "%{$search}%")
+                    ->orWhere('no_telepon', 'like', "%{$search}%")
+                    ->orWhere('no_telepon', 'like', "%{$search}%")
+                    ->orWhere('alamat', 'like', "%{$search}%");
             });
             $piutangs->whereHas('client', function ($q) use ($search): void {
-                $q->where('nama', 'like', "%{$search}%");
+                $q->where('nama', 'like', "%{$search}%")
+                    ->orWhere('no_telepon', 'like', "%{$search}%")
+                    ->orWhere('no_telepon', 'like', "%{$search}%")
+                    ->orWhere('alamat', 'like', "%{$search}%");
             });
         }
 
@@ -39,20 +46,20 @@ class TagihanController extends Controller
             ->filter(fn ($group) => $group->first()->client !== null)
             ->map(function (Collection $group) {
                 $client = $group->first()->client;
-                $ht = $group->filter(fn ($r) => $r instanceof Hutang);
-                $pt = $group->filter(fn ($r) => $r instanceof Piutang);
+                $ht = $group->filter(fn (Jurnal $r) => $r->entitas_type === 'hutang');
+                $pt = $group->filter(fn (Jurnal $r) => $r->entitas_type === 'piutang');
 
-                $totalHutang = (float) $ht->sum('total');
-                $sisaHutang = (float) $ht->sum(fn ($r) => $r->sisa());
-                $totalPiutang = (float) $pt->sum('total');
-                $sisaPiutang = (float) $pt->sum(fn ($r) => $r->sisa());
+                $totalHutang = (float) $ht->sum(fn (Jurnal $r) => $r->totalEntitas());
+                $sisaHutang = (float) $ht->sum(fn (Jurnal $r) => $r->sisaEntitas());
+                $totalPiutang = (float) $pt->sum(fn (Jurnal $r) => $r->totalEntitas());
+                $sisaPiutang = (float) $pt->sum(fn (Jurnal $r) => $r->sisaEntitas());
                 $selisih = $sisaPiutang - $sisaHutang;
 
                 return [
                     'client_id' => $client->id,
                     'client' => $client->nama,
-                    'jumlah_hutang' => $ht->count(),
-                    'jumlah_piutang' => $pt->count(),
+                    'jumlah_hutang' => $ht->filter(fn (Jurnal $r) => $r->sisaEntitas() > 0)->count(),
+                    'jumlah_piutang' => $pt->filter(fn (Jurnal $r) => $r->sisaEntitas() > 0)->count(),
                     'total_hutang' => $totalHutang,
                     'sisa_hutang' => $sisaHutang,
                     'total_piutang' => $totalPiutang,
@@ -71,31 +78,39 @@ class TagihanController extends Controller
         $totalPiutang = (float) $items->sum('total_piutang');
         $sisaPiutang = (float) $items->sum('sisa_piutang');
 
-        return response()->json(compact(
-            'items',
-            'totalHutang',
-            'sisaHutang',
-            'totalPiutang',
-            'sisaPiutang',
-        ));
+        return response()->json([
+            'items' => $items,
+            'totalHutang' => $totalHutang,
+            'sisaHutang' => $sisaHutang,
+            'totalPiutang' => $totalPiutang,
+            'sisaPiutang' => $sisaPiutang,
+        ]);
     }
 
     public function export(Request $request): StreamedResponse
     {
         $search = trim((string) $request->query('search'));
 
-        $hutangs = Hutang::with('client');
-        $piutangs = Piutang::with('client');
+        $hutangs = Jurnal::with(['client', 'details.akun.kategori', 'pembayarans.details.akun'])
+            ->where('entitas_type', 'hutang');
+        $piutangs = Jurnal::with(['client', 'details.akun.kategori', 'pembayarans.details.akun'])
+            ->where('entitas_type', 'piutang');
 
         $this->scopeKepemilikan($hutangs);
         $this->scopeKepemilikan($piutangs);
 
         if ($search !== '') {
             $hutangs->whereHas('client', function ($q) use ($search): void {
-                $q->where('nama', 'like', "%{$search}%");
+                $q->where('nama', 'like', "%{$search}%")
+                    ->orWhere('no_telepon', 'like', "%{$search}%")
+                    ->orWhere('no_telepon', 'like', "%{$search}%")
+                    ->orWhere('alamat', 'like', "%{$search}%");
             });
             $piutangs->whereHas('client', function ($q) use ($search): void {
-                $q->where('nama', 'like', "%{$search}%");
+                $q->where('nama', 'like', "%{$search}%")
+                    ->orWhere('no_telepon', 'like', "%{$search}%")
+                    ->orWhere('no_telepon', 'like', "%{$search}%")
+                    ->orWhere('alamat', 'like', "%{$search}%");
             });
         }
 
@@ -105,20 +120,18 @@ class TagihanController extends Controller
             ->filter(fn ($group) => $group->first()->client !== null)
             ->map(function (Collection $group) {
                 $client = $group->first()->client;
-                $ht = $group->filter(fn ($r) => $r instanceof Hutang);
-                $pt = $group->filter(fn ($r) => $r instanceof Piutang);
+                $ht = $group->filter(fn (Jurnal $r) => $r->entitas_type === 'hutang');
+                $pt = $group->filter(fn (Jurnal $r) => $r->entitas_type === 'piutang');
 
-                $totalHutang = (float) $ht->sum('total');
-                $sisaHutang = (float) $ht->sum(fn ($r) => $r->sisa());
-                $totalPiutang = (float) $pt->sum('total');
-                $sisaPiutang = (float) $pt->sum(fn ($r) => $r->sisa());
+                $sisaHutang = (float) $ht->sum(fn (Jurnal $r) => $r->sisaEntitas());
+                $sisaPiutang = (float) $pt->sum(fn (Jurnal $r) => $r->sisaEntitas());
                 $selisih = $sisaPiutang - $sisaHutang;
 
                 return [
                     'client' => $client->nama,
-                    'jumlah_hutang' => $ht->count(),
+                    'jumlah_hutang' => $ht->filter(fn (Jurnal $r) => $r->sisaEntitas() > 0)->count(),
                     'sisa_hutang' => $sisaHutang,
-                    'jumlah_piutang' => $pt->count(),
+                    'jumlah_piutang' => $pt->filter(fn (Jurnal $r) => $r->sisaEntitas() > 0)->count(),
                     'sisa_piutang' => $sisaPiutang,
                     'sisa' => $selisih,
                 ];
@@ -130,15 +143,15 @@ class TagihanController extends Controller
         $rows = $items->map(fn ($item) => [
             $item['client'],
             $item['jumlah_hutang'],
-            (float) $item['sisa_hutang'],
+            $item['sisa_hutang'],
             $item['jumlah_piutang'],
-            (float) $item['sisa_piutang'],
-            (float) $item['sisa'],
+            $item['sisa_piutang'],
+            $item['sisa'],
         ]);
 
         return ExcelExportService::download(
             'saldo-client-'.now()->format('Y-m-d').'.xlsx',
-            ['Client', 'Jml Hutang', 'Sisa Hutang', 'Jml Piutang', 'Sisa Piutang', 'Total Sisa'],
+            ['Client', 'Jumlah Hutang', 'Sisa Hutang', 'Jumlah Piutang', 'Sisa Piutang', 'Sisa Net'],
             $rows,
             ['C' => '#,##0.00', 'E' => '#,##0.00', 'F' => '#,##0.00'],
         );
@@ -146,98 +159,84 @@ class TagihanController extends Controller
 
     public function show(Client $client): JsonResponse
     {
-        $hutangs = Hutang::with('pembayarans')
-            ->where('client_id', $client->id);
+        $hutangsQuery = Jurnal::with(['pembayarans.details.akun', 'details.akun.kategori', 'user'])
+            ->where('client_id', $client->id)
+            ->where('entitas_type', 'hutang');
+        $piutangsQuery = Jurnal::with(['pembayarans.details.akun', 'details.akun.kategori', 'user'])
+            ->where('client_id', $client->id)
+            ->where('entitas_type', 'piutang');
 
-        $this->scopeKepemilikan($hutangs);
+        $this->scopeKepemilikan($hutangsQuery);
+        $this->scopeKepemilikan($piutangsQuery);
 
-        $dataHutangs = $hutangs
+        $hutangsList = $hutangsQuery->orderByDesc('tanggal')->get();
+        $piutangsList = $piutangsQuery->orderByDesc('tanggal')->get();
+
+        $hutangs = $hutangsList->map(fn (Jurnal $h) => [
+            'id' => $h->id,
+            'no_hutang' => $h->nomor_jurnal,
+            'tanggal' => $h->tanggal->toDateString(),
+            'total' => $h->totalEntitas(),
+            'dibayar' => $h->dibayarEntitas(),
+            'sisa' => $h->sisaEntitas(),
+            'status' => $h->statusEntitas(),
+            'keterangan' => $h->keterangan,
+        ])->values();
+
+        $piutangs = $piutangsList->map(fn (Jurnal $p) => [
+            'id' => $p->id,
+            'no_piutang' => $p->nomor_jurnal,
+            'tanggal' => $p->tanggal->toDateString(),
+            'total' => $p->totalEntitas(),
+            'dibayar' => $p->dibayarEntitas(),
+            'sisa' => $p->sisaEntitas(),
+            'status' => $p->statusEntitas(),
+            'keterangan' => $p->keterangan,
+        ])->values();
+
+        $totalHutang = (float) $hutangsList->sum(fn ($h) => $h->totalEntitas());
+        $sisaHutang = (float) $hutangsList->sum(fn ($h) => $h->sisaEntitas());
+        $totalPiutang = (float) $piutangsList->sum(fn ($p) => $p->totalEntitas());
+        $sisaPiutang = (float) $piutangsList->sum(fn ($p) => $p->sisaEntitas());
+
+        // Get payment journals linked to these invoices
+        $allInvoiceIds = $hutangsList->pluck('id')->concat($piutangsList->pluck('id'));
+        $riwayat = Jurnal::with('details.akun')
+            ->where('journalable_type', Jurnal::class)
+            ->whereIn('journalable_id', $allInvoiceIds)
             ->orderByDesc('tanggal')
+            ->orderByDesc('id')
             ->get()
-            ->map(fn ($h) => [
-                'id' => $h->id,
-                'no_hutang' => $h->no_hutang,
-                'tanggal' => $h->tanggal->toDateString(),
-                'total' => (float) $h->total,
-                'sisa' => $h->sisa(),
-                'status' => $h->status,
-                'keterangan' => $h->keterangan,
-                'pembayarans' => $h->pembayarans->map(fn ($p) => [
+            ->map(function (Jurnal $p) use ($hutangsList) {
+                $isHutang = $hutangsList->contains('id', $p->journalable_id);
+                $jumlah = (float) $p->details
+                    ->filter(fn ($d) => $isHutang ? ($d->akun?->system_code === 'hutang' || $d->akun?->kategori?->jenis === 'liabilitas') : ($d->akun?->system_code === 'piutang' || $d->akun?->kategori?->jenis === 'aset'))
+                    ->sum($isHutang ? 'debit' : 'kredit');
+
+                return [
                     'id' => $p->id,
+                    'tipe' => $isHutang ? 'hutang' : 'piutang',
                     'tanggal' => $p->tanggal->toDateString(),
-                    'jumlah' => (float) $p->jumlah,
+                    'jumlah' => $jumlah,
                     'keterangan' => $p->keterangan,
-                ])->values(),
-            ])
-            ->values();
+                ];
+            })->values();
 
-        $piutangs = Piutang::with('pembayarans')
-            ->where('client_id', $client->id);
-
-        $this->scopeKepemilikan($piutangs);
-
-        $dataPiutangs = $piutangs
-            ->orderByDesc('tanggal')
-            ->get()
-            ->map(fn ($p) => [
-                'id' => $p->id,
-                'no_piutang' => $p->no_piutang,
-                'tanggal' => $p->tanggal->toDateString(),
-                'total' => (float) $p->total,
-                'sisa' => $p->sisa(),
-                'status' => $p->status,
-                'keterangan' => $p->keterangan,
-                'pembayarans' => $p->pembayarans->map(fn ($b) => [
-                    'id' => $b->id,
-                    'tanggal' => $b->tanggal->toDateString(),
-                    'jumlah' => (float) $b->jumlah,
-                    'keterangan' => $b->keterangan,
-                ])->values(),
-            ])
-            ->values();
-
-        $totalHutang = (float) $dataHutangs->sum('total');
-        $sisaHutang = (float) $dataHutangs->sum('sisa');
-        $totalPiutang = (float) $dataPiutangs->sum('total');
-        $sisaPiutang = (float) $dataPiutangs->sum('sisa');
-
-        $riwayat = $this->riwayatPembayaran($dataHutangs, $dataPiutangs);
-
-        return response()->json(compact(
-            'client',
-            'totalHutang',
-            'sisaHutang',
-            'totalPiutang',
-            'sisaPiutang',
-            'riwayat',
-        ) + [
-            'hutangs' => $dataHutangs,
-            'piutangs' => $dataPiutangs,
+        return response()->json([
+            'client' => [
+                'id' => $client->id,
+                'nama' => $client->nama,
+                'tipe' => $client->tipe,
+                'no_telepon' => $client->no_telepon,
+                'alamat' => $client->alamat,
+            ],
+            'totalHutang' => $totalHutang,
+            'sisaHutang' => $sisaHutang,
+            'totalPiutang' => $totalPiutang,
+            'sisaPiutang' => $sisaPiutang,
+            'hutangs' => $hutangs,
+            'piutangs' => $piutangs,
+            'riwayat' => $riwayat,
         ]);
-    }
-
-    protected function riwayatPembayaran(Collection $hutangs, Collection $piutangs): Collection
-    {
-        $fromHutang = $hutangs->flatMap(fn ($h) => collect($h['pembayarans'])->map(fn ($p) => [
-            'tipe' => 'hutang',
-            'tanggal' => $p['tanggal'],
-            'jumlah' => $p['jumlah'],
-            'keterangan' => $p['keterangan'],
-            'nomor' => $h['no_hutang'],
-        ]));
-
-        $fromPiutang = $piutangs->flatMap(fn ($p) => collect($p['pembayarans'])->map(fn ($b) => [
-            'tipe' => 'piutang',
-            'tanggal' => $b['tanggal'],
-            'jumlah' => $b['jumlah'],
-            'keterangan' => $b['keterangan'],
-            'nomor' => $p['no_piutang'],
-        ]));
-
-        return collect()
-            ->concat($fromHutang)
-            ->concat($fromPiutang)
-            ->sortByDesc('tanggal')
-            ->values();
     }
 }

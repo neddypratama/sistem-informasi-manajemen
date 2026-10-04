@@ -5,9 +5,7 @@ namespace Tests\Feature;
 use App\Models\Akun;
 use App\Models\Barang;
 use App\Models\Client;
-use App\Models\Hutang;
 use App\Models\Jurnal;
-use App\Models\Piutang;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\BuatDataUji;
@@ -78,10 +76,10 @@ class AutoJurnalTransaksiTest extends TestCase
         // Kas tidak tersentuh karena transaksi selalu kredit
         $this->assertDatabaseMissing('jurnal_details', ['akun_id' => $this->akunKas->id]);
 
-        // Pembelian selalu membentuk hutang supplier
-        $this->assertSame(1, Hutang::count());
-        $this->assertSame('belum_lunas', Hutang::first()->status);
-        $this->assertSame(100000.0, (float) Hutang::first()->total);
+        // Pembelian selalu membentuk hutang supplier (jurnal entitas_type = hutang)
+        $this->assertSame(1, Jurnal::where('entitas_type', 'hutang')->count());
+        $this->assertSame('belum_lunas', Jurnal::where('entitas_type', 'hutang')->first()->statusEntitas());
+        $this->assertSame(100000.0, (float) Jurnal::where('entitas_type', 'hutang')->first()->totalEntitas());
     }
 
     public function test_penjualan_membuat_jurnal_piutang_penjualan_dan_hpp(): void
@@ -125,10 +123,10 @@ class AutoJurnalTransaksiTest extends TestCase
             'akun_id' => $this->akunKas->id,
         ]);
 
-        // Penjualan selalu membentuk piutang customer
-        $this->assertSame(1, Piutang::count());
-        $this->assertSame('belum_lunas', Piutang::first()->status);
-        $this->assertSame(60000.0, (float) Piutang::first()->total);
+        // Penjualan selalu membentuk piutang customer (jurnal entitas_type = piutang)
+        $this->assertSame(1, Jurnal::where('entitas_type', 'piutang')->count());
+        $this->assertSame('belum_lunas', Jurnal::where('entitas_type', 'piutang')->first()->statusEntitas());
+        $this->assertSame(60000.0, (float) Jurnal::where('entitas_type', 'piutang')->first()->totalEntitas());
     }
 
     public function test_delete_transaksi_menghapus_jurnal_dan_piutang(): void
@@ -142,14 +140,14 @@ class AutoJurnalTransaksiTest extends TestCase
         ]);
 
         $this->assertSame(2, Jurnal::count());
-        $this->assertSame(1, Piutang::count());
+        $this->assertSame(1, Jurnal::where('entitas_type', 'piutang')->count());
 
         $this->actingAsApi($this->user)
             ->deleteJson('/api/transaksi/'.$penjualan->id)
             ->assertOk();
 
         $this->assertSame(1, Jurnal::count());
-        $this->assertSame(0, Piutang::count());
+        $this->assertSame(0, Jurnal::where('entitas_type', 'piutang')->count());
         $this->assertDatabaseMissing('transaksis', ['id' => $penjualan->id]);
     }
 
@@ -160,7 +158,7 @@ class AutoJurnalTransaksiTest extends TestCase
         ]);
 
         $this->assertSame('kredit', $transaksi->metode_pembayaran);
-        $this->assertSame(1, Hutang::count());
+        $this->assertSame(1, Jurnal::where('entitas_type', 'hutang')->count());
     }
 
     public function test_pembelian_telur_memakai_stok_telur_dan_hutang_peternak(): void

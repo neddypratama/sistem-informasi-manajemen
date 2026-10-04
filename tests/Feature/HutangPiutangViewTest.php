@@ -5,7 +5,7 @@ namespace Tests\Feature;
 use App\Models\Akun;
 use App\Models\Barang;
 use App\Models\Client;
-use App\Models\Hutang;
+use App\Models\Jurnal;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\BuatDataUji;
@@ -125,7 +125,7 @@ class HutangPiutangViewTest extends TestCase
 
         $this->actingAsApi($this->user)
             ->postJson('/api/pelunasan/hutang', [
-                'hutang_id' => Hutang::first()->id,
+                'hutang_id' => Jurnal::where('entitas_type', 'hutang')->first()->id,
                 'tanggal' => '2026-08-10',
                 'jumlah' => 40000,
                 'keterangan' => 'Cicilan pertama',

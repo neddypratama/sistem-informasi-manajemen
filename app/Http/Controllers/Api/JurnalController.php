@@ -27,6 +27,7 @@ class JurnalController extends Controller
         $dari = $request->query('dari');
         $sampai = $request->query('sampai');
         $jenis = $request->query('jenis');
+        $kategori = $request->query('kategori');
 
         [$sort, $order] = $this->sortParams(
             ['tanggal', 'nomor_jurnal', 'created_at'],
@@ -54,6 +55,11 @@ class JurnalController extends Controller
                         ->orWhereHas('client', fn ($c) => $c->where('nama', 'like', "%{$search}%"));
                 });
             })
+            ->when($kategori === 'tanpa_hpp' || ($jenis === 'beban' && $kategori === 'beban'), fn ($q) => $q->whereDoesntHave('details.akun.kategori', fn ($q2) => $q2->where('nama', 'like', 'HPP%')))
+            ->when($kategori === 'tanpa_penjualan' || ($jenis === 'pendapatan' && $kategori === 'pendapatan'), function ($q): void {
+                $q->whereDoesntHave('details.akun.kategori', fn ($q2) => $q2->whereIn('nama', ['Penjualan Telur', 'Penjualan Pakan', 'Penjualan Obat', 'Penjualan EggTray']));
+            })
+            ->when(is_numeric($kategori), fn ($q) => $q->whereHas('details.akun', fn ($q2) => $q2->where('kategori_id', (int) $kategori)))
             ->when($clientId, fn ($q) => $q->where('client_id', $clientId))
             ->when($dari, fn ($q) => $q->whereDate('tanggal', '>=', $dari))
             ->when($sampai, fn ($q) => $q->whereDate('tanggal', '<=', $sampai));
@@ -65,7 +71,25 @@ class JurnalController extends Controller
         $jurnals = $query
             ->orderBy($sort, $order)
             ->when($sort === 'tanggal', fn ($q) => $q->orderByDesc('id'))
-            ->paginate(15);
+            ->paginate(15)
+            ->through(fn ($jurnal) => [
+                'id' => $jurnal->id,
+                'nomor_jurnal' => $jurnal->nomor_jurnal,
+                'tanggal' => $jurnal->tanggal,
+                'keterangan' => $jurnal->keterangan,
+                'client_id' => $jurnal->client_id,
+                'client' => $jurnal->client,
+                'user_id' => $jurnal->user_id,
+                'user' => $jurnal->user,
+                'journalable_type' => $jurnal->journalable_type,
+                'journalable_id' => $jurnal->journalable_id,
+                'created_by' => $jurnal->created_by,
+                'created_at' => $jurnal->created_at,
+                'updated_at' => $jurnal->updated_at,
+                'details' => $jurnal->details,
+                'total_debit' => $jurnal->details->sum('debit'),
+                'total_kredit' => $jurnal->details->sum('kredit'),
+            ]);
 
         return response()->json(array_merge($jurnals->toArray(), [
             'total_debit' => $totalDebit,
@@ -80,6 +104,8 @@ class JurnalController extends Controller
         $clientId = $request->query('client_id');
         $dari = $request->query('dari');
         $sampai = $request->query('sampai');
+        $kategori = $request->query('kategori');
+        $jenis = $request->query('jenis');
 
         [$sort, $order] = $this->sortParams(
             ['tanggal', 'nomor_jurnal', 'created_at'],
@@ -97,6 +123,8 @@ class JurnalController extends Controller
             $query->whereNull('journalable_id');
         }
 
+        $this->filterJenis($query, $jenis);
+
         $query
             ->when($search !== '', function ($q) use ($search): void {
                 $q->where(function ($x) use ($search): void {
@@ -105,6 +133,11 @@ class JurnalController extends Controller
                         ->orWhereHas('client', fn ($c) => $c->where('nama', 'like', "%{$search}%"));
                 });
             })
+            ->when($kategori === 'tanpa_hpp' || ($jenis === 'beban' && $kategori === 'beban'), fn ($q) => $q->whereDoesntHave('details.akun.kategori', fn ($q2) => $q2->where('nama', 'like', 'HPP%')))
+            ->when($kategori === 'tanpa_penjualan' || ($jenis === 'pendapatan' && $kategori === 'pendapatan'), function ($q): void {
+                $q->whereDoesntHave('details.akun.kategori', fn ($q2) => $q2->whereIn('nama', ['Penjualan Telur', 'Penjualan Pakan', 'Penjualan Obat', 'Penjualan EggTray']));
+            })
+            ->when(is_numeric($kategori), fn ($q) => $q->whereHas('details.akun', fn ($q2) => $q2->where('kategori_id', (int) $kategori)))
             ->when($clientId, fn ($q) => $q->where('client_id', $clientId))
             ->when($dari, fn ($q) => $q->whereDate('tanggal', '>=', $dari))
             ->when($sampai, fn ($q) => $q->whereDate('tanggal', '<=', $sampai));
@@ -160,14 +193,38 @@ class JurnalController extends Controller
         $jenisOptions = [];
         foreach (['kas', 'hutang', 'piutang', 'beban', 'pendapatan'] as $jenis) {
             $fixedAkun = match ($jenis) {
-                'kas' => Akun::system('kas'),
-                'hutang' => Akun::system('hutang'),
-                'piutang' => Akun::system('piutang'),
+                'kas' => Akun::system('kas') ?? Akun::query()->KasBank()->orderBy('kode')->first(),
+                'hutang' => Akun::system('hutang') ?? Akun::with('kategori')
+                    ->where('status', 'aktif')
+                    ->whereHas('kategori', fn ($x) => $x->where('jenis', 'liabilitas'))
+                    ->orderBy('kode')
+                    ->first(),
+                'piutang' => Akun::system('piutang') ?? Akun::with('kategori')
+                    ->where('status', 'aktif')
+                    ->whereHas('kategori', fn ($x) => $x->where('jenis', 'aset')
+                        ->where('nama', 'not like', 'Stok%')
+                        ->where('nama', 'not like', 'Kas%')
+                        ->where('nama', 'not like', 'Bank%'))
+                    ->orderBy('kode')
+                    ->first(),
                 default => null,
             };
 
             $fixedOptions = match ($jenis) {
                 'kas' => Akun::query()->KasBank()->orderBy('kode')->get(),
+                'hutang' => Akun::with('kategori')
+                    ->where('status', 'aktif')
+                    ->whereHas('kategori', fn ($x) => $x->where('jenis', 'liabilitas'))
+                    ->orderBy('kode')
+                    ->get(),
+                'piutang' => Akun::with('kategori')
+                    ->where('status', 'aktif')
+                    ->whereHas('kategori', fn ($x) => $x->where('jenis', 'aset')
+                        ->where('nama', 'not like', 'Stok%')
+                        ->where('nama', 'not like', 'Kas%')
+                        ->where('nama', 'not like', 'Bank%'))
+                    ->orderBy('kode')
+                    ->get(),
                 'beban' => $this->akunByJenisKategori('beban'),
                 'pendapatan' => $this->akunByJenisKategori('pendapatan'),
                 default => collect([$fixedAkun])->filter()->values(),
@@ -184,7 +241,7 @@ class JurnalController extends Controller
             ];
         }
 
-        $lawanKas = Akun::system('kas');
+        $lawanKas = Akun::system('kas') ?? Akun::query()->KasBank()->orderBy('kode')->first();
 
         return response()->json(compact('clients', 'akuns', 'jenisOptions', 'lawanKas'));
     }

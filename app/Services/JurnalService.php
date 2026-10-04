@@ -4,13 +4,9 @@ namespace App\Services;
 
 use App\Models\Akun;
 use App\Models\Client;
-use App\Models\Hutang;
 use App\Models\JenisBarang;
 use App\Models\Jurnal;
 use App\Models\Kategori;
-use App\Models\PembayaranHutang;
-use App\Models\PembayaranPiutang;
-use App\Models\Piutang;
 use App\Models\StokOpname;
 use App\Models\Transaksi;
 
@@ -84,16 +80,7 @@ class JurnalService
             ]);
         }
 
-        Hutang::create([
-            'no_hutang' => $this->generateNomor('HT', $transaksi->tanggal),
-            'tanggal' => $transaksi->tanggal,
-            'client_id' => $transaksi->client_id,
-            'total' => $transaksi->total,
-            'keterangan' => $this->keteranganSumber($transaksi),
-            'status' => 'belum_lunas',
-            'created_by' => $transaksi->created_by,
-            'jurnal_id' => $jurnal->id,
-        ]);
+        $jurnal->update(['entitas_type' => 'hutang']);
 
         return $jurnal;
     }
@@ -161,16 +148,7 @@ class JurnalService
             ]);
         }
 
-        Piutang::create([
-            'no_piutang' => $this->generateNomor('PT', $transaksi->tanggal),
-            'tanggal' => $transaksi->tanggal,
-            'client_id' => $transaksi->client_id,
-            'total' => $transaksi->total,
-            'keterangan' => $this->keteranganSumber($transaksi),
-            'status' => 'belum_lunas',
-            'created_by' => $transaksi->created_by,
-            'jurnal_id' => $jurnal->id,
-        ]);
+        $jurnal->update(['entitas_type' => 'piutang']);
 
         foreach ($jenisLines as $line) {
             $jurnal->details()->create([
@@ -340,72 +318,40 @@ class JurnalService
      */
     protected function kurangiEntitasDariRetur(Transaksi $retur, string $model): void
     {
-        $sourceJurnal = $retur->returDari?->jurnals()->first();
-
-        if ($sourceJurnal === null) {
-            return;
-        }
-
-        $entitas = $model::where('jurnal_id', $sourceJurnal->id)->first();
-
-        if ($entitas === null) {
-            return;
-        }
-
-        $entitas->total = max(0, (float) $entitas->total - (float) $retur->total);
-        $entitas->save();
-        $entitas->setStatusFromSisa();
+        // Retur automatically creates journal details reversing the balance dynamically.
     }
 
-    /**
-     * Membalik pengurangan entitas (hutang/piutang) saat retur dihapus.
-     *
-     * @param  class-string<Hutang|Piutang>  $model
-     */
     public function kembalikanEntitasDariRetur(Transaksi $retur, string $model): void
     {
-        $sourceJurnal = $retur->returDari?->jurnals()->first();
-
-        if ($sourceJurnal === null) {
-            return;
-        }
-
-        $entitas = $model::where('jurnal_id', $sourceJurnal->id)->first();
-
-        if ($entitas === null) {
-            return;
-        }
-
-        $entitas->total = (float) $entitas->total + (float) $retur->total;
-        $entitas->save();
-        $entitas->setStatusFromSisa();
+        // Retur deletion automatically removes journal details restoring the balance dynamically.
     }
 
     /**
      * Jurnal hutang bertambah (tambah manual): menerima kas dari pihak lain.
      * Debit Kas, Kredit Hutang.
      */
-    public function postTambahHutang(Hutang $hutang): ?Jurnal
+    public function postTambahHutang(string $tanggal, int $clientId, float $total, ?string $keterangan, int $createdBy, int $akunPembayaranId, ?string $noHutang = null): Jurnal
     {
-        $kas = $this->resolveKasAkun($hutang->akun_pembayaran_id);
-        $hutangAkun = Akun::system('hutang');
+        $kas = $this->resolveKasAkun($akunPembayaranId);
+        $hutangAkun = $this->resolveAkunHutang();
 
         if ($kas === null || $hutangAkun === null) {
-            return null;
+            throw new \RuntimeException('Akun hutang atau akun kas tidak ditemukan. Pastikan minimal satu akun hutang (kategori liabilitas) dan satu akun kas tersedia.');
         }
 
-        $jurnal = $this->buatHeaderPembayaran(
-            $hutang->tanggal,
-            $hutang->client_id,
-            $hutang->created_by,
-            "Tambah Hutang [{$hutang->no_hutang}]",
-            $hutang,
-        );
+        $noHutang = $noHutang ?: $this->generateNomor('HT', $tanggal);
 
-        $jurnal->details()->create(['akun_id' => $kas->id, 'debit' => $hutang->total, 'kredit' => 0]);
-        $jurnal->details()->create(['akun_id' => $hutangAkun->id, 'debit' => 0, 'kredit' => $hutang->total]);
+        $jurnal = Jurnal::create([
+            'nomor_jurnal' => $noHutang,
+            'tanggal' => $tanggal,
+            'client_id' => $clientId,
+            'keterangan' => $keterangan ?: "Tambah Hutang [{$noHutang}]",
+            'created_by' => $createdBy,
+            'entitas_type' => 'hutang',
+        ]);
 
-        $hutang->update(['jurnal_id' => $jurnal->id]);
+        $jurnal->details()->create(['akun_id' => $kas->id, 'debit' => $total, 'kredit' => 0]);
+        $jurnal->details()->create(['akun_id' => $hutangAkun->id, 'debit' => 0, 'kredit' => $total]);
 
         return $jurnal;
     }
@@ -414,27 +360,28 @@ class JurnalService
      * Jurnal piutang bertambah (tambah manual): memberikan kas kepada pihak lain.
      * Debit Piutang, Kredit Kas.
      */
-    public function postTambahPiutang(Piutang $piutang): ?Jurnal
+    public function postTambahPiutang(string $tanggal, int $clientId, float $total, ?string $keterangan, int $createdBy, int $akunPembayaranId, ?string $noPiutang = null): Jurnal
     {
-        $kas = $this->resolveKasAkun($piutang->akun_pembayaran_id);
-        $piutangAkun = Akun::system('piutang');
+        $kas = $this->resolveKasAkun($akunPembayaranId);
+        $piutangAkun = $this->resolveAkunPiutang();
 
         if ($kas === null || $piutangAkun === null) {
-            return null;
+            throw new \RuntimeException('Akun piutang atau akun kas tidak ditemukan. Pastikan minimal satu akun piutang (kategori aset) dan satu akun kas tersedia.');
         }
 
-        $jurnal = $this->buatHeaderPembayaran(
-            $piutang->tanggal,
-            $piutang->client_id,
-            $piutang->created_by,
-            "Tambah Piutang [{$piutang->no_piutang}]",
-            $piutang,
-        );
+        $noPiutang = $noPiutang ?: $this->generateNomor('PT', $tanggal);
 
-        $jurnal->details()->create(['akun_id' => $piutangAkun->id, 'debit' => $piutang->total, 'kredit' => 0]);
-        $jurnal->details()->create(['akun_id' => $kas->id, 'debit' => 0, 'kredit' => $piutang->total]);
+        $jurnal = Jurnal::create([
+            'nomor_jurnal' => $noPiutang,
+            'tanggal' => $tanggal,
+            'client_id' => $clientId,
+            'keterangan' => $keterangan ?: "Tambah Piutang [{$noPiutang}]",
+            'created_by' => $createdBy,
+            'entitas_type' => 'piutang',
+        ]);
 
-        $piutang->update(['jurnal_id' => $jurnal->id]);
+        $jurnal->details()->create(['akun_id' => $piutangAkun->id, 'debit' => $total, 'kredit' => 0]);
+        $jurnal->details()->create(['akun_id' => $kas->id, 'debit' => 0, 'kredit' => $total]);
 
         return $jurnal;
     }
@@ -443,37 +390,43 @@ class JurnalService
      * Jurnal pelunasan hutang: pembayaran kepada supplier.
      * Debit Hutang, Kredit Kas.
      */
-    public function postPembayaranHutang(PembayaranHutang $pembayaran): ?Jurnal
+    public function postPembayaranHutang(Jurnal $invoiceJurnal, string $tanggal, float $jumlah, ?string $keterangan, int $createdBy, int $akunPembayaranId): Jurnal
     {
-        $hutang = Akun::system('hutang');
-        $kas = $this->resolveKasAkun($pembayaran->akun_pembayaran_id);
+        $invoiceJurnal->loadMissing('details.akun.kategori');
+        $hutang = $invoiceJurnal->details
+            ->map(fn ($d) => $d->akun)
+            ->first(fn ($a) => $a?->system_code === 'hutang' || $a?->kategori?->jenis === 'liabilitas')
+            ?? $this->resolveAkunHutang();
+
+        $kas = $this->resolveKasAkun($akunPembayaranId);
 
         if ($hutang === null || $kas === null) {
-            return null;
+            throw new \RuntimeException('Akun hutang pada faktur atau akun kas tidak ditemukan. Pastikan akun hutang dan kas tersedia.');
         }
 
-        $jurnal = $this->buatHeaderPembayaran(
-            $pembayaran->tanggal,
-            $pembayaran->hutang->client_id,
-            $pembayaran->created_by,
-            "Pelunasan Hutang [{$pembayaran->hutang->no_hutang}]",
-            $pembayaran,
-        );
+        $noBayar = $this->generateNomor('BYR-HT', $tanggal);
+
+        $jurnal = Jurnal::create([
+            'nomor_jurnal' => $noBayar,
+            'tanggal' => $tanggal,
+            'client_id' => $invoiceJurnal->client_id,
+            'keterangan' => $keterangan ?: "Pelunasan Hutang [{$invoiceJurnal->nomor_jurnal}]",
+            'created_by' => $createdBy,
+            'journalable_type' => Jurnal::class,
+            'journalable_id' => $invoiceJurnal->id,
+        ]);
 
         $jurnal->details()->create([
             'akun_id' => $hutang->id,
-            'debit' => $pembayaran->jumlah,
+            'debit' => $jumlah,
             'kredit' => 0,
         ]);
 
         $jurnal->details()->create([
             'akun_id' => $kas->id,
             'debit' => 0,
-            'kredit' => $pembayaran->jumlah,
+            'kredit' => $jumlah,
         ]);
-
-        $pembayaran->update(['jurnal_id' => $jurnal->id]);
-        $pembayaran->hutang->setStatusFromSisa();
 
         return $jurnal;
     }
@@ -482,48 +435,52 @@ class JurnalService
      * Jurnal penerimaan piutang: penerimaan dari customer.
      * Debit Kas, Kredit Piutang.
      */
-    public function postPembayaranPiutang(PembayaranPiutang $pembayaran): ?Jurnal
+    public function postPembayaranPiutang(Jurnal $invoiceJurnal, string $tanggal, float $jumlah, ?string $keterangan, int $createdBy, int $akunPembayaranId): Jurnal
     {
-        $kas = $this->resolveKasAkun($pembayaran->akun_pembayaran_id);
-        $piutang = Akun::system('piutang');
+        $invoiceJurnal->loadMissing('details.akun.kategori');
+        $piutang = $invoiceJurnal->details
+            ->map(fn ($d) => $d->akun)
+            ->first(fn ($a) => $a?->system_code === 'piutang' || ($a?->kategori?->jenis === 'aset' && ! in_array($a?->system_code, ['kas', 'stok'], true)))
+            ?? $this->resolveAkunPiutang();
+
+        $kas = $this->resolveKasAkun($akunPembayaranId);
 
         if ($kas === null || $piutang === null) {
-            return null;
+            throw new \RuntimeException('Akun piutang pada faktur atau akun kas tidak ditemukan. Pastikan akun piutang dan kas tersedia.');
         }
 
-        $jurnal = $this->buatHeaderPembayaran(
-            $pembayaran->tanggal,
-            $pembayaran->piutang->client_id,
-            $pembayaran->created_by,
-            "Pelunasan Piutang [{$pembayaran->piutang->no_piutang}]",
-            $pembayaran,
-        );
+        $noBayar = $this->generateNomor('BYR-PT', $tanggal);
+
+        $jurnal = Jurnal::create([
+            'nomor_jurnal' => $noBayar,
+            'tanggal' => $tanggal,
+            'client_id' => $invoiceJurnal->client_id,
+            'keterangan' => $keterangan ?: "Pelunasan Piutang [{$invoiceJurnal->nomor_jurnal}]",
+            'created_by' => $createdBy,
+            'journalable_type' => Jurnal::class,
+            'journalable_id' => $invoiceJurnal->id,
+        ]);
 
         $jurnal->details()->create([
             'akun_id' => $kas->id,
-            'debit' => $pembayaran->jumlah,
+            'debit' => $jumlah,
             'kredit' => 0,
         ]);
 
         $jurnal->details()->create([
             'akun_id' => $piutang->id,
             'debit' => 0,
-            'kredit' => $pembayaran->jumlah,
+            'kredit' => $jumlah,
         ]);
-
-        $pembayaran->update(['jurnal_id' => $jurnal->id]);
-        $pembayaran->piutang->setStatusFromSisa();
 
         return $jurnal;
     }
 
     /**
-     * Menghapus jurnal pelunasan dan mengembalikan status hutang/piutang.
+     * Menghapus jurnal pelunasan.
      */
-    public function deletePembayaran(int $jurnalId, Hutang|Piutang $entitas): void
+    public function deletePembayaran(int $jurnalId): void
     {
-        $entitas->setStatusFromSisa();
-
         if ($jurnalId <= 0) {
             return;
         }
@@ -651,6 +608,14 @@ class JurnalService
     protected function cariAkun(string $nama): ?Akun
     {
         return Akun::where('nama', $nama)->where('status', 'aktif')->first();
+    }
+
+    /**
+     * Mencari akun aktif yang namanya diawali awalan tertentu, mis. "Hutang".
+     */
+    protected function cariAkunMulaiDengan(string $awalan): ?Akun
+    {
+        return Akun::where('nama', 'like', $awalan.'%')->where('status', 'aktif')->orderBy('id')->first();
     }
 
     /**
@@ -946,7 +911,11 @@ class JurnalService
         ]);
     }
 
-    protected function resolveKasAkun(?int $akunId = null): ?Akun
+    /**
+     * Menentukan akun kas/bank: pilihan pengguna, akun sistem, atau kategori
+     * "Kas" pada chart of accounts produksi (mis. "Kas Tunai").
+     */
+    public function resolveKasAkun(?int $akunId = null): ?Akun
     {
         if ($akunId) {
             $akun = Akun::where('id', $akunId)->where('status', 'aktif')->first();
@@ -955,7 +924,54 @@ class JurnalService
             }
         }
 
-        return Akun::system('kas');
+        return $this->resolveAkunKas();
+    }
+
+    /**
+     * Akun kas default untuk jurnal manual hutang/piutang.
+     */
+    public function resolveAkunKas(): ?Akun
+    {
+        return Akun::system('kas')
+            ?? $this->cariAkun('Kas Tunai')
+            ?? $this->cariAkunMulaiDengan('Kas')
+            ?? Akun::where('status', 'aktif')
+                ->whereHas('kategori', fn ($q) => $q->where('nama', 'like', 'Kas%'))
+                ->orderBy('id')
+                ->first();
+    }
+
+    /**
+     * Akun hutang default: akun sistem, nama berawalan "Hutang", atau kategori
+     * liabilitas pertama pada chart of accounts produksi.
+     */
+    public function resolveAkunHutang(): ?Akun
+    {
+        return Akun::system('hutang')
+            ?? $this->cariAkun('Hutang Peternak')
+            ?? $this->cariAkunMulaiDengan('Hutang')
+            ?? Akun::where('status', 'aktif')
+                ->whereHas('kategori', fn ($q) => $q->where('jenis', 'liabilitas'))
+                ->orderBy('id')
+                ->first();
+    }
+
+    /**
+     * Akun piutang default: akun sistem, nama berawalan "Piutang", atau
+     * kategori aset non stok/kas/bank pertama pada chart of accounts produksi.
+     */
+    public function resolveAkunPiutang(): ?Akun
+    {
+        return Akun::system('piutang')
+            ?? $this->cariAkun('Piutang Peternak')
+            ?? $this->cariAkunMulaiDengan('Piutang')
+            ?? Akun::where('status', 'aktif')
+                ->whereHas('kategori', fn ($q) => $q->where('jenis', 'aset')
+                    ->where('nama', 'not like', 'Stok%')
+                    ->where('nama', 'not like', 'Kas%')
+                    ->where('nama', 'not like', 'Bank%'))
+                ->orderBy('id')
+                ->first();
     }
 
     /**
@@ -964,8 +980,15 @@ class JurnalService
     public function deleteFromTransaksi(Transaksi $transaksi): void
     {
         foreach ($transaksi->jurnals as $jurnal) {
-            Hutang::where('jurnal_id', $jurnal->id)->delete();
-            Piutang::where('jurnal_id', $jurnal->id)->delete();
+            // Also delete any payment journals linked to this invoice journal
+            $paymentJurnals = Jurnal::where('journalable_type', Jurnal::class)
+                ->where('journalable_id', $jurnal->id)
+                ->get();
+            foreach ($paymentJurnals as $pj) {
+                $pj->details()->delete();
+                $pj->delete();
+            }
+
             $jurnal->details()->delete();
             $jurnal->delete();
         }
@@ -1001,12 +1024,9 @@ class JurnalService
     {
         $datePart = str_replace('-', '', $tanggal);
 
-        $model = $prefix === 'JNL' ? Jurnal::class : ($prefix === 'HT' ? Hutang::class : Piutang::class);
-        $column = $prefix === 'JNL' ? 'nomor_jurnal' : ($prefix === 'HT' ? 'no_hutang' : 'no_piutang');
-
-        $last = $model::where($column, 'like', "{$prefix}-{$datePart}-%")
+        $last = Jurnal::where('nomor_jurnal', 'like', "{$prefix}-{$datePart}-%")
             ->orderByDesc('id')
-            ->value($column);
+            ->value('nomor_jurnal');
 
         $sequence = $last ? (int) substr($last, -4) + 1 : 1;
 

@@ -119,7 +119,9 @@ class JurnalJenisRequest extends FormRequest
      */
     protected function resolveLawan(): ?Akun
     {
-        return $this->resolveAkun('akun_lawan') ?? Akun::system('kas');
+        return $this->resolveAkun('akun_lawan')
+            ?? Akun::system('kas')
+            ?? Akun::query()->KasBank()->orderBy('kode')->first();
     }
 
     protected function resolusiLawanGagal(string $jenis): string

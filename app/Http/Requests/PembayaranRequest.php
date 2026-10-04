@@ -2,8 +2,7 @@
 
 namespace App\Http\Requests;
 
-use App\Models\Hutang;
-use App\Models\Piutang;
+use App\Models\Jurnal;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
@@ -17,8 +16,8 @@ class PembayaranRequest extends FormRequest
         return [
             'client_id' => ['nullable', 'integer', 'exists:clients,id'],
             'tipe' => ['required_with:client_id', 'string', 'in:hutang,piutang'],
-            'hutang_id' => ['nullable', 'integer', 'exists:hutangs,id'],
-            'piutang_id' => ['nullable', 'integer', 'exists:piutangs,id'],
+            'hutang_id' => ['nullable', 'integer', 'exists:jurnals,id'],
+            'piutang_id' => ['nullable', 'integer', 'exists:jurnals,id'],
             'tanggal' => ['required', 'date'],
             'jumlah' => ['required', 'numeric', 'gt:0'],
             'keterangan' => ['nullable', 'string', 'max:255'],
@@ -47,9 +46,12 @@ class PembayaranRequest extends FormRequest
     {
         $clientId = (int) $this->input('client_id');
         $tipe = $this->input('tipe');
-        $model = $tipe === 'piutang' ? Piutang::class : Hutang::class;
 
-        $sisaClient = (float) $model::where('client_id', $clientId)->get()->sum(fn ($e) => $e->sisa());
+        $sisaClient = (float) Jurnal::with(['pembayarans.details.akun', 'details.akun.kategori'])
+            ->where('entitas_type', $tipe)
+            ->where('client_id', $clientId)
+            ->get()
+            ->sum(fn (Jurnal $e) => $e->sisaEntitas());
 
         if ($sisaClient <= 0) {
             $validator->errors()->add('client_id', 'Tidak ada tagihan yang masih bersisa untuk client ini.');
@@ -73,13 +75,8 @@ class PembayaranRequest extends FormRequest
             return;
         }
 
-        if ($this->input('hutang_id')) {
-            $entitas = Hutang::find($id);
-            $label = 'hutang';
-        } else {
-            $entitas = Piutang::find($id);
-            $label = 'piutang';
-        }
+        $entitas = Jurnal::with(['pembayarans.details.akun', 'details.akun.kategori'])->find($id);
+        $label = $this->input('hutang_id') ? 'hutang' : 'piutang';
 
         if ($entitas === null) {
             $validator->errors()->add($label.'_id', 'Tagihan tidak ditemukan.');
@@ -87,10 +84,10 @@ class PembayaranRequest extends FormRequest
             return;
         }
 
-        if ($jumlah > $entitas->sisa()) {
+        if ($jumlah > $entitas->sisaEntitas()) {
             $validator->errors()->add(
                 'jumlah',
-                'Jumlah melebihi sisa tagihan (Rp '.number_format($entitas->sisa(), 0, ',', '.').').',
+                'Jumlah melebihi sisa tagihan (Rp '.number_format($entitas->sisaEntitas(), 0, ',', '.').').',
             );
         }
     }

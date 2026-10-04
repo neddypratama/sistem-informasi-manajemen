@@ -6,15 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\Akun;
 use App\Models\Barang;
 use App\Models\Client;
-use App\Models\Hutang;
 use App\Models\JenisBarang;
+use App\Models\Jurnal;
 use App\Models\JurnalDetail;
 use App\Models\LogAktivitas;
-use App\Models\Piutang;
 use App\Models\StokBatch;
 use App\Models\Transaksi;
 use App\Services\SaldoAkunService;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -68,8 +66,8 @@ class DashboardController extends Controller
             ),
             'nilaiPersediaan' => $this->nilaiPersediaan(),
             'jumlahStok' => (float) Barang::sum('stok'),
-            ...$this->totalTagihan(Piutang::class, 'piutang'),
-            ...$this->totalTagihan(Hutang::class, 'hutang'),
+            ...$this->totalTagihan('piutang'),
+            ...$this->totalTagihan('hutang'),
             ...$this->saldoKasBank($sampai),
         ];
 
@@ -176,17 +174,18 @@ class DashboardController extends Controller
      *
      * @return array<string, float>
      */
-    protected function totalTagihan(string $model, string $prefix): array
+    protected function totalTagihan(string $entitasType): array
     {
-        $query = $model::query();
+        $query = Jurnal::with(['pembayarans.details.akun', 'details.akun.kategori'])
+            ->where('entitas_type', $entitasType);
 
         $this->scopeKepemilikan($query);
 
-        $belumLunas = $query->get()->filter(fn ($tagihan) => ! $tagihan->isLunas());
+        $belumLunas = $query->get()->filter(fn (Jurnal $tagihan) => $tagihan->sisaEntitas() > 0);
 
         return [
-            $prefix => (float) $belumLunas->sum(fn ($tagihan) => $tagihan->sisa()),
-            $prefix.'Jumlah' => $belumLunas->count(),
+            $entitasType => (float) $belumLunas->sum(fn (Jurnal $tagihan) => $tagihan->sisaEntitas()),
+            $entitasType.'Jumlah' => $belumLunas->count(),
         ];
     }
 
@@ -445,8 +444,8 @@ class DashboardController extends Controller
      */
     protected function hutangLebihBesar(): array
     {
-        $hutang = $this->sisaPerClient(Hutang::class, 'pembayaran_hutangs', 'hutang_id');
-        $piutang = $this->sisaPerClient(Piutang::class, 'pembayaran_piutangs', 'piutang_id');
+        $hutang = $this->sisaPerClient('hutang');
+        $piutang = $this->sisaPerClient('piutang');
 
         $jumlah = 0;
         $selisih = 0.0;
@@ -464,28 +463,21 @@ class DashboardController extends Controller
     }
 
     /**
-     * Sisa tagihan (total - terbayar) per client dalam satu query per model,
-     * tanpa N+1 akibat pemanggilan Hutang::sisa()/Piutang::sisa() per baris.
+     * Sisa tagihan (total - terbayar) per client.
      *
-     * @param  class-string<Model>  $model
      * @return array<int, float>
      */
-    protected function sisaPerClient(string $model, string $tabelPembayaran, string $kunci): array
+    protected function sisaPerClient(string $entitasType): array
     {
-        $tabel = $model::query()->getModel()->getTable();
-
-        $query = $model::query()
-            ->selectRaw("client_id, total - COALESCE((
-                SELECT SUM(p.jumlah) FROM {$tabelPembayaran} p WHERE p.{$kunci} = {$tabel}.id
-            ), 0) as sisa")
-            ->where('status', '!=', 'lunas')
+        $query = Jurnal::with(['pembayarans.details.akun', 'details.akun.kategori'])
+            ->where('entitas_type', $entitasType)
             ->whereNotNull('client_id');
 
         $this->scopeKepemilikan($query);
 
         return $query->get()
-            ->groupBy(fn ($row) => (int) $row->client_id)
-            ->map(fn ($rows) => round((float) $rows->sum(fn ($row) => (float) $row->sisa), 2))
+            ->groupBy(fn (Jurnal $row) => (int) $row->client_id)
+            ->map(fn ($rows) => round((float) $rows->sum(fn (Jurnal $row) => $row->sisaEntitas()), 2))
             ->all();
     }
 

@@ -4,6 +4,7 @@ import BaseButton from '../../components/ui/BaseButton.vue';
 import BaseCard from '../../components/ui/BaseCard.vue';
 import BaseInput from '../../components/ui/BaseInput.vue';
 import BaseLabel from '../../components/ui/BaseLabel.vue';
+import BaseSelect from '../../components/ui/BaseSelect.vue';
 import BaseTable from '../../components/ui/BaseTable.vue';
 import CardContent from '../../components/ui/CardContent.vue';
 import PageHeader from '../../components/ui/PageHeader.vue';
@@ -45,12 +46,20 @@ function kelompokkanPerKategori(items) {
     }
 
     return [...groups.entries()]
-        .map(([kategori, akunList]) => ({
-            kategori,
-            akunList,
-            saldo: akunList.reduce((sum, item) => sum + parseFloat(item.saldo), 0),
-        }))
-        .sort((a, b) => a.kategori.localeCompare(b.kategori));
+        .map(([kategori, akunList]) => {
+            const sortedAkunList = [...akunList].sort((a, b) =>
+                (a.akun?.kode ?? '').localeCompare(b.akun?.kode ?? '', undefined, { numeric: true }),
+            );
+            const minKode = sortedAkunList[0]?.akun?.kode ?? '';
+
+            return {
+                kategori,
+                akunList: sortedAkunList,
+                minKode,
+                saldo: akunList.reduce((sum, item) => sum + parseFloat(item.saldo), 0),
+            };
+        })
+        .sort((a, b) => a.minKode.localeCompare(b.minKode, undefined, { numeric: true }));
 }
 
 const pendapatanKelompok = computed(() => kelompokkanPerKategori(data.value?.pendapatan));

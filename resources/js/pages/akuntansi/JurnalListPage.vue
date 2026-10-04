@@ -108,15 +108,16 @@ function handleExport() {
                         <TableHead>Client</TableHead>
                         <TableHead>Dibuat Oleh</TableHead>
                         <TableHead>Sumber</TableHead>
+                        <TableHead class="text-right">Total</TableHead>
                         <TableHead class="text-right">Detail</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     <TableRow v-if="isLoading">
-                        <TableCell colspan="7"><PageLoader /></TableCell>
+                        <TableCell colspan="8"><PageLoader /></TableCell>
                     </TableRow>
                     <TableRow v-else-if="!data?.data?.length">
-                        <TableCell colspan="7"><EmptyState /></TableCell>
+                        <TableCell colspan="8"><EmptyState /></TableCell>
                     </TableRow>
                     <TableRow
                         v-for="jurnal in data.data"
@@ -135,10 +136,13 @@ function handleExport() {
                                 {{ jurnal.journalable_id ? 'Otomatis' : 'Manual' }}
                             </BaseBadge>
                         </TableCell>
+                        <TableCell class="text-right font-medium">
+                            {{ formatIDR(Math.max(jurnal.total_debit ?? 0, jurnal.total_kredit ?? 0)) }}
+                        </TableCell>
                         <TableCell class="text-right">{{ jurnal.details?.length }} baris</TableCell>
                     </TableRow>
                     <TableRow v-if="data?.data?.length && data?.total_debit !== undefined">
-                        <TableCell colspan="5" class="font-bold">Total Debit &amp; Kredit</TableCell>
+                        <TableCell colspan="6" class="font-bold">Total Debit &amp; Kredit</TableCell>
                         <TableCell colspan="2" class="text-right font-bold text-slate-900">
                             Debit: {{ formatIDR(data.total_debit) }} | Kredit: {{ formatIDR(data.total_kredit) }}
                         </TableCell>

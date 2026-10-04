@@ -4,9 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Akun;
 use App\Models\Barang;
-use App\Models\Hutang;
+use App\Models\Jurnal;
 use App\Models\Kategori;
-use App\Models\Piutang;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\BuatDataUji;
@@ -45,7 +44,7 @@ class KasMonitoringTest extends TestCase
         // Kas keluar: bayar hutang 100.000 pada 10 Agu.
         $this->actingAsApi($this->user)
             ->postJson('/api/pelunasan/hutang', [
-                'hutang_id' => Hutang::first()->id,
+                'hutang_id' => Jurnal::where('entitas_type', 'hutang')->first()->id,
                 'tanggal' => '2026-08-10',
                 'jumlah' => 100000,
                 'akun_pembayaran_id' => Akun::system('kas')->id,
@@ -55,7 +54,7 @@ class KasMonitoringTest extends TestCase
         // Kas masuk: terima piutang 150.000 pada 11 Agu.
         $this->actingAsApi($this->user)
             ->postJson('/api/pelunasan/piutang', [
-                'piutang_id' => Piutang::first()->id,
+                'piutang_id' => Jurnal::where('entitas_type', 'piutang')->first()->id,
                 'tanggal' => '2026-08-11',
                 'jumlah' => 150000,
                 'akun_pembayaran_id' => Akun::system('kas')->id,
@@ -91,7 +90,7 @@ class KasMonitoringTest extends TestCase
         // Mutasi tanggal 10 Agu.
         $this->actingAsApi($this->user)
             ->postJson('/api/pelunasan/hutang', [
-                'hutang_id' => Hutang::first()->id,
+                'hutang_id' => Jurnal::where('entitas_type', 'hutang')->first()->id,
                 'tanggal' => '2026-08-10',
                 'jumlah' => 40000,
                 'akun_pembayaran_id' => Akun::system('kas')->id,
@@ -130,7 +129,7 @@ class KasMonitoringTest extends TestCase
 
         $this->actingAsApi($this->user)
             ->postJson('/api/pelunasan/hutang', [
-                'hutang_id' => Hutang::first()->id,
+                'hutang_id' => Jurnal::where('entitas_type', 'hutang')->first()->id,
                 'tanggal' => '2026-08-10',
                 'jumlah' => 100000,
                 'akun_pembayaran_id' => $akunBank->id,

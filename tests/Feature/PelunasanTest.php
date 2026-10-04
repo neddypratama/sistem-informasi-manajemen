@@ -4,11 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Akun;
 use App\Models\Barang;
-use App\Models\Hutang;
 use App\Models\Jurnal;
-use App\Models\PembayaranHutang;
-use App\Models\PembayaranPiutang;
-use App\Models\Piutang;
 use App\Models\Transaksi;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -41,9 +37,9 @@ class PelunasanTest extends TestCase
             ['barang_id' => $this->barang->id, 'kuantitas' => 10, 'harga' => 10000],
         ]);
 
-        $hutang = Hutang::first();
-        $this->assertSame(100000.0, (float) $hutang->total);
-        $this->assertSame('belum_lunas', $hutang->status);
+        $hutang = Jurnal::where('entitas_type', 'hutang')->first();
+        $this->assertSame(100000.0, (float) $hutang->totalEntitas());
+        $this->assertSame('belum_lunas', $hutang->statusEntitas());
 
         $this->actingAsApi($this->user)
             ->postJson('/api/pelunasan/hutang', [
@@ -54,26 +50,20 @@ class PelunasanTest extends TestCase
             ])
             ->assertCreated();
 
-        $this->assertDatabaseHas('pembayaran_hutangs', [
-            'hutang_id' => $hutang->id,
-            'jumlah' => 100000,
-        ]);
-
-        $pembayaran = PembayaranHutang::first();
-        $jurnal = Jurnal::find($pembayaran->jurnal_id);
-        $this->assertNotNull($jurnal);
+        $pembayaran = Jurnal::where('journalable_type', Jurnal::class)->first();
+        $this->assertNotNull($pembayaran);
 
         // Bayar hutang: Dr Hutang, Cr Kas
-        $detailKas = $jurnal->details->firstWhere('akun_id', Akun::system('kas')->id);
-        $detailHutang = $jurnal->details->firstWhere('akun_id', Akun::system('hutang')->id);
+        $detailKas = $pembayaran->details->firstWhere('akun_id', Akun::system('kas')->id);
+        $detailHutang = $pembayaran->details->first(fn ($d) => $d->akun_id !== Akun::system('kas')->id);
 
         $this->assertSame(0.0, (float) $detailKas->debit);
         $this->assertSame(100000.0, (float) $detailKas->kredit);
         $this->assertSame(100000.0, (float) $detailHutang->debit);
 
         $hutang->refresh();
-        $this->assertSame(0.0, $hutang->sisa());
-        $this->assertSame('lunas', $hutang->status);
+        $this->assertSame(0.0, $hutang->sisaEntitas());
+        $this->assertSame('lunas', $hutang->statusEntitas());
     }
 
     public function test_terima_piutang_menghasilkan_jurnal_kas_dan_mengurangi_sisa(): void
@@ -88,8 +78,8 @@ class PelunasanTest extends TestCase
             ['barang_id' => $this->barang->id, 'kuantitas' => 4, 'harga' => 15000],
         ]);
 
-        $piutang = Piutang::first();
-        $this->assertSame(60000.0, (float) $piutang->total);
+        $piutang = Jurnal::where('entitas_type', 'piutang')->first();
+        $this->assertSame(60000.0, (float) $piutang->totalEntitas());
 
         $this->actingAsApi($this->user)
             ->postJson('/api/pelunasan/piutang', [
@@ -100,21 +90,19 @@ class PelunasanTest extends TestCase
             ])
             ->assertCreated();
 
-        $pembayaran = PembayaranPiutang::first();
-        $jurnal = Jurnal::find($pembayaran->jurnal_id);
-        $this->assertNotNull($jurnal);
+        $pembayaran = Jurnal::where('journalable_type', Jurnal::class)->first();
+        $this->assertNotNull($pembayaran);
 
         // Terima piutang: Dr Kas, Cr Piutang
-        $detailKas = $jurnal->details->firstWhere('akun_id', Akun::system('kas')->id);
-        $detailPiutang = $jurnal->details->firstWhere('akun_id', Akun::system('piutang')->id);
+        $detailKas = $pembayaran->details->firstWhere('akun_id', Akun::system('kas')->id);
+        $detailPiutang = $pembayaran->details->firstWhere('akun_id', Akun::system('piutang')->id);
 
         $this->assertSame(60000.0, (float) $detailKas->debit);
         $this->assertSame(0.0, (float) $detailKas->kredit);
         $this->assertSame(60000.0, (float) $detailPiutang->kredit);
 
-        $piutang->refresh();
-        $this->assertSame(0.0, $piutang->sisa());
-        $this->assertSame('lunas', $piutang->status);
+        $this->assertSame(0.0, $piutang->sisaEntitas());
+        $this->assertSame('lunas', $piutang->statusEntitas());
     }
 
     public function test_pembayaran_melebihi_sisa_ditolak(): void
@@ -125,7 +113,7 @@ class PelunasanTest extends TestCase
             ['barang_id' => $this->barang->id, 'kuantitas' => 10, 'harga' => 10000],
         ]);
 
-        $hutang = Hutang::first();
+        $hutang = Jurnal::where('entitas_type', 'hutang')->first();
 
         $this->actingAsApi($this->user)
             ->postJson('/api/pelunasan/hutang', [
@@ -137,7 +125,7 @@ class PelunasanTest extends TestCase
             ->assertStatus(422)
             ->assertJsonValidationErrors('jumlah');
 
-        $this->assertSame(0, PembayaranHutang::count());
+        $this->assertSame(0, Jurnal::where('journalable_type', Jurnal::class)->count());
     }
 
     public function test_hapus_pembayaran_mengembalikan_sisa_dan_status(): void
@@ -148,7 +136,7 @@ class PelunasanTest extends TestCase
             ['barang_id' => $this->barang->id, 'kuantitas' => 10, 'harga' => 10000],
         ]);
 
-        $hutang = Hutang::first();
+        $hutang = Jurnal::where('entitas_type', 'hutang')->first();
 
         $this->actingAsApi($this->user)
             ->postJson('/api/pelunasan/hutang', [
@@ -159,18 +147,16 @@ class PelunasanTest extends TestCase
             ])
             ->assertCreated();
 
-        $pembayaran = PembayaranHutang::first();
+        $pembayaran = Jurnal::where('journalable_type', Jurnal::class)->first();
 
         $this->actingAsApi($this->user)
             ->deleteJson('/api/pelunasan/hutang/'.$pembayaran->id)
             ->assertOk();
 
-        $this->assertSame(0, PembayaranHutang::count());
-        $this->assertNull(Jurnal::find($pembayaran->jurnal_id), 'Jurnal pelunasan harus ikut terhapus.');
+        $this->assertSame(0, Jurnal::where('journalable_type', Jurnal::class)->count());
 
-        $hutang->refresh();
-        $this->assertSame(100000.0, $hutang->sisa());
-        $this->assertSame('belum_lunas', $hutang->status);
+        $this->assertSame(100000.0, $hutang->sisaEntitas());
+        $this->assertSame('belum_lunas', $hutang->statusEntitas());
     }
 
     public function test_retur_pembelian_mengurangi_total_hutang_asli(): void
@@ -181,17 +167,15 @@ class PelunasanTest extends TestCase
             ['barang_id' => $this->barang->id, 'kuantitas' => 10, 'harga' => 10000],
         ]);
 
-        $hutang = Hutang::first();
-        $this->assertSame(100000.0, (float) $hutang->total);
+        $hutang = Jurnal::where('entitas_type', 'hutang')->first();
+        $this->assertSame(100000.0, (float) $hutang->totalEntitas());
 
         $this->simpanRetur($this->user, 'pembelian_retur', $sumber, [
             ['barang_id' => $this->barang->id, 'kuantitas' => 4, 'harga' => 10000],
         ], '2026-08-05', 'Retur sebagian');
 
-        $hutang->refresh();
-        $this->assertSame(60000.0, (float) $hutang->total);
-        $this->assertSame(60000.0, $hutang->sisa());
-        $this->assertSame('belum_lunas', $hutang->status);
+        $this->assertSame(60000.0, $hutang->sisaEntitas());
+        $this->assertSame('belum_lunas', $hutang->statusEntitas());
     }
 
     public function test_daftar_pelunasan_hanya_memuat_client_yang_masih_bersisa(): void
@@ -213,7 +197,7 @@ class PelunasanTest extends TestCase
 
         $this->actingAsApi($this->user)
             ->postJson('/api/pelunasan/hutang', [
-                'hutang_id' => Hutang::first()->id,
+                'hutang_id' => Jurnal::where('entitas_type', 'hutang')->first()->id,
                 'tanggal' => '2026-08-10',
                 'jumlah' => 100000,
                 'akun_pembayaran_id' => Akun::system('kas')->id,
@@ -271,15 +255,15 @@ class PelunasanTest extends TestCase
             ])
             ->assertCreated();
 
-        $this->assertSame(2, PembayaranHutang::count());
+        $this->assertSame(2, Jurnal::where('journalable_type', Jurnal::class)->count());
         // 2 jurnal pembelian + 2 jurnal pembayaran.
         $this->assertSame(4, Jurnal::count());
 
-        $hutangs = Hutang::orderBy('id')->get();
-        $this->assertSame(0.0, $hutangs[0]->sisa());
-        $this->assertSame('lunas', $hutangs[0]->status);
-        $this->assertSame(30000.0, $hutangs[1]->sisa());
-        $this->assertSame('belum_lunas', $hutangs[1]->status);
+        $hutangs = Jurnal::where('entitas_type', 'hutang')->orderBy('id')->get();
+        $this->assertSame(0.0, $hutangs[0]->sisaEntitas());
+        $this->assertSame('lunas', $hutangs[0]->statusEntitas());
+        $this->assertSame(30000.0, $hutangs[1]->sisaEntitas());
+        $this->assertSame('belum_lunas', $hutangs[1]->statusEntitas());
 
         // Sisa gabungan per client menjadi 30.000.
         $this->actingAsApi($this->user)
@@ -308,7 +292,7 @@ class PelunasanTest extends TestCase
             ->assertStatus(422)
             ->assertJsonValidationErrors('jumlah');
 
-        $this->assertSame(0, PembayaranHutang::count());
+        $this->assertSame(0, Jurnal::where('journalable_type', Jurnal::class)->count());
     }
 
     public function test_terima_piutang_gabungan_mengalokasikan_ke_seluruh_faktur(): void
@@ -336,13 +320,13 @@ class PelunasanTest extends TestCase
             ])
             ->assertCreated();
 
-        $this->assertSame(1, PembayaranPiutang::count());
+        $this->assertSame(1, Jurnal::where('journalable_type', Jurnal::class)->count());
 
-        $piutangs = Piutang::orderBy('id')->get();
-        $this->assertSame(0.0, $piutangs[0]->sisa());
-        $this->assertSame('lunas', $piutangs[0]->status);
-        $this->assertSame(60000.0, $piutangs[1]->sisa());
-        $this->assertSame('belum_lunas', $piutangs[1]->status);
+        $piutangs = Jurnal::where('entitas_type', 'piutang')->orderBy('id')->get();
+        $this->assertSame(0.0, $piutangs[0]->sisaEntitas());
+        $this->assertSame('lunas', $piutangs[0]->statusEntitas());
+        $this->assertSame(60000.0, $piutangs[1]->sisaEntitas());
+        $this->assertSame('belum_lunas', $piutangs[1]->statusEntitas());
 
         $this->actingAsApi($this->user)
             ->getJson('/api/pelunasan/piutang')
@@ -360,7 +344,7 @@ class PelunasanTest extends TestCase
             ['barang_id' => $this->barang->id, 'kuantitas' => 10, 'harga' => 10000],
         ]);
 
-        $hutang = Hutang::first();
+        $hutang = Jurnal::where('entitas_type', 'hutang')->first();
 
         $this->actingAsApi($this->user)
             ->postJson('/api/pelunasan/hutang', [
@@ -371,9 +355,8 @@ class PelunasanTest extends TestCase
             ])
             ->assertCreated();
 
-        $hutang->refresh();
-        $this->assertSame(60000.0, $hutang->sisa());
-        $this->assertSame('belum_lunas', $hutang->status);
+        $this->assertSame(60000.0, $hutang->sisaEntitas());
+        $this->assertSame('belum_lunas', $hutang->statusEntitas());
         $this->assertSame(1, Transaksi::where('tipe_transaksi', 'pembelian')->count());
     }
 }

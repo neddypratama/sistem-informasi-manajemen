@@ -5,8 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ReturStoreRequest;
 use App\Models\DetailTransaksi;
-use App\Models\Hutang;
-use App\Models\Piutang;
 use App\Models\Transaksi;
 use App\Services\FifoStockService;
 use App\Services\JurnalService;
@@ -277,9 +275,9 @@ class ReturController extends Controller
                 }
 
                 if ($isPembelian) {
-                    $this->jurnalService->kembalikanEntitasDariRetur($transaksi, Hutang::class);
+                    $this->jurnalService->kembalikanEntitasDariRetur($transaksi, 'hutang');
                 } else {
-                    $this->jurnalService->kembalikanEntitasDariRetur($transaksi, Piutang::class);
+                    $this->jurnalService->kembalikanEntitasDariRetur($transaksi, 'piutang');
                 }
 
                 $this->jurnalService->deleteFromTransaksi($transaksi);

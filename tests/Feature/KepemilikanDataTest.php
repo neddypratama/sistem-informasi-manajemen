@@ -4,10 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Akun;
 use App\Models\Client;
-use App\Models\Hutang;
 use App\Models\Jurnal;
 use App\Models\Permission;
-use App\Models\Piutang;
 use App\Models\Role;
 use App\Models\StokOpname;
 use App\Models\Transaksi;
@@ -220,25 +218,8 @@ class KepemilikanDataTest extends TestCase
         $userB = $this->buatUserBiasa();
         $client = Client::firstOrFail();
 
-        $hutangA = Hutang::create([
-            'no_hutang' => 'HT-20260810-0001',
-            'tanggal' => '2026-08-10',
-            'client_id' => $client->id,
-            'total' => 100000,
-            'keterangan' => 'Hutang milik A',
-            'status' => 'belum_lunas',
-            'created_by' => $userA->id,
-        ]);
-
-        $piutangA = Piutang::create([
-            'no_piutang' => 'PT-20260810-0001',
-            'tanggal' => '2026-08-10',
-            'client_id' => $client->id,
-            'total' => 200000,
-            'keterangan' => 'Piutang milik A',
-            'status' => 'belum_lunas',
-            'created_by' => $userA->id,
-        ]);
+        $hutangA = $this->buatHutang($client, 100000, $userA);
+        $piutangA = $this->buatPiutang($client, 200000, $userA);
 
         $this->actingAsApi($userA)
             ->getJson('/api/hutang')
@@ -277,15 +258,7 @@ class KepemilikanDataTest extends TestCase
         $userB = $this->buatUserBiasa();
         $client = Client::firstOrFail();
 
-        Hutang::create([
-            'no_hutang' => 'HT-20260810-0001',
-            'tanggal' => '2026-08-10',
-            'client_id' => $client->id,
-            'total' => 100000,
-            'keterangan' => 'Hutang milik A',
-            'status' => 'belum_lunas',
-            'created_by' => $userA->id,
-        ]);
+        $this->buatHutang($client, 100000, $userA);
 
         $this->actingAsApi($userA)
             ->getJson('/api/pelunasan/hutang')
@@ -413,15 +386,7 @@ class KepemilikanDataTest extends TestCase
     {
         $superadmin = User::factory()->create();
         $userA = $this->buatUserBiasa();
-        $hutangA = Hutang::create([
-            'no_hutang' => 'HT-20260810-0001',
-            'tanggal' => '2026-08-10',
-            'client_id' => Client::firstOrFail()->id,
-            'total' => 100000,
-            'keterangan' => 'Hutang milik A',
-            'status' => 'belum_lunas',
-            'created_by' => $userA->id,
-        ]);
+        $hutangA = $this->buatHutang(Client::firstOrFail(), 100000, $userA);
 
         $this->actingAsApi($superadmin)
             ->getJson('/api/hutang')

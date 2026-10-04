@@ -3,11 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Akun;
 use App\Models\Client;
-use App\Models\Hutang;
 use App\Models\Jurnal;
-use App\Models\PembayaranHutang;
 use App\Services\ExcelExportService;
 use App\Services\JurnalService;
 use App\Services\LogAktivitasService;
@@ -26,51 +23,77 @@ class HutangController extends Controller
     public function index(Request $request): JsonResponse
     {
         [$sort, $order] = $this->sortParams(
-            ['tanggal', 'no_hutang', 'total', 'created_at'],
+            ['tanggal', 'nomor_jurnal', 'created_at'],
             'tanggal',
             'desc',
         );
 
+        if ($sort === 'no_hutang') {
+            $sort = 'nomor_jurnal';
+        }
+
         $query = $this->queryTerfilter($request);
 
-        $totalNilai = (float) (clone $query)->toBase()->sum('total');
-
         $hutangs = (clone $query)
-            ->with(['client', 'pembayarans', 'user'])
+            ->with(['client', 'pembayarans.details.akun', 'user', 'details.akun.kategori'])
             ->orderBy($sort, $order)
             ->when($sort === 'tanggal', fn ($q) => $q->orderByDesc('id'))
             ->paginate(15);
 
         // Transform items to include sisa & list of payments
-        $hutangs->getCollection()->transform(function ($item) {
+        $hutangs->getCollection()->transform(function (Jurnal $item) {
+            $total = $item->totalEntitas();
+            $dibayar = $item->dibayarEntitas();
+            $sisa = $item->sisaEntitas();
+            $status = $item->statusEntitas();
+
+            $pembayarans = $item->pembayarans->map(function ($p) {
+                $jumlah = (float) $p->details
+                    ->filter(fn ($d) => $d->akun?->system_code === 'hutang' || $d->akun?->kategori?->jenis === 'liabilitas')
+                    ->sum('debit');
+
+                return [
+                    'id' => $p->id,
+                    'tanggal' => $p->tanggal->toDateString(),
+                    'jumlah' => $jumlah,
+                    'keterangan' => $p->keterangan,
+                ];
+            })->values();
+
             return [
                 'id' => $item->id,
-                'no_hutang' => $item->no_hutang,
+                'no_hutang' => $item->nomor_jurnal,
                 'tanggal' => $item->tanggal->toDateString(),
                 'client_id' => $item->client_id,
                 'client' => $item->client?->nama,
-                'total' => (float) $item->total,
-                'dibayar' => (float) $item->pembayarans->sum('jumlah'),
-                'sisa' => (float) $item->sisa(),
-                'status' => $item->status,
+                'total' => $total,
+                'dibayar' => $dibayar,
+                'sisa' => $sisa,
+                'status' => $status,
                 'keterangan' => $item->keterangan,
                 'user' => $item->user?->name,
-                'pembayarans' => $item->pembayarans->map(fn ($p) => [
-                    'id' => $p->id,
-                    'tanggal' => $p->tanggal->toDateString(),
-                    'jumlah' => (float) $p->jumlah,
-                    'keterangan' => $p->keterangan,
-                ])->values(),
+                'pembayarans' => $pembayarans,
             ];
         });
 
-        // Summary totals
-        $allHutang = Hutang::with('pembayarans');
+        // Calculate filtered results status
+        if ($request->query('status')) {
+            $filterStatus = $request->query('status');
+            $filtered = $hutangs->getCollection()->filter(fn ($item) => $item['status'] === $filterStatus)->values();
+            $hutangs->setCollection($filtered);
+        }
+
+        // Summary totals across all hutang
+        $allHutang = Jurnal::with(['pembayarans.details.akun', 'details.akun.kategori'])
+            ->where('entitas_type', 'hutang');
         $this->scopeKepemilikan($allHutang);
         $allHutang = $allHutang->get();
-        $totalHutang = (float) $allHutang->sum('total');
-        $sisaHutang = (float) $allHutang->sum(fn ($h) => $h->sisa());
+
+        $totalHutang = (float) $allHutang->sum(fn ($h) => $h->totalEntitas());
+        $sisaHutang = (float) $allHutang->sum(fn ($h) => $h->sisaEntitas());
         $lunasHutang = (float) ($totalHutang - $sisaHutang);
+
+        $totalNilai = (float) $hutangs->getCollection()->sum('total');
 
         return response()->json([
             'data' => $hutangs,
@@ -86,27 +109,38 @@ class HutangController extends Controller
     public function export(Request $request): StreamedResponse
     {
         [$sort, $order] = $this->sortParams(
-            ['tanggal', 'no_hutang', 'total', 'created_at'],
+            ['tanggal', 'nomor_jurnal', 'created_at'],
             'tanggal',
             'desc',
         );
 
+        if ($sort === 'no_hutang') {
+            $sort = 'nomor_jurnal';
+        }
+
         $rows = (clone $this->queryTerfilter($request))
-            ->with(['client', 'pembayarans', 'user'])
+            ->with(['client', 'pembayarans.details.akun', 'user', 'details.akun.kategori'])
             ->orderBy($sort, $order)
             ->when($sort === 'tanggal', fn ($q) => $q->orderByDesc('id'))
             ->get()
-            ->map(fn (Hutang $item) => [
-                $item->no_hutang,
-                $item->tanggal->toDateString(),
-                $item->client?->nama ?? '',
-                (float) $item->total,
-                (float) $item->pembayarans->sum('jumlah'),
-                (float) $item->sisa(),
-                $item->status === 'lunas' ? 'Lunas' : 'Belum Lunas',
-                $item->keterangan ?? '',
-                $item->user?->name ?? '',
-            ]);
+            ->map(function (Jurnal $item) {
+                $total = $item->totalEntitas();
+                $dibayar = $item->dibayarEntitas();
+                $sisa = $item->sisaEntitas();
+                $status = $item->statusEntitas();
+
+                return [
+                    $item->nomor_jurnal,
+                    $item->tanggal->toDateString(),
+                    $item->client?->nama ?? '',
+                    $total,
+                    $dibayar,
+                    $sisa,
+                    $status === 'lunas' ? 'Lunas' : 'Belum Lunas',
+                    $item->keterangan ?? '',
+                    $item->user?->name ?? '',
+                ];
+            });
 
         return ExcelExportService::download(
             'hutang-'.now()->format('Y-m-d').'.xlsx',
@@ -116,19 +150,12 @@ class HutangController extends Controller
         );
     }
 
-    /**
-     * Query hutang terfilter (tanpa eager load & sorting) agar index, export,
-     * dan agregat total memakai sumber filter yang sama.
-     *
-     * @return Builder<Hutang>
-     */
     private function queryTerfilter(Request $request): Builder
     {
         $clientId = $request->input('client_id');
         $search = trim((string) $request->query('search'));
-        $status = $request->query('status');
 
-        $query = Hutang::query();
+        $query = Jurnal::where('entitas_type', 'hutang');
 
         $this->scopeKepemilikan($query);
 
@@ -139,15 +166,16 @@ class HutangController extends Controller
         $query
             ->when($search !== '', function ($q) use ($search): void {
                 $q->where(function ($x) use ($search): void {
-                    $x->where('no_hutang', 'like', "%{$search}%")
+                    $x->where('nomor_jurnal', 'like', "%{$search}%")
                         ->orWhere('keterangan', 'like', "%{$search}%")
-                        ->orWhereHas('client', fn ($c) => $c->where('nama', 'like', "%{$search}%"));
+                        ->orWhereHas('client', fn ($c) => $c->where('nama', 'like', "%{$search}%")
+                            // ->orWhere('id', 'like', "%{$search}%")
+                            // ->orWhere('no_telepon', 'like', "%{$search}%")
+                            // ->orWhere('no_telepon', 'like', "%{$search}%")
+                            // ->orWhere('alamat', 'like', "%{$search}%")
+                        );
                 });
-            })
-            ->when(
-                is_string($status) && in_array($status, ['belum_lunas', 'lunas'], true),
-                fn ($q) => $q->where('status', $status),
-            );
+            });
 
         return $query;
     }
@@ -155,8 +183,8 @@ class HutangController extends Controller
     public function createData(): JsonResponse
     {
         $clients = Client::where('status', 'aktif')->orderBy('nama')->get();
-        $akunHutang = Akun::system('hutang');
-        $akunKas = Akun::system('kas');
+        $akunHutang = $this->jurnalService->resolveAkunHutang();
+        $akunKas = $this->jurnalService->resolveAkunKas();
 
         return response()->json([
             'clients' => $clients,
@@ -189,45 +217,38 @@ class HutangController extends Controller
         ]);
 
         try {
-            $hutang = DB::transaction(function () use ($validated): Hutang {
-                $datePart = str_replace('-', '', $validated['tanggal']);
-                $last = Hutang::where('no_hutang', 'like', "HT-{$datePart}-%")
-                    ->orderByDesc('id')
-                    ->value('no_hutang');
-                $sequence = $last ? (int) substr($last, -4) + 1 : 1;
-                $noHutang = sprintf('HT-%s-%04d', $datePart, $sequence);
-
-                $hutang = Hutang::create([
-                    'no_hutang' => $noHutang,
-                    'tanggal' => $validated['tanggal'],
-                    'client_id' => $validated['client_id'],
-                    'total' => $validated['total'],
-                    'keterangan' => $validated['keterangan'] ?? null,
-                    'status' => 'belum_lunas',
-                    'created_by' => auth()->id(),
-                    'akun_pembayaran_id' => $validated['akun_pembayaran_id'],
-                ]);
-
-                // Auto create journal: Debit Kas, Kredit Hutang
-                $this->jurnalService->postTambahHutang($hutang);
-
-                return $hutang;
+            $jurnal = DB::transaction(function () use ($validated): Jurnal {
+                return $this->jurnalService->postTambahHutang(
+                    $validated['tanggal'],
+                    (int) $validated['client_id'],
+                    (float) $validated['total'],
+                    $validated['keterangan'] ?? null,
+                    (int) auth()->id(),
+                    (int) $validated['akun_pembayaran_id'],
+                );
             });
         } catch (\Throwable $e) {
             return response()->json(['message' => 'Gagal menyimpan transaksi hutang: '.$e->getMessage()], 422);
         }
 
-        LogAktivitasService::catat('hutang', 'tambah', 'Menambah hutang', $hutang->no_hutang);
+        LogAktivitasService::catat('hutang', 'tambah', 'Menambah hutang', $jurnal->nomor_jurnal);
 
         return response()->json([
             'message' => 'Transaksi tambah hutang berhasil disimpan.',
-            'data' => $hutang,
+            'data' => [
+                'id' => $jurnal->id,
+                'no_hutang' => $jurnal->nomor_jurnal,
+                'tanggal' => $jurnal->tanggal->toDateString(),
+                'client_id' => $jurnal->client_id,
+                'total' => (float) $validated['total'],
+                'keterangan' => $jurnal->keterangan,
+            ],
         ], 201);
     }
 
-    public function updateTambah(Request $request, Hutang $hutang): JsonResponse
+    public function updateTambah(Request $request, Jurnal $hutang): JsonResponse
     {
-        $this->scopeKepemilikan(Hutang::query()->where('id', $hutang->id));
+        $this->scopeKepemilikan(Jurnal::where('id', $hutang->id)->where('entitas_type', 'hutang'));
 
         $validated = $request->validate([
             'tanggal' => ['required', 'date'],
@@ -242,7 +263,7 @@ class HutangController extends Controller
             'akun_pembayaran_id.required' => 'Metode pembayaran / akun kas wajib dipilih.',
         ]);
 
-        $dibayar = (float) $hutang->pembayarans()->sum('jumlah');
+        $dibayar = $hutang->dibayarEntitas();
         if ((float) $validated['total'] < $dibayar) {
             return response()->json([
                 'message' => 'Total hutang tidak boleh kurang dari jumlah yang sudah dibayar (Rp '.number_format($dibayar, 0, ',', '.').').',
@@ -251,26 +272,28 @@ class HutangController extends Controller
 
         try {
             DB::transaction(function () use ($hutang, $validated): void {
+                $hutang->details()->delete();
+                $kas = $this->jurnalService->resolveKasAkun((int) $validated['akun_pembayaran_id']);
+                $hutangAkun = $this->jurnalService->resolveAkunHutang();
+
+                if ($kas === null || $hutangAkun === null) {
+                    throw new \RuntimeException('Akun hutang atau akun kas tidak ditemukan.');
+                }
+
                 $hutang->update([
                     'tanggal' => $validated['tanggal'],
                     'client_id' => $validated['client_id'],
-                    'total' => $validated['total'],
                     'keterangan' => $validated['keterangan'] ?? null,
-                    'akun_pembayaran_id' => $validated['akun_pembayaran_id'],
                 ]);
 
-                if ($hutang->jurnal_id) {
-                    Jurnal::where('id', $hutang->jurnal_id)->delete();
-                }
-
-                $this->jurnalService->postTambahHutang($hutang);
-                $hutang->setStatusFromSisa();
+                $hutang->details()->create(['akun_id' => $kas->id, 'debit' => $validated['total'], 'kredit' => 0]);
+                $hutang->details()->create(['akun_id' => $hutangAkun->id, 'debit' => 0, 'kredit' => $validated['total']]);
             });
         } catch (\Throwable $e) {
             return response()->json(['message' => 'Gagal memperbarui transaksi hutang: '.$e->getMessage()], 422);
         }
 
-        LogAktivitasService::catat('hutang', 'ubah', 'Mengubah hutang', $hutang->no_hutang);
+        LogAktivitasService::catat('hutang', 'ubah', 'Mengubah hutang', $hutang->nomor_jurnal);
 
         return response()->json([
             'message' => 'Transaksi hutang berhasil diperbarui.',
@@ -297,22 +320,23 @@ class HutangController extends Controller
         $jumlah = (float) $validated['jumlah'];
 
         // Get unpaid debt for this client sorted FIFO
-        $fakturs = Hutang::with('pembayarans')
+        $fakturs = Jurnal::with(['pembayarans.details.akun', 'details.akun.kategori'])
+            ->where('entitas_type', 'hutang')
             ->where('client_id', $clientId);
 
         $this->scopeKepemilikan($fakturs);
 
         $fakturs = $fakturs
             ->get()
-            ->filter(fn ($e) => $e->sisa() > 0)
-            ->sortBy(fn ($e) => $e->tanggal->toDateString().'-'.str_pad((string) $e->id, 8, '0', STR_PAD_LEFT))
+            ->filter(fn (Jurnal $e) => $e->sisaEntitas() > 0)
+            ->sortBy(fn (Jurnal $e) => $e->tanggal->toDateString().'-'.str_pad((string) $e->id, 8, '0', STR_PAD_LEFT))
             ->values();
 
         if ($fakturs->isEmpty()) {
             return response()->json(['message' => 'Client ini tidak memiliki hutang yang belum lunas.'], 422);
         }
 
-        $totalSisa = (float) $fakturs->sum(fn ($f) => $f->sisa());
+        $totalSisa = (float) $fakturs->sum(fn (Jurnal $f) => $f->sisaEntitas());
         if ($jumlah > $totalSisa) {
             return response()->json(['message' => 'Jumlah pembayaran melebihi total sisa hutang client (Rp '.number_format($totalSisa, 0, ',', '.').').'], 422);
         }
@@ -326,20 +350,17 @@ class HutangController extends Controller
                         break;
                     }
 
-                    $sisaFaktur = $faktur->sisa();
+                    $sisaFaktur = $faktur->sisaEntitas();
                     $bayar = min($sisaFaktur, $sisaUang);
 
-                    $pembayaran = PembayaranHutang::create([
-                        'hutang_id' => $faktur->id,
-                        'tanggal' => $validated['tanggal'],
-                        'jumlah' => $bayar,
-                        'keterangan' => $validated['keterangan'] ?? null,
-                        'created_by' => auth()->id(),
-                        'akun_pembayaran_id' => $validated['akun_pembayaran_id'],
-                    ]);
-
-                    // Auto create journal: Debit Hutang, Kredit Kas
-                    $this->jurnalService->postPembayaranHutang($pembayaran);
+                    $this->jurnalService->postPembayaranHutang(
+                        $faktur,
+                        $validated['tanggal'],
+                        $bayar,
+                        $validated['keterangan'] ?? null,
+                        (int) auth()->id(),
+                        (int) $validated['akun_pembayaran_id'],
+                    );
 
                     $sisaUang -= $bayar;
                 }
