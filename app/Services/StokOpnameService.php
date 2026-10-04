@@ -26,10 +26,12 @@ class StokOpnameService
         array $items,
         ?string $keterangan,
         int $createdBy,
+        ?string $jenisOpname = null,
     ): StokOpname {
         $opname = StokOpname::create([
             'no_opname' => $this->generateNomor($tanggal),
             'tanggal' => $tanggal,
+            'jenis_opname' => $jenisOpname,
             'keterangan' => $keterangan,
             'status' => 'selesai',
             'created_by' => $createdBy,

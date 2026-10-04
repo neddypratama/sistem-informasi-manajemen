@@ -38,7 +38,6 @@ class ExcelExportTest extends TestCase
             '/api/transaksi/export-excel',
             '/api/stok/export-excel',
             '/api/stok/riwayat/{barang}/export-excel',
-            '/api/stok/laporan/export-excel',
             '/api/stok-opname/export-excel',
             '/api/jurnal/export-excel',
             '/api/laporan/buku-besar/export-excel',

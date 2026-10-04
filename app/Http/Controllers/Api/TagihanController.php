@@ -8,18 +8,30 @@ use App\Models\Hutang;
 use App\Models\Piutang;
 use App\Services\ExcelExportService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TagihanController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
+        $search = trim((string) $request->query('search'));
+
         $hutangs = Hutang::with('client');
         $piutangs = Piutang::with('client');
 
         $this->scopeKepemilikan($hutangs);
         $this->scopeKepemilikan($piutangs);
+
+        if ($search !== '') {
+            $hutangs->whereHas('client', function ($q) use ($search): void {
+                $q->where('nama', 'like', "%{$search}%");
+            });
+            $piutangs->whereHas('client', function ($q) use ($search): void {
+                $q->where('nama', 'like', "%{$search}%");
+            });
+        }
 
         $items = $hutangs->get()
             ->concat($piutangs->get())
@@ -34,6 +46,7 @@ class TagihanController extends Controller
                 $sisaHutang = (float) $ht->sum(fn ($r) => $r->sisa());
                 $totalPiutang = (float) $pt->sum('total');
                 $sisaPiutang = (float) $pt->sum(fn ($r) => $r->sisa());
+                $selisih = $sisaPiutang - $sisaHutang;
 
                 return [
                     'client_id' => $client->id,
@@ -45,11 +58,12 @@ class TagihanController extends Controller
                     'total_piutang' => $totalPiutang,
                     'sisa_piutang' => $sisaPiutang,
                     'total' => $totalHutang + $totalPiutang,
-                    'sisa' => $sisaHutang + $sisaPiutang,
+                    'sisa' => $selisih,
+                    'posisi_sisa' => $selisih >= 0 ? 'piutang' : 'hutang',
                 ];
             })
             ->values()
-            ->sortByDesc('sisa')
+            ->sortByDesc(fn ($item) => abs($item['sisa']))
             ->values();
 
         $totalHutang = (float) $items->sum('total_hutang');
@@ -66,13 +80,24 @@ class TagihanController extends Controller
         ));
     }
 
-    public function export(): StreamedResponse
+    public function export(Request $request): StreamedResponse
     {
+        $search = trim((string) $request->query('search'));
+
         $hutangs = Hutang::with('client');
         $piutangs = Piutang::with('client');
 
         $this->scopeKepemilikan($hutangs);
         $this->scopeKepemilikan($piutangs);
+
+        if ($search !== '') {
+            $hutangs->whereHas('client', function ($q) use ($search): void {
+                $q->where('nama', 'like', "%{$search}%");
+            });
+            $piutangs->whereHas('client', function ($q) use ($search): void {
+                $q->where('nama', 'like', "%{$search}%");
+            });
+        }
 
         $items = $hutangs->get()
             ->concat($piutangs->get())
@@ -87,6 +112,7 @@ class TagihanController extends Controller
                 $sisaHutang = (float) $ht->sum(fn ($r) => $r->sisa());
                 $totalPiutang = (float) $pt->sum('total');
                 $sisaPiutang = (float) $pt->sum(fn ($r) => $r->sisa());
+                $selisih = $sisaPiutang - $sisaHutang;
 
                 return [
                     'client' => $client->nama,
@@ -94,11 +120,11 @@ class TagihanController extends Controller
                     'sisa_hutang' => $sisaHutang,
                     'jumlah_piutang' => $pt->count(),
                     'sisa_piutang' => $sisaPiutang,
-                    'sisa' => $sisaHutang + $sisaPiutang,
+                    'sisa' => $selisih,
                 ];
             })
             ->values()
-            ->sortByDesc('sisa')
+            ->sortByDesc(fn ($item) => abs($item['sisa']))
             ->values();
 
         $rows = $items->map(fn ($item) => [

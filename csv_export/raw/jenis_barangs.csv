@@ -1,0 +1,11 @@
+﻿id,name,deskripsi,kategori_id,created_at,updated_at
+1,"Telur Bebek","Jenis untuk barang Telur Bebek.",59,"2025-11-01 04:45:24","2025-11-01 04:45:24"
+2,"Telur Horn","Jenis untuk barang Telur Horn.",59,"2025-11-01 04:45:24","2025-11-01 04:45:24"
+3,"Telur Puyuh","Jenis untuk barang Telur Puyuh.",59,"2025-11-01 04:45:24","2025-11-01 04:45:24"
+4,"Telur Arab","Jenis untuk barang Telur Arab.",59,"2025-11-01 04:45:24","2025-11-01 04:45:24"
+5,"Telur Asin","Jenis untuk barang Telur Asin.",59,"2025-11-01 04:45:24","2025-11-01 04:45:24"
+6,Tray,"Jenis untuk barang tray telur.",62,"2025-11-01 04:45:24","2025-11-01 04:45:24"
+7,Obat-Obatan,"Jenis untuk barang berupa obat-obatan atau vitamin.",61,"2025-11-01 04:45:24","2025-11-01 04:45:24"
+8,"Pakan Sentrat/Pabrikan","Jenis untuk barang pakan atau sentrat ternak.",60,"2025-11-01 04:45:24","2025-11-01 04:45:24"
+9,"Pakan Curah","Jenis untuk barang pakan curah.",60,"2025-11-01 04:45:24","2025-11-01 04:45:24"
+10,"Pakan Kucing","Jenis untuk barang pakan Kucing.",60,"2025-11-01 04:45:24","2025-11-01 04:45:24"

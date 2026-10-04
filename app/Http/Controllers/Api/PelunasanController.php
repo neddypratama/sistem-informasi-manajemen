@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\PembayaranRequest;
 use App\Models\Client;
 use App\Models\Hutang;
+use App\Models\Jurnal;
 use App\Models\PembayaranHutang;
 use App\Models\PembayaranPiutang;
 use App\Models\Piutang;
@@ -31,11 +32,25 @@ class PelunasanController extends Controller
         return $this->store($request, 'hutang');
     }
 
+    public function updateHutang(PembayaranRequest $request, PembayaranHutang $pembayaran): JsonResponse
+    {
+        $this->pastikanKepemilikan($pembayaran);
+
+        return $this->updatePembayaran($request, 'hutang', $pembayaran);
+    }
+
     public function destroyHutang(PembayaranHutang $pembayaran): JsonResponse
     {
         $this->pastikanKepemilikan($pembayaran);
 
         return $this->destroy($pembayaran->hutang, (int) $pembayaran->jurnal_id, $pembayaran);
+    }
+
+    public function updatePiutang(PembayaranRequest $request, PembayaranPiutang $pembayaran): JsonResponse
+    {
+        $this->pastikanKepemilikan($pembayaran);
+
+        return $this->updatePembayaran($request, 'piutang', $pembayaran);
     }
 
     public function destroyPiutang(PembayaranPiutang $pembayaran): JsonResponse
@@ -223,6 +238,58 @@ class PelunasanController extends Controller
         $this->jurnalService->postPembayaranPiutang($pembayaran);
 
         return $pembayaran;
+    }
+
+    protected function updatePembayaran(PembayaranRequest $request, string $tipe, PembayaranHutang|PembayaranPiutang $pembayaran): JsonResponse
+    {
+        $jumlahBaru = (float) $request->input('jumlah');
+        $isHutang = $tipe === 'hutang';
+        $entitas = $isHutang ? $pembayaran->hutang : $pembayaran->piutang;
+
+        $otherPayments = (float) $entitas->pembayarans()->where('id', '!=', $pembayaran->id)->sum('jumlah');
+        $maxAllowed = (float) $entitas->total - $otherPayments;
+
+        if ($jumlahBaru > $maxAllowed) {
+            return response()->json([
+                'message' => 'Jumlah pembayaran melebihi sisa tagihan (Maksimal Rp '.number_format($maxAllowed, 0, ',', '.').').',
+            ], 422);
+        }
+
+        try {
+            DB::transaction(function () use ($pembayaran, $request, $jumlahBaru, $isHutang, $entitas): void {
+                $pembayaran->update([
+                    'tanggal' => $request->input('tanggal'),
+                    'jumlah' => $jumlahBaru,
+                    'keterangan' => $request->input('keterangan'),
+                    'akun_pembayaran_id' => $request->input('akun_pembayaran_id'),
+                ]);
+
+                if ($pembayaran->jurnal_id) {
+                    Jurnal::where('id', $pembayaran->jurnal_id)->delete();
+                }
+
+                if ($isHutang) {
+                    /** @var PembayaranHutang $pembayaran */
+                    $this->jurnalService->postPembayaranHutang($pembayaran);
+                } else {
+                    /** @var PembayaranPiutang $pembayaran */
+                    $this->jurnalService->postPembayaranPiutang($pembayaran);
+                }
+
+                $entitas->setStatusFromSisa();
+            });
+        } catch (\Throwable $e) {
+            return response()->json(['message' => 'Gagal memperbarui pembayaran: '.$e->getMessage()], 422);
+        }
+
+        LogAktivitasService::catat(
+            'pelunasan',
+            'ubah',
+            'Mengubah '.($isHutang ? 'pembayaran hutang' : 'penerimaan piutang').' sebesar Rp '.number_format($jumlahBaru, 0, ',', '.'),
+            $entitas->client?->nama,
+        );
+
+        return response()->json(['message' => 'Pembayaran berhasil diperbarui.']);
     }
 
     protected function destroy(Hutang|Piutang $entitas, int $jurnalId, $pembayaran): JsonResponse

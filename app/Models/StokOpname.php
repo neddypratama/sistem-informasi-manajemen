@@ -11,6 +11,7 @@ class StokOpname extends Model
     protected $fillable = [
         'no_opname',
         'tanggal',
+        'jenis_opname',
         'keterangan',
         'status',
         'created_by',

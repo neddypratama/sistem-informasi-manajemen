@@ -92,11 +92,6 @@ export const stokRiwayatApi = {
         exportExcel(`/stok/riwayat/${id}/export-excel`, params, `riwayat-stok-${id}.xlsx`),
 };
 
-export const stokLaporanApi = {
-    index: (params) => wrap.get('/stok/laporan', { params }),
-    exportExcel: (params) => exportExcel('/stok/laporan/export-excel', params, 'laporan-stok.xlsx'),
-};
-
 export const stokOpnameApi = {
     createData: () => wrap.get('/stok-opname/create-data'),
     exportExcel: (params) => exportExcel('/stok-opname/export-excel', params, 'stok-opname.xlsx'),
@@ -104,6 +99,11 @@ export const stokOpnameApi = {
     show: (id) => wrap.get(`/stok-opname/${id}`),
     store: (data) => wrap.post('/stok-opname', data),
     destroy: (id) => wrap.del(`/stok-opname/${id}`),
+};
+
+export const stokLaporanApi = {
+    index: (params) => wrap.get('/stok/laporan', { params }),
+    exportExcel: (params) => exportExcel('/stok/laporan/export-excel', params, 'stok-laporan.xlsx'),
 };
 
 export const jurnalApi = {
@@ -134,6 +134,7 @@ export const hutangApi = {
     exportExcel: (params) => exportExcel('/hutang/export-excel', params, 'hutang.xlsx'),
     createData: () => wrap.get('/hutang/create-data'),
     storeTambah: (data) => wrap.post('/hutang/tambah', data),
+    updateTambah: (id, data) => wrap.put(`/hutang/tambah/${id}`, data),
     storeBayar: (data) => wrap.post('/hutang/bayar', data),
 };
 
@@ -142,15 +143,18 @@ export const piutangApi = {
     exportExcel: (params) => exportExcel('/piutang/export-excel', params, 'piutang.xlsx'),
     createData: () => wrap.get('/piutang/create-data'),
     storeTambah: (data) => wrap.post('/piutang/tambah', data),
+    updateTambah: (id, data) => wrap.put(`/piutang/tambah/${id}`, data),
     storeBayar: (data) => wrap.post('/piutang/bayar', data),
 };
 
 export const pelunasanApi = {
     hutang: () => wrap.get('/pelunasan/hutang'),
     bayarHutang: (data) => wrap.post('/pelunasan/hutang', data),
+    updateHutang: (id, data) => wrap.put(`/pelunasan/hutang/${id}`, data),
     hapusHutang: (id) => wrap.del(`/pelunasan/hutang/${id}`),
     piutang: () => wrap.get('/pelunasan/piutang'),
     terimaPiutang: (data) => wrap.post('/pelunasan/piutang', data),
+    updatePiutang: (id, data) => wrap.put(`/pelunasan/piutang/${id}`, data),
     hapusPiutang: (id) => wrap.del(`/pelunasan/piutang/${id}`),
 };
 
@@ -192,4 +196,11 @@ export const userApi = {
 export const logAktivitasApi = {
     index: (params) => wrap.get('/log-aktivitas', { params }),
     userOptions: () => wrap.get('/log-aktivitas/users'),
+};
+
+export const importApi = {
+    downloadTemplate: (modul) => exportExcel(`/import/template/${modul}`, {}, `template-import-${modul}.xlsx`),
+    importData: (modul, formData) => wrap.post(`/import/${modul}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    }),
 };

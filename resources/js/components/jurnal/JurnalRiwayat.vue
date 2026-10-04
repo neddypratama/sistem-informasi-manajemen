@@ -8,6 +8,7 @@ import BaseSelect from '../ui/BaseSelect.vue';
 import BaseTable from '../ui/BaseTable.vue';
 import EmptyState from '../ui/EmptyState.vue';
 import PageLoader from '../ui/PageLoader.vue';
+import StatCard from '../ui/StatCard.vue';
 import TableBody from '../ui/TableBody.vue';
 import TableCell from '../ui/TableCell.vue';
 import TableHead from '../ui/TableHead.vue';
@@ -15,7 +16,7 @@ import TableHeader from '../ui/TableHeader.vue';
 import TableRow from '../ui/TableRow.vue';
 import { jurnalApi } from '../../api';
 import { useQuery } from '../../lib/query';
-import { formatTanggal } from '../../lib/utils';
+import { formatIDR, formatTanggal } from '../../lib/utils';
 
 const props = defineProps({
     jenis: { type: String, required: true },
@@ -54,6 +55,11 @@ watch([() => props.jenis, search], () => {
 
 <template>
     <div>
+        <div v-if="data?.total_debit !== undefined" class="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <StatCard label="Total Debit" :value="formatIDR(data?.total_debit ?? 0)" value-class="text-emerald-700" />
+            <StatCard label="Total Kredit" :value="formatIDR(data?.total_kredit ?? 0)" value-class="text-blue-700" />
+        </div>
+
         <div class="mb-4 flex flex-wrap items-center gap-3">
             <BaseInput v-model="search" placeholder="Cari nomor/client/keterangan..." class="w-full sm:w-60" />
             <BaseSelect v-model="sortKey" class="w-full sm:w-40">
@@ -105,6 +111,12 @@ watch([() => props.jenis, search], () => {
                             </BaseBadge>
                         </TableCell>
                         <TableCell class="text-right">{{ jurnal.details?.length }} baris</TableCell>
+                    </TableRow>
+                    <TableRow v-if="data?.data?.length && data?.total_debit !== undefined">
+                        <TableCell colspan="5" class="font-bold">Total Debit &amp; Kredit</TableCell>
+                        <TableCell colspan="2" class="text-right font-bold text-slate-900">
+                            Debit: {{ formatIDR(data.total_debit) }} | Kredit: {{ formatIDR(data.total_kredit) }}
+                        </TableCell>
                     </TableRow>
                 </TableBody>
             </BaseTable>

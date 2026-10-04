@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\BarangController;
 use App\Http\Controllers\Api\ClientController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\HutangController;
+use App\Http\Controllers\Api\ImportController;
 use App\Http\Controllers\Api\JenisBarangController;
 use App\Http\Controllers\Api\JurnalController;
 use App\Http\Controllers\Api\KasController;
@@ -182,9 +183,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/hutang/export-excel', [HutangController::class, 'export']);
         Route::get('/hutang/create-data', [HutangController::class, 'createData']);
         Route::post('/hutang/tambah', [HutangController::class, 'storeTambah']);
+        Route::put('/hutang/tambah/{hutang}', [HutangController::class, 'updateTambah']);
         Route::post('/hutang/bayar', [HutangController::class, 'storeBayar']);
         Route::get('/pelunasan/hutang', [PelunasanController::class, 'bayarHutang']);
         Route::post('/pelunasan/hutang', [PelunasanController::class, 'storeHutang']);
+        Route::put('/pelunasan/hutang/{pembayaran}', [PelunasanController::class, 'updateHutang']);
         Route::delete('/pelunasan/hutang/{pembayaran}', [PelunasanController::class, 'destroyHutang']);
     });
 
@@ -193,9 +196,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/piutang/export-excel', [PiutangController::class, 'export']);
         Route::get('/piutang/create-data', [PiutangController::class, 'createData']);
         Route::post('/piutang/tambah', [PiutangController::class, 'storeTambah']);
+        Route::put('/piutang/tambah/{piutang}', [PiutangController::class, 'updateTambah']);
         Route::post('/piutang/bayar', [PiutangController::class, 'storeBayar']);
         Route::get('/pelunasan/piutang', [PelunasanController::class, 'terimaPiutang']);
         Route::post('/pelunasan/piutang', [PelunasanController::class, 'storePiutang']);
+        Route::put('/pelunasan/piutang/{pembayaran}', [PelunasanController::class, 'updatePiutang']);
         Route::delete('/pelunasan/piutang/{pembayaran}', [PelunasanController::class, 'destroyPiutang']);
     });
 
@@ -255,4 +260,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/laporan/laba-rugi-curah', [LaporanController::class, 'labaRugiPakanCurah']);
         Route::get('/laporan/laba-rugi-curah/export-excel', [LaporanController::class, 'exportLabaRugiPakanCurah']);
     });
+
+    // Import Data & Download Format Excel
+    Route::get('/import/template/{modul}', [ImportController::class, 'downloadTemplate']);
+    Route::post('/import/{modul}', [ImportController::class, 'import']);
 });

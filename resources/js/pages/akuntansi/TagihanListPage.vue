@@ -1,6 +1,8 @@
 <script setup>
+import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import BaseButton from '../../components/ui/BaseButton.vue';
+import BaseInput from '../../components/ui/BaseInput.vue';
 import BaseTable from '../../components/ui/BaseTable.vue';
 import EmptyState from '../../components/ui/EmptyState.vue';
 import PageHeader from '../../components/ui/PageHeader.vue';
@@ -16,19 +18,25 @@ import { useQuery } from '../../lib/query';
 import { formatIDR } from '../../lib/utils';
 
 const router = useRouter();
+const search = ref('');
 
 const { data, isLoading } = useQuery({
-    queryKey: ['tagihan'],
-    queryFn: tagihanApi.index,
+    queryKey: computed(() => ['tagihan', { search: search.value }]),
+    queryFn: () => tagihanApi.index({ search: search.value }),
+});
+
+const totalSisaNet = computed(() => {
+    if (!data.value) return 0;
+    return data.value.sisaPiutang - data.value.sisaHutang;
 });
 
 function handleExport() {
-    tagihanApi.exportExcel();
+    tagihanApi.exportExcel({ search: search.value });
 }
 </script>
 
 <template>
-    <PageLoader v-if="isLoading || !data" />
+    <PageLoader v-if="isLoading && !data" />
     <div v-else>
         <PageHeader title="Saldo Per Client" description="Ringkasan hutang &amp; piutang per client.">
             <template #actions>
@@ -36,18 +44,32 @@ function handleExport() {
             </template>
         </PageHeader>
 
-        <div class="grid grid-cols-1 gap-4 sm:grid-cols-4">
-            <StatCard label="Total Hutang" :value="formatIDR(data.totalHutang)" />
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-5">
+            <StatCard label="Total Hutang" :value="formatIDR(data?.totalHutang ?? 0)" />
             <StatCard
                 label="Sisa Hutang"
-                :value="formatIDR(data.sisaHutang)"
+                :value="formatIDR(data?.sisaHutang ?? 0)"
                 value-class="text-rose-700"
             />
-            <StatCard label="Total Piutang" :value="formatIDR(data.totalPiutang)" />
+            <StatCard label="Total Piutang" :value="formatIDR(data?.totalPiutang ?? 0)" />
             <StatCard
                 label="Sisa Piutang"
-                :value="formatIDR(data.sisaPiutang)"
+                :value="formatIDR(data?.sisaPiutang ?? 0)"
                 value-class="text-emerald-700"
+            />
+            <StatCard
+                label="Total Sisa Net"
+                :value="formatIDR(Math.abs(totalSisaNet))"
+                :value-class="totalSisaNet < 0 ? 'text-rose-700' : 'text-emerald-700'"
+                :description="totalSisaNet < 0 ? 'Net Hutang' : 'Net Piutang'"
+            />
+        </div>
+
+        <div class="mt-4 flex items-center justify-between gap-4">
+            <BaseInput
+                v-model="search"
+                placeholder="Cari nama client..."
+                class="w-full sm:w-72"
             />
         </div>
 
@@ -65,7 +87,7 @@ function handleExport() {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    <TableRow v-if="data.items.length === 0">
+                    <TableRow v-if="!data?.items?.length">
                         <TableCell colspan="7">
                             <EmptyState message="Belum ada tagihan." />
                         </TableCell>
@@ -76,7 +98,15 @@ function handleExport() {
                         <TableCell class="text-right">{{ formatIDR(item.sisa_hutang) }}</TableCell>
                         <TableCell class="text-right">{{ item.jumlah_piutang }}</TableCell>
                         <TableCell class="text-right">{{ formatIDR(item.sisa_piutang) }}</TableCell>
-                        <TableCell class="text-right font-semibold">{{ formatIDR(item.sisa) }}</TableCell>
+                        <TableCell
+                            class="text-right font-semibold"
+                            :class="item.sisa < 0 ? 'text-rose-600' : (item.sisa > 0 ? 'text-emerald-600' : 'text-slate-600')"
+                        >
+                            {{ formatIDR(Math.abs(item.sisa)) }}
+                            <span class="text-xs font-normal">
+                                ({{ item.sisa < 0 ? 'Hutang' : (item.sisa > 0 ? 'Piutang' : '-') }})
+                            </span>
+                        </TableCell>
                         <TableCell class="text-right">
                             <BaseButton
                                 variant="outline"
@@ -87,10 +117,16 @@ function handleExport() {
                             </BaseButton>
                         </TableCell>
                     </TableRow>
-                    <TableRow v-if="data.items.length > 0">
-                        <TableCell colspan="5" class="font-bold">Total Keseluruhan</TableCell>
-                        <TableCell class="text-right font-bold">
-                            {{ formatIDR(data.sisaHutang + data.sisaPiutang) }}
+                    <TableRow v-if="data?.items?.length > 0">
+                        <TableCell colspan="5" class="font-bold">Total Sisa Net Keseluruhan</TableCell>
+                        <TableCell
+                            class="text-right font-bold"
+                            :class="totalSisaNet < 0 ? 'text-rose-600' : 'text-emerald-600'"
+                        >
+                            {{ formatIDR(Math.abs(totalSisaNet)) }}
+                            <span class="text-xs font-normal">
+                                ({{ totalSisaNet < 0 ? 'Net Hutang' : 'Net Piutang' }})
+                            </span>
                         </TableCell>
                         <TableCell />
                     </TableRow>

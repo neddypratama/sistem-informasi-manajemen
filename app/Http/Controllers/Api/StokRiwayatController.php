@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Barang;
 use App\Models\DetailTransaksi;
+use App\Models\StokOpnameDetail;
 use App\Services\ExcelExportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -25,18 +26,15 @@ class StokRiwayatController extends Controller
         'penjualan' => -1,
         'pembelian_retur' => -1,
         'penjualan_retur' => 1,
+        'stok_opname' => 1,
     ];
 
-    /**
-     * Label tipe transaksi untuk tampilan & export.
-     *
-     * @var array<string, string>
-     */
     private const LABEL_TIPE = [
         'pembelian' => 'Pembelian',
         'penjualan' => 'Penjualan',
         'pembelian_retur' => 'Retur Pembelian',
         'penjualan_retur' => 'Retur Penjualan',
+        'stok_opname' => 'Stok Opname',
     ];
 
     /**
@@ -184,33 +182,75 @@ class StokRiwayatController extends Controller
      */
     private function mutasiBarang(Barang $barang, ?string $tipe, string $dari, string $sampai, string $order): array
     {
-        $semua = DetailTransaksi::query()
+        $transaksis = DetailTransaksi::query()
             ->where('barang_id', $barang->id)
-            ->with(['transaksi:id,tipe_transaksi,tanggal,nomor_transaksi,client_id', 'transaksi.client:id,nama'])
+            ->with(['transaksi:id,tipe_transaksi,tanggal,nomor_transaksi,client_id,created_at', 'transaksi.client:id,nama'])
             ->get()
             ->filter(fn (DetailTransaksi $detail) => $detail->transaksi !== null)
-            ->sortBy(fn (DetailTransaksi $detail) => [
-                $detail->transaksi->tanggal->toDateString(),
-                $detail->transaksi->id,
-            ])
+            ->map(function (DetailTransaksi $detail) {
+                $qty = (self::ARAH_QTY[$detail->transaksi->tipe_transaksi] ?? 0) * (float) $detail->kuantitas;
+
+                return [
+                    'id' => 'tx-'.$detail->id,
+                    'transaksi_id' => $detail->transaksi_id,
+                    'tanggal' => $detail->transaksi->tanggal->toDateString(),
+                    'created_at' => $detail->transaksi->created_at ?? $detail->created_at,
+                    'nomor' => $detail->transaksi->nomor_transaksi,
+                    'tipe' => $detail->transaksi->tipe_transaksi,
+                    'tipe_label' => self::LABEL_TIPE[$detail->transaksi->tipe_transaksi] ?? $detail->transaksi->tipe_transaksi,
+                    'client' => $detail->transaksi->client?->nama,
+                    'kuantitas' => (float) $detail->kuantitas,
+                    'qty' => $qty,
+                    'harga' => (float) $detail->harga,
+                    'subtotal' => (float) $detail->subtotal,
+                ];
+            });
+
+        $opnames = StokOpnameDetail::query()
+            ->where('barang_id', $barang->id)
+            ->whereHas('stokOpname', fn ($q) => $q->where('status', 'selesai'))
+            ->with('stokOpname:id,no_opname,tanggal,created_at')
+            ->get()
+            ->filter(fn ($detail) => $detail->stokOpname !== null)
+            ->map(function ($detail) {
+                $selisih = (float) $detail->selisih;
+
+                return [
+                    'id' => 'op-'.$detail->id,
+                    'transaksi_id' => null,
+                    'tanggal' => $detail->stokOpname->tanggal->toDateString(),
+                    'created_at' => $detail->stokOpname->created_at ?? $detail->created_at,
+                    'nomor' => $detail->stokOpname->no_opname,
+                    'tipe' => 'stok_opname',
+                    'tipe_label' => 'Stok Opname',
+                    'client' => 'Opname '.$detail->stokOpname->no_opname,
+                    'kuantitas' => abs($selisih),
+                    'qty' => $selisih,
+                    'harga' => (float) $detail->harga_satuan,
+                    'subtotal' => abs((float) $detail->nilai_selisih),
+                ];
+            });
+
+        $semua = $transaksis->concat($opnames)
+            ->sortBy(fn ($item) => [$item['tanggal'], (string) $item['created_at'], $item['id']])
             ->values();
 
-        $saldo = (float) $barang->stok - (float) $semua->sum(fn ($detail) => $this->qtyBertanda($detail));
+        $saldo = (float) $barang->stok - (float) $semua->sum('qty');
         $saldoSebelumDari = $saldo;
         $baris = collect();
         $totalNilai = 0.0;
 
-        foreach ($semua as $detail) {
-            $tanggal = $detail->transaksi->tanggal->toDateString();
+        foreach ($semua as $item) {
+            $tanggal = $item['tanggal'];
 
             if ($dari !== '' && $tanggal < $dari) {
-                $saldoSebelumDari += $this->qtyBertanda($detail);
+                $saldoSebelumDari += $item['qty'];
             }
 
             $saldoSebelum = $saldo;
-            $saldo += $this->qtyBertanda($detail);
+            $saldo += $item['qty'];
 
-            $cocok = ($tipe === null || $detail->transaksi->tipe_transaksi === $tipe)
+            $cocok = ($tipe === null || $item['tipe'] === $tipe)
                 && ($dari === '' || $tanggal >= $dari)
                 && ($sampai === '' || $tanggal <= $sampai);
 
@@ -218,9 +258,13 @@ class StokRiwayatController extends Controller
                 continue;
             }
 
-            $totalNilai += (float) $detail->subtotal;
+            $totalNilai += (float) $item['subtotal'];
 
-            $baris->push($this->payloadBaris($detail, $saldoSebelum, $saldo));
+            $baris->push(array_merge($item, [
+                'arah' => $item['qty'] >= 0 ? 'masuk' : 'keluar',
+                'saldo_sebelum' => $saldoSebelum,
+                'saldo' => $saldo,
+            ]));
         }
 
         if ($order === 'desc') {
@@ -228,39 +272,5 @@ class StokRiwayatController extends Controller
         }
 
         return [$baris->values(), $totalNilai, $saldoSebelumDari];
-    }
-
-    /**
-     * Kuantitas bertanda: positif untuk transaksi yang menambah stok.
-     */
-    private function qtyBertanda(DetailTransaksi $detail): float
-    {
-        return (self::ARAH_QTY[$detail->transaksi->tipe_transaksi] ?? 0) * (float) $detail->kuantitas;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function payloadBaris(DetailTransaksi $detail, float $saldoSebelum, float $saldo): array
-    {
-        $transaksi = $detail->transaksi;
-        $qty = $this->qtyBertanda($detail);
-
-        return [
-            'id' => $detail->id,
-            'transaksi_id' => $detail->transaksi_id,
-            'tanggal' => $transaksi->tanggal->toDateString(),
-            'nomor' => $transaksi->nomor_transaksi,
-            'tipe' => $transaksi->tipe_transaksi,
-            'tipe_label' => self::LABEL_TIPE[$transaksi->tipe_transaksi] ?? $transaksi->tipe_transaksi,
-            'client' => $transaksi->client?->nama,
-            'kuantitas' => (float) $detail->kuantitas,
-            'qty' => $qty,
-            'arah' => $qty >= 0 ? 'masuk' : 'keluar',
-            'harga' => (float) $detail->harga,
-            'subtotal' => (float) $detail->subtotal,
-            'saldo_sebelum' => $saldoSebelum,
-            'saldo' => $saldo,
-        ];
     }
 }

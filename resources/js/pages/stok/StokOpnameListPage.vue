@@ -21,18 +21,20 @@ import { formatTanggal } from '../../lib/utils';
 const page = ref(1);
 const search = ref('');
 const statusFilter = ref('');
+const jenisFilter = ref('');
 
 const { data, isLoading } = useQuery({
-    queryKey: () => ['stok-opname', page.value, search.value, statusFilter.value],
+    queryKey: () => ['stok-opname', page.value, search.value, statusFilter.value, jenisFilter.value],
     queryFn: () =>
         stokOpnameApi.index({
             page: page.value,
             search: search.value || undefined,
             status: statusFilter.value || undefined,
+            jenis_opname: jenisFilter.value || undefined,
         }),
 });
 
-watch([search, statusFilter], () => {
+watch([search, statusFilter, jenisFilter], () => {
     if (page.value !== 1) {
         page.value = 1;
     }
@@ -49,6 +51,7 @@ function handleExport() {
     stokOpnameApi.exportExcel({
         search: search.value || undefined,
         status: statusFilter.value || undefined,
+        jenis_opname: jenisFilter.value || undefined,
     });
 }
 </script>
@@ -65,6 +68,13 @@ function handleExport() {
 
         <div class="mb-4 flex flex-wrap items-center gap-3">
             <BaseInput v-model="search" placeholder="Cari no opname..." class="w-full sm:w-56" />
+            <BaseSelect v-model="jenisFilter" class="w-full sm:w-40">
+                <option value="">Jenis: Semua</option>
+                <option value="Telur">Telur</option>
+                <option value="Pakan">Pakan</option>
+                <option value="Obat">Obat</option>
+                <option value="Tray">Tray</option>
+            </BaseSelect>
             <BaseSelect v-model="statusFilter" class="w-full sm:w-36">
                 <option value="">Status: Semua</option>
                 <option value="draft">Draft</option>
@@ -78,6 +88,7 @@ function handleExport() {
                     <TableRow>
                         <TableHead>No Opname</TableHead>
                         <TableHead>Tanggal</TableHead>
+                        <TableHead>Jenis Opname</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead class="text-right">Jumlah Barang</TableHead>
                         <TableHead class="text-right">Nilai Selisih</TableHead>
@@ -86,10 +97,10 @@ function handleExport() {
                 </TableHeader>
                 <TableBody>
                     <TableRow v-if="isLoading">
-                        <TableCell colspan="6"><PageLoader /></TableCell>
+                        <TableCell colspan="7"><PageLoader /></TableCell>
                     </TableRow>
                     <TableRow v-else-if="rows.length === 0">
-                        <TableCell colspan="6"><EmptyState message="Belum ada stok opname." /></TableCell>
+                        <TableCell colspan="7"><EmptyState message="Belum ada stok opname." /></TableCell>
                     </TableRow>
                     <template v-else>
                         <TableRow
@@ -101,6 +112,12 @@ function handleExport() {
                             <TableCell class="font-medium">{{ row.no_opname }}</TableCell>
                             <TableCell>{{ formatTanggal(row.tanggal) }}</TableCell>
                             <TableCell>
+                                <BaseBadge v-if="row.jenis_opname" variant="info">
+                                    {{ row.jenis_opname }}
+                                </BaseBadge>
+                                <span v-else class="text-slate-400">-</span>
+                            </TableCell>
+                            <TableCell>
                                 <BaseBadge :variant="row.status === 'selesai' ? 'success' : 'warning'">
                                     {{ row.status }}
                                 </BaseBadge>
@@ -110,7 +127,7 @@ function handleExport() {
                             <TableCell>{{ row.created_by || '-' }}</TableCell>
                         </TableRow>
                         <TableRow v-if="rows.length > 0 && data?.total_nilai_selisih !== undefined">
-                            <TableCell colspan="3" class="font-bold">Total Keseluruhan</TableCell>
+                            <TableCell colspan="4" class="font-bold">Total Keseluruhan</TableCell>
                             <TableCell class="text-right font-bold">
                                 {{ formatSelisih(data.total_nilai_selisih) }}
                             </TableCell>

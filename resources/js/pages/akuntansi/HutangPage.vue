@@ -20,7 +20,7 @@ import TableCell from '../../components/ui/TableCell.vue';
 import TableHead from '../../components/ui/TableHead.vue';
 import TableHeader from '../../components/ui/TableHeader.vue';
 import TableRow from '../../components/ui/TableRow.vue';
-import { akunApi, hutangApi } from '../../api';
+import { akunApi, hutangApi, pelunasanApi } from '../../api';
 import { invalidateQueries, useQuery } from '../../lib/query';
 import { apiErrorMessage, formatIDR, today } from '../../lib/utils';
 import { useAuthStore } from '../../stores/auth';
@@ -42,7 +42,8 @@ const SORT_OPTIONS = [
 ];
 
 const showModal = ref(false);
-const modalType = ref('tambah'); // 'tambah' | 'bayar'
+const modalType = ref('tambah'); // 'tambah' | 'edit_tambah' | 'bayar' | 'edit_bayar'
+const editingId = ref(null);
 
 // Form state
 const formTanggal = ref(today());
@@ -112,6 +113,7 @@ const selectedClientSummary = computed(() => {
 
 function openModal(type) {
     modalType.value = type;
+    editingId.value = null;
     formTanggal.value = today();
     formClientId.value = '';
     formAmount.value = 0;
@@ -121,8 +123,33 @@ function openModal(type) {
     showModal.value = true;
 }
 
+function openEditTambah(item) {
+    modalType.value = 'edit_tambah';
+    editingId.value = item.id;
+    formTanggal.value = item.tanggal;
+    formClientId.value = String(item.client_id);
+    formAmount.value = item.total;
+    formKeterangan.value = item.keterangan || '';
+    formAkunPembayaranId.value = kasBankOptions.value?.[0]?.id ?? '';
+    formError.value = '';
+    showModal.value = true;
+}
+
+function openEditBayar(pembayaran, item) {
+    modalType.value = 'edit_bayar';
+    editingId.value = pembayaran.id;
+    formTanggal.value = pembayaran.tanggal;
+    formClientId.value = String(item.client_id);
+    formAmount.value = pembayaran.jumlah;
+    formKeterangan.value = pembayaran.keterangan || '';
+    formAkunPembayaranId.value = kasBankOptions.value?.[0]?.id ?? '';
+    formError.value = '';
+    showModal.value = true;
+}
+
 function closeModal() {
     showModal.value = false;
+    editingId.value = null;
 }
 
 watch(selectedClientFilter, () => {
@@ -148,10 +175,25 @@ async function handleSubmitForm() {
                 keterangan: formKeterangan.value || null,
                 akun_pembayaran_id: formAkunPembayaranId.value,
             });
-        } else {
+        } else if (modalType.value === 'edit_tambah') {
+            await hutangApi.updateTambah(editingId.value, {
+                tanggal: formTanggal.value,
+                client_id: formClientId.value,
+                total: formAmount.value,
+                keterangan: formKeterangan.value || null,
+                akun_pembayaran_id: formAkunPembayaranId.value,
+            });
+        } else if (modalType.value === 'bayar') {
             await hutangApi.storeBayar({
                 tanggal: formTanggal.value,
                 client_id: formClientId.value,
+                jumlah: formAmount.value,
+                keterangan: formKeterangan.value || null,
+                akun_pembayaran_id: formAkunPembayaranId.value,
+            });
+        } else if (modalType.value === 'edit_bayar') {
+            await pelunasanApi.updateHutang(editingId.value, {
+                tanggal: formTanggal.value,
                 jumlah: formAmount.value,
                 keterangan: formKeterangan.value || null,
                 akun_pembayaran_id: formAkunPembayaranId.value,
@@ -250,12 +292,13 @@ function handleExport() {
                         <TableHead class="text-right">Sisa</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Keterangan</TableHead>
+                        <TableHead v-if="canManage" class="text-right">Aksi</TableHead>
                     </TableRow>
                 </TableHeader>
 
                 <TableBody>
                     <TableRow v-if="hutangsData.length === 0">
-                        <TableCell colspan="8">
+                        <TableCell :colspan="canManage ? 9 : 8">
                             <EmptyState message="Belum ada transaksi hutang." />
                         </TableCell>
                     </TableRow>
@@ -275,6 +318,11 @@ function handleExport() {
                         </TableCell>
                         <TableCell class="max-w-xs truncate text-slate-500" :title="item.keterangan">
                             {{ item.keterangan || '-' }}
+                        </TableCell>
+                        <TableCell v-if="canManage" class="text-right space-x-1">
+                            <BaseButton variant="outline" size="sm" @click="openEditTambah(item)">
+                                Edit
+                            </BaseButton>
                         </TableCell>
                     </TableRow>
                     <TableRow v-if="hutangsData.length > 0 && data?.total_nilai !== undefined">
@@ -296,7 +344,7 @@ function handleExport() {
         <!-- Modal Tambah / Bayar Hutang -->
         <BaseModal
             :open="showModal"
-            :title="modalType === 'tambah' ? 'Input Tambah Hutang' : 'Input Bayar Hutang'"
+            :title="modalType === 'tambah' ? 'Input Tambah Hutang' : (modalType === 'edit_tambah' ? 'Edit Hutang' : (modalType === 'edit_bayar' ? 'Edit Pembayaran Hutang' : 'Input Bayar Hutang'))"
             @close="closeModal"
         >
             <form class="space-y-4" @submit.prevent="handleSubmitForm">
@@ -315,6 +363,7 @@ function handleExport() {
                         :options="searchableClients"
                         placeholder="-- Pilih Client --"
                         search-placeholder="Cari client..."
+                        :disabled="modalType === 'edit_bayar'"
                     />
                 </div>
 
@@ -346,7 +395,7 @@ function handleExport() {
 
                 <div>
                     <BaseLabel for="form-amount">
-                        {{ modalType === 'tambah' ? 'Jumlah Hutang Baru' : 'Jumlah Pembayaran' }}
+                        {{ modalType.includes('tambah') ? 'Jumlah Hutang' : 'Jumlah Pembayaran' }}
                     </BaseLabel>
                     <CurrencyInput id="form-amount" v-model="formAmount" />
                     <p v-if="modalType === 'bayar' && selectedClientSummary" class="mt-1 text-xs text-slate-500">
@@ -362,7 +411,7 @@ function handleExport() {
                 <div class="flex justify-end gap-2 pt-2">
                     <BaseButton type="button" variant="outline" @click="closeModal">Batal</BaseButton>
                     <BaseButton type="submit" :disabled="formSaving || !formClientId || !formAkunPembayaranId || formAmount <= 0">
-                        {{ formSaving ? 'Menyimpan...' : modalType === 'tambah' ? 'Simpan Hutang' : 'Simpan Pembayaran' }}
+                        {{ formSaving ? 'Menyimpan...' : (modalType.startsWith('edit') ? 'Update Data' : (modalType === 'tambah' ? 'Simpan Hutang' : 'Simpan Pembayaran')) }}
                     </BaseButton>
                 </div>
             </form>

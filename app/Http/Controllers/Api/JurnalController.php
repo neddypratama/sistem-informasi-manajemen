@@ -8,6 +8,7 @@ use App\Http\Requests\JurnalRequest;
 use App\Models\Akun;
 use App\Models\Client;
 use App\Models\Jurnal;
+use App\Models\JurnalDetail;
 use App\Services\ExcelExportService;
 use App\Services\LogAktivitasService;
 use Illuminate\Http\JsonResponse;
@@ -57,12 +58,19 @@ class JurnalController extends Controller
             ->when($dari, fn ($q) => $q->whereDate('tanggal', '>=', $dari))
             ->when($sampai, fn ($q) => $q->whereDate('tanggal', '<=', $sampai));
 
+        $jurnalIds = (clone $query)->toBase()->select($query->qualifyColumn('id'));
+        $totalDebit = (float) JurnalDetail::whereIn('jurnal_id', $jurnalIds)->sum('debit');
+        $totalKredit = (float) JurnalDetail::whereIn('jurnal_id', $jurnalIds)->sum('kredit');
+
         $jurnals = $query
             ->orderBy($sort, $order)
             ->when($sort === 'tanggal', fn ($q) => $q->orderByDesc('id'))
             ->paginate(15);
 
-        return response()->json($jurnals);
+        return response()->json(array_merge($jurnals->toArray(), [
+            'total_debit' => $totalDebit,
+            'total_kredit' => $totalKredit,
+        ]));
     }
 
     public function export(Request $request): StreamedResponse

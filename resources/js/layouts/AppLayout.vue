@@ -173,6 +173,7 @@ const sections = computed(() => [
             { to: '/laporan/neraca', icon: '⚖️', label: 'Neraca', show: auth.hasPermission('menu.laporan.neraca') },
             { to: '/laporan/laba-rugi', icon: '📊', label: 'Laba Rugi', show: auth.hasPermission('menu.laporan.laba_rugi') },
             { to: '/laporan/laba-rugi-curah', icon: '🌾', label: 'Laba Rugi Pakan Curah', show: auth.hasPermission('menu.laporan.laba_rugi_curah') },
+            { to: '/import-data', icon: '📥', label: 'Import Data Excel', show: true },
         ],
         show: auth.hasPermission('menu.laporan.buku_besar')
             || auth.hasPermission('menu.laporan.neraca')

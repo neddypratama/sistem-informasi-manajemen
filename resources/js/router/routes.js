@@ -276,6 +276,16 @@ export const routes = [
 
             // Akun & Kategori Akun
             {
+                path: 'import-data',
+                name: 'import.data',
+                component: () => import('../pages/import/ImportPage.vue'),
+            },
+            {
+                path: 'admin/migrasi',
+                name: 'admin.migrasi',
+                component: () => import('../pages/import/ImportPage.vue'),
+            },
+            {
                 path: 'akun',
                 name: 'akun',
                 component: () => import('../pages/master/AkunPage.vue'),

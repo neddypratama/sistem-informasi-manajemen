@@ -23,6 +23,7 @@ import { apiErrorMessage, formatIDR, today } from '../../lib/utils';
 const router = useRouter();
 
 const tanggal = ref(today());
+const jenisOpname = ref('');
 const keterangan = ref('');
 const error = ref('');
 const saving = ref(false);
@@ -219,6 +220,7 @@ async function handleSubmit() {
     try {
         await stokOpnameApi.store({
             tanggal: tanggal.value,
+            jenis_opname: jenisOpname.value || null,
             keterangan: keterangan.value || null,
             items: payloadItems,
         });
@@ -247,10 +249,20 @@ async function handleSubmit() {
 
         <PageLoader v-if="isLoading" />
         <form v-else class="mt-6 space-y-6" @submit.prevent="handleSubmit">
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div>
                     <BaseLabel for="tanggal">Tanggal Opname</BaseLabel>
                     <BaseInput id="tanggal" v-model="tanggal" type="date" />
+                </div>
+                <div>
+                    <BaseLabel for="jenis_opname">Jenis Opname</BaseLabel>
+                    <BaseSelect id="jenis_opname" v-model="jenisOpname">
+                        <option value="">-- Pilih Jenis Opname --</option>
+                        <option value="Telur">Telur</option>
+                        <option value="Pakan">Pakan</option>
+                        <option value="Obat">Obat</option>
+                        <option value="Tray">Tray</option>
+                    </BaseSelect>
                 </div>
                 <div>
                     <BaseLabel for="keterangan">Keterangan</BaseLabel>

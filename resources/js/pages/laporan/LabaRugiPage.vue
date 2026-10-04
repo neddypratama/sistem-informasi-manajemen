@@ -23,10 +23,11 @@ function firstDayOfMonth() {
 
 const dari = ref(firstDayOfMonth());
 const sampai = ref(today());
+const akunSearch = ref('');
 
 const { data, isFetching, isLoading, refetch } = useQuery({
-    queryKey: () => ['laporan-laba-rugi', dari.value, sampai.value],
-    queryFn: () => laporanApi.labaRugi({ dari: dari.value, sampai: sampai.value }),
+    queryKey: () => ['laporan-laba-rugi', dari.value, sampai.value, akunSearch.value],
+    queryFn: () => laporanApi.labaRugi({ dari: dari.value, sampai: sampai.value, akun: akunSearch.value }),
     enabled: false,
 });
 
@@ -59,6 +60,7 @@ function handleExport() {
     laporanApi.exportLabaRugi({
         dari: dari.value,
         sampai: sampai.value,
+        akun: akunSearch.value,
     });
 }
 </script>
@@ -79,6 +81,10 @@ function handleExport() {
                     <div>
                         <BaseLabel for="sampai">Sampai</BaseLabel>
                         <BaseInput id="sampai" v-model="sampai" type="date" />
+                    </div>
+                    <div>
+                        <BaseLabel for="akun">Filter Akun</BaseLabel>
+                        <BaseInput id="akun" v-model="akunSearch" placeholder="Cari nama / kode akun..." class="w-full sm:w-56" />
                     </div>
                     <BaseButton :disabled="isFetching" @click="refetch()">
                         {{ isFetching ? 'Memuat...' : 'Tampilkan' }}

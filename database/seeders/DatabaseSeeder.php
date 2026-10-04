@@ -179,7 +179,7 @@ class DatabaseSeeder extends Seeder
                 'menu.pembelian.pakan', 'menu.pembelian.obat', 'menu.pembelian.tray',
                 'menu.penjualan.telur', 'menu.penjualan.tray', 'menu.stok.laporan',
                 'menu.akuntansi.saldo_client', 'menu.akuntansi.hutang', 'menu.akuntansi.piutang', 'menu.akuntansi.jurnal', 'menu.akuntansi.kas',
-                'menu.jurnal.kas', 'menu.jurnal.beban', 'menu.jurnal.pendapatan', 
+                'menu.jurnal.kas', 'menu.jurnal.beban', 'menu.jurnal.pendapatan',
             ],
         ];
 

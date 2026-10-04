@@ -1,0 +1,9 @@
+﻿id,name,description,status,created_at,updated_at
+1,Admin,"Administrator with full access",active,"2026-02-02 22:33:42","2026-02-02 22:33:42"
+2,Manager,"Regular manager with limited access",active,"2026-02-02 22:33:42","2026-02-02 22:33:42"
+3,"Pembelian Telur","Administrator with full access",active,"2026-02-02 22:33:42","2026-02-02 22:33:42"
+4,"Pakan dan Obat-Obatan","Regular manager with limited access",active,"2026-02-02 22:33:42","2026-02-02 22:33:42"
+5,"Kas Tunai","Administrator with full access",active,"2026-02-02 22:33:42","2026-02-02 22:33:42"
+6,"Kas Transfer","Regular manager with limited access",active,"2026-02-02 22:33:42","2026-02-02 22:33:42"
+7,"Akuntasi dan Rekap","Regular manager with limited access",active,"2026-02-02 22:33:42","2026-02-02 22:33:42"
+8,"Super Admin","Repair data and all function",active,"2026-02-26 01:13:51","2026-02-26 01:13:51"

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Akun;
 use App\Models\Client;
+use App\Models\Jurnal;
 use App\Models\PembayaranPiutang;
 use App\Models\Piutang;
 use App\Services\ExcelExportService;
@@ -222,6 +223,59 @@ class PiutangController extends Controller
             'message' => 'Transaksi tambah piutang berhasil disimpan.',
             'data' => $piutang,
         ], 201);
+    }
+
+    public function updateTambah(Request $request, Piutang $piutang): JsonResponse
+    {
+        $this->scopeKepemilikan(Piutang::query()->where('id', $piutang->id));
+
+        $validated = $request->validate([
+            'tanggal' => ['required', 'date'],
+            'client_id' => ['required', 'exists:clients,id'],
+            'total' => ['required', 'numeric', 'gt:0'],
+            'keterangan' => ['nullable', 'string'],
+            'akun_pembayaran_id' => ['required', 'exists:akuns,id'],
+        ], [
+            'client_id.required' => 'Client wajib dipilih.',
+            'total.required' => 'Jumlah piutang wajib diisi.',
+            'total.gt' => 'Jumlah piutang harus lebih besar dari 0.',
+            'akun_pembayaran_id.required' => 'Metode pembayaran / akun kas wajib dipilih.',
+        ]);
+
+        $dibayar = (float) $piutang->pembayarans()->sum('jumlah');
+        if ((float) $validated['total'] < $dibayar) {
+            return response()->json([
+                'message' => 'Total piutang tidak boleh kurang dari jumlah yang sudah diterima (Rp '.number_format($dibayar, 0, ',', '.').').',
+            ], 422);
+        }
+
+        try {
+            DB::transaction(function () use ($piutang, $validated): void {
+                $piutang->update([
+                    'tanggal' => $validated['tanggal'],
+                    'client_id' => $validated['client_id'],
+                    'total' => $validated['total'],
+                    'keterangan' => $validated['keterangan'] ?? null,
+                    'akun_pembayaran_id' => $validated['akun_pembayaran_id'],
+                ]);
+
+                if ($piutang->jurnal_id) {
+                    Jurnal::where('id', $piutang->jurnal_id)->delete();
+                }
+
+                $this->jurnalService->postTambahPiutang($piutang);
+                $piutang->setStatusFromSisa();
+            });
+        } catch (\Throwable $e) {
+            return response()->json(['message' => 'Gagal memperbarui transaksi piutang: '.$e->getMessage()], 422);
+        }
+
+        LogAktivitasService::catat('piutang', 'ubah', 'Mengubah piutang', $piutang->no_piutang);
+
+        return response()->json([
+            'message' => 'Transaksi piutang berhasil diperbarui.',
+            'data' => $piutang,
+        ]);
     }
 
     public function storeBayar(Request $request): JsonResponse

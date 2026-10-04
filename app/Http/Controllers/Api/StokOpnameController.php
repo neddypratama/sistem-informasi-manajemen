@@ -109,6 +109,7 @@ class StokOpnameController extends Controller
                 'id' => $opname->id,
                 'no_opname' => $opname->no_opname,
                 'tanggal' => $opname->tanggal->toDateString(),
+                'jenis_opname' => $opname->jenis_opname,
                 'status' => $opname->status,
                 'keterangan' => $opname->keterangan,
                 'created_by' => $opname->user?->name,
@@ -160,6 +161,7 @@ class StokOpnameController extends Controller
     {
         $search = trim((string) $request->query('search'));
         $status = $request->query('status');
+        $jenisOpname = $request->query('jenis_opname');
         $dari = $request->query('dari');
         $sampai = $request->query('sampai');
 
@@ -177,6 +179,10 @@ class StokOpnameController extends Controller
             ->when(
                 is_string($status) && $status !== '',
                 fn ($q) => $q->where('status', $status),
+            )
+            ->when(
+                is_string($jenisOpname) && $jenisOpname !== '',
+                fn ($q) => $q->where('jenis_opname', $jenisOpname),
             )
             ->when($dari, fn ($q) => $q->whereDate('tanggal', '>=', $dari))
             ->when($sampai, fn ($q) => $q->whereDate('tanggal', '<=', $sampai));
@@ -215,6 +221,7 @@ class StokOpnameController extends Controller
                 'id' => $opname->id,
                 'no_opname' => $opname->no_opname,
                 'tanggal' => $opname->tanggal->toDateString(),
+                'jenis_opname' => $opname->jenis_opname,
                 'status' => $opname->status,
                 'keterangan' => $opname->keterangan,
                 'created_by' => $opname->user?->name,
@@ -234,6 +241,7 @@ class StokOpnameController extends Controller
                     $data['items'],
                     $data['keterangan'],
                     (int) auth()->id(),
+                    $data['jenis_opname'],
                 );
 
                 $this->jurnalService->postStokOpname($opname);
@@ -278,6 +286,7 @@ class StokOpnameController extends Controller
     {
         $validated = request()->validate([
             'tanggal' => ['required', 'date'],
+            'jenis_opname' => ['nullable', 'string', 'in:Telur,Pakan,Obat,Tray'],
             'keterangan' => ['nullable', 'string', 'max:255'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.barang_id' => ['required', 'integer', 'exists:barangs,id'],
@@ -288,6 +297,7 @@ class StokOpnameController extends Controller
 
         return [
             'tanggal' => $validated['tanggal'],
+            'jenis_opname' => $validated['jenis_opname'] ?? null,
             'keterangan' => $validated['keterangan'] ?? null,
             'items' => collect($validated['items'])
                 ->map(fn ($row) => [

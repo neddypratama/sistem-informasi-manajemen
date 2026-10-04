@@ -357,9 +357,10 @@ class LaporanController extends Controller
     {
         $start = $request->input('dari', now()->startOfMonth()->toDateString());
         $end = $request->input('sampai', now()->endOfMonth()->toDateString());
+        $akunFilter = trim((string) $request->input('akun'));
 
-        $pendapatan = $this->agregatPeriode('pendapatan', $start, $end);
-        $beban = $this->agregatPeriode('beban', $start, $end);
+        $pendapatan = $this->agregatPeriode('pendapatan', $start, $end, $akunFilter);
+        $beban = $this->agregatPeriode('beban', $start, $end, $akunFilter);
 
         $totalPendapatan = array_sum(array_column($pendapatan, 'saldo'));
         $totalBeban = array_sum(array_column($beban, 'saldo'));
@@ -372,9 +373,10 @@ class LaporanController extends Controller
     {
         $start = $request->input('dari', now()->startOfMonth()->toDateString());
         $end = $request->input('sampai', now()->endOfMonth()->toDateString());
+        $akunFilter = trim((string) $request->input('akun'));
 
-        $pendapatan = $this->agregatPeriode('pendapatan', $start, $end);
-        $beban = $this->agregatPeriode('beban', $start, $end);
+        $pendapatan = $this->agregatPeriode('pendapatan', $start, $end, $akunFilter);
+        $beban = $this->agregatPeriode('beban', $start, $end, $akunFilter);
 
         $totalPendapatan = array_sum(array_column($pendapatan, 'saldo'));
         $totalBeban = array_sum(array_column($beban, 'saldo'));
@@ -580,7 +582,7 @@ class LaporanController extends Controller
         return $this->saldoAkun->saldoAkhirSebelum($akun, $tanggal);
     }
 
-    protected function agregatPeriode(string $jenis, string $start, string $end): array
+    protected function agregatPeriode(string $jenis, string $start, string $end, ?string $akunFilter = null): array
     {
         $result = [];
 
@@ -590,6 +592,12 @@ class LaporanController extends Controller
             ->where('nama', '!=', 'Saldo Bp.Supriyadi')
             ->where(fn ($q) => $q->whereNull('system_code')
                 ->orWhereNotIn('system_code', self::CURAH_SYSTEM_CODES))
+            ->when(! empty($akunFilter), function ($q) use ($akunFilter): void {
+                $q->where(function ($query) use ($akunFilter): void {
+                    $query->where('nama', 'like', "%{$akunFilter}%")
+                        ->orWhere('kode', 'like', "%{$akunFilter}%");
+                });
+            })
             ->orderBy('kode')
             ->get();
 

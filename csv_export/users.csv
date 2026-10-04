@@ -1,0 +1,10 @@
+﻿id,name,username,email,email_verified_at,password,role_id,status,remember_token,deleted_at,created_at,updated_at
+1,Admin,admin,admin@gmail.com,"2026-02-02 22:33:42",$2y$12$flCpGAr1OPgNnn9dzcJv6OW6hZN20SAmpWbli84/I4OY1xe3nIhZa,1,active,cZX8bXQ3tBzcXdgPWVlCNPna2vBlEJiIQMQ0N6q2sbbFZTXdgNrwakrKYfse,,"2026-02-02 22:33:42","2026-02-02 22:33:42"
+2,Manager,manager,manager@gmail.com,"2026-02-02 22:33:42",$2y$12$YavxtJx2.gup.hv44ypTYuVoMcUPL7vo/qEugwCqd9MW8coYvqt7.,2,active,6njvRxkelPhu7p1s7mhrn9hHhN2QqHyGFHrOxHJO8PafavZZbNr2uWC5cmZL,,"2026-02-02 22:33:43","2026-02-02 22:33:43"
+3,"Pembelian Telur",pembelian-telur,telur@gmail.com,"2026-02-02 22:33:43",$2y$12$yZJBV.Dr9LtwjNnh06Ymj.KTuZE9teK3XKtS2V4G2RU02BoWI5b4q,3,active,qb8fsExUIrtUd4qKvzL4yjEFWq1AmbeyFv8MTD98Q1h9essyDrOBjoKdwjBb,,"2026-02-02 22:33:43","2026-02-02 22:33:43"
+4,Pakan,pakan,pakan@gmail.com,"2026-02-02 22:33:43",$2y$12$KAX9LClCue.Ico6aTehX/OhESOyMclC8HTCPL9JCnvXDQB/D27NB6,4,active,8RG6QeJlK9v90yQKZjAjxFevuMBGN7JzXCkhYej3aKE6ACQrhMN0fANzyeto,,"2026-02-02 22:33:43","2026-02-02 22:33:43"
+5,"Kas Tunai",kas-tunai,tunai@gmail.com,"2026-02-02 22:33:43",$2y$12$F3zVTbe8qnZ26HuWjzEA4epIg5mFmiMa7gx4zq4JqrM46Rx1oorv6,5,active,PYycJw16uXCr8SZ4TYB7mbKz5LZtZa5mJtD2SyWT5zAcTHxgdkGARue9LGiU,,"2026-02-02 22:33:44","2026-02-02 22:33:44"
+6,RIFA💫,rifa,transfer@gmail.com,"2026-02-02 22:33:44",$2y$12$rLPGzs3ayNjz5/aTEFf5ee//Tqa3xKyH6ji9fE1Nqsz2OCvA9xnie,6,active,G9gd1WFChlGPKYcCfoiktuAYKbZXVzNFLSbE4Z4hvpsyM25g12NxSj336gc3,,"2026-02-02 22:33:44","2026-05-09 04:23:23"
+7,"Akuntasi dan Rekap",akuntasi-dan-rekap,akuntasi@gmail.com,"2026-02-02 22:33:44",$2y$12$vyhIHqyoJUeQB0JXylmCqOAs2D4wzlVALA2HbfDj6z.PqtY15dyuS,7,active,yPBGHBLclj,,"2026-02-02 22:33:44","2026-02-02 22:33:44"
+8,"Super Admin",super-admin,super@gmail.com,,$2y$12$XflpF6kUdU1.uk/uv0mrseZe5x8WK5IsC7DqWgOcJHJEsp42rtlgm,8,active,,,"2026-02-26 01:14:16","2026-02-26 01:14:16"
+9,"kholaif ‎.☘︎ ݁˖",kholaif,admin2@gmail.com,,$2y$12$FR.bLGFQnFuCUCvhP4AhHe/92QQsnmABWsrFxkQb94vKzkpDsTkL6,1,active,,,"2026-04-03 17:01:40","2026-05-13 03:38:48"

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Akun;
 use App\Models\Client;
 use App\Models\Hutang;
+use App\Models\Jurnal;
 use App\Models\PembayaranHutang;
 use App\Services\ExcelExportService;
 use App\Services\JurnalService;
@@ -222,6 +223,59 @@ class HutangController extends Controller
             'message' => 'Transaksi tambah hutang berhasil disimpan.',
             'data' => $hutang,
         ], 201);
+    }
+
+    public function updateTambah(Request $request, Hutang $hutang): JsonResponse
+    {
+        $this->scopeKepemilikan(Hutang::query()->where('id', $hutang->id));
+
+        $validated = $request->validate([
+            'tanggal' => ['required', 'date'],
+            'client_id' => ['required', 'exists:clients,id'],
+            'total' => ['required', 'numeric', 'gt:0'],
+            'keterangan' => ['nullable', 'string'],
+            'akun_pembayaran_id' => ['required', 'exists:akuns,id'],
+        ], [
+            'client_id.required' => 'Client wajib dipilih.',
+            'total.required' => 'Jumlah hutang wajib diisi.',
+            'total.gt' => 'Jumlah hutang harus lebih besar dari 0.',
+            'akun_pembayaran_id.required' => 'Metode pembayaran / akun kas wajib dipilih.',
+        ]);
+
+        $dibayar = (float) $hutang->pembayarans()->sum('jumlah');
+        if ((float) $validated['total'] < $dibayar) {
+            return response()->json([
+                'message' => 'Total hutang tidak boleh kurang dari jumlah yang sudah dibayar (Rp '.number_format($dibayar, 0, ',', '.').').',
+            ], 422);
+        }
+
+        try {
+            DB::transaction(function () use ($hutang, $validated): void {
+                $hutang->update([
+                    'tanggal' => $validated['tanggal'],
+                    'client_id' => $validated['client_id'],
+                    'total' => $validated['total'],
+                    'keterangan' => $validated['keterangan'] ?? null,
+                    'akun_pembayaran_id' => $validated['akun_pembayaran_id'],
+                ]);
+
+                if ($hutang->jurnal_id) {
+                    Jurnal::where('id', $hutang->jurnal_id)->delete();
+                }
+
+                $this->jurnalService->postTambahHutang($hutang);
+                $hutang->setStatusFromSisa();
+            });
+        } catch (\Throwable $e) {
+            return response()->json(['message' => 'Gagal memperbarui transaksi hutang: '.$e->getMessage()], 422);
+        }
+
+        LogAktivitasService::catat('hutang', 'ubah', 'Mengubah hutang', $hutang->no_hutang);
+
+        return response()->json([
+            'message' => 'Transaksi hutang berhasil diperbarui.',
+            'data' => $hutang,
+        ]);
     }
 
     public function storeBayar(Request $request): JsonResponse

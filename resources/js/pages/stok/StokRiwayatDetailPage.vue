@@ -36,6 +36,7 @@ const TIPE_LABEL = {
     penjualan: { text: 'Penjualan', variant: 'success' },
     pembelian_retur: { text: 'Retur Pembelian', variant: 'danger' },
     penjualan_retur: { text: 'Retur Penjualan', variant: 'warning' },
+    stok_opname: { text: 'Stok Opname', variant: 'secondary' },
 };
 
 const { data, isLoading, isFetching } = useQuery({
@@ -112,6 +113,7 @@ function handleExport() {
                     <option value="penjualan">Penjualan</option>
                     <option value="pembelian_retur">Retur Pembelian</option>
                     <option value="penjualan_retur">Retur Penjualan</option>
+                    <option value="stok_opname">Stok Opname</option>
                 </BaseSelect>
             </div>
             <div>
@@ -167,7 +169,7 @@ function handleExport() {
                             v-for="baris in rows"
                             :key="baris.id"
                             class="cursor-pointer hover:bg-slate-50"
-                            @click="router.push(`/transaksi/${baris.transaksi_id}`)"
+                            @click="baris.transaksi_id ? router.push(`/transaksi/${baris.transaksi_id}`) : null"
                         >
                             <TableCell>{{ formatTanggal(baris.tanggal) }}</TableCell>
                             <TableCell class="font-medium">{{ baris.nomor }}</TableCell>
