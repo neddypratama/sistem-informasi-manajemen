@@ -17,6 +17,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class DashboardController extends Controller
@@ -165,27 +166,74 @@ class DashboardController extends Controller
     protected function nilaiPersediaan(): float
     {
         return (float) StokBatch::where('qty_sisa', '>', 0)
-            ->get()
-            ->sum(fn (StokBatch $batch) => (float) $batch->qty_sisa * (float) $batch->harga_beli);
+            ->sum(DB::raw('qty_sisa * harga_beli'));
     }
 
     /**
-     * Total sisa tagihan belum lunas beserta jumlahnya.
+     * Ringkasan total & jumlah tagihan belum lunas (hutang / piutang) via SQL aggregation.
      *
-     * @return array<string, float>
+     * @return array<string, float|int>
      */
     protected function totalTagihan(string $entitasType): array
     {
-        $query = Jurnal::with(['pembayarans.details.akun', 'details.akun.kategori'])
-            ->where('entitas_type', $entitasType);
+        $createdByFilter = '';
+        $bindings = [$entitasType];
 
-        $this->scopeKepemilikan($query);
+        if (! auth()->user()?->bisaMelihatSemuaData()) {
+            $createdByFilter = 'AND j.created_by = ?';
+            $bindings[] = auth()->id();
+        }
 
-        $belumLunas = $query->get()->filter(fn (Jurnal $tagihan) => $tagihan->sisaEntitas() > 0);
+        $isHutang = $entitasType === 'hutang';
+        $sumInvColumn = $isHutang ? 'jd.kredit' : 'jd.debit';
+        $sumPayColumn = $isHutang ? 'pjd.debit' : 'pjd.kredit';
+
+        $sql = "
+            SELECT 
+                COUNT(*) as jumlah,
+                COALESCE(SUM(t.sisa), 0) as sisa_total
+            FROM (
+                SELECT 
+                    j.id,
+                    (
+                        COALESCE(SUM(CASE WHEN a.system_code = ? OR k.jenis = '{$entitasType}' THEN {$sumInvColumn} ELSE 0 END), 0) -
+                        COALESCE((
+                            SELECT SUM(CASE WHEN pa.system_code = ? OR pk.jenis = '{$entitasType}' THEN {$sumPayColumn} ELSE 0 END)
+                            FROM jurnals pj
+                            JOIN jurnal_details pjd ON pjd.jurnal_id = pj.id
+                            LEFT JOIN akuns pa ON pa.id = pjd.akun_id
+                            LEFT JOIN kategoris pk ON pk.id = pa.kategori_id
+                            WHERE pj.journalable_type = 'App\\\\Models\\\\Jurnal' AND pj.journalable_id = j.id
+                        ), 0) -
+                        COALESCE((
+                            SELECT SUM(CASE WHEN ra.system_code = ? OR rk.jenis = '{$entitasType}' THEN rjd.{$sumPayColumn} ELSE 0 END)
+                            FROM transaksis ret
+                            JOIN jurnals rj ON rj.journalable_type = 'App\\\\Models\\\\Transaksi' AND rj.journalable_id = ret.id
+                            JOIN jurnal_details rjd ON rjd.jurnal_id = rj.id
+                            LEFT JOIN akuns ra ON ra.id = rjd.akun_id
+                            LEFT JOIN kategoris rk ON rk.id = ra.kategori_id
+                            WHERE ret.retur_dari_id = j.journalable_id AND j.journalable_type = 'App\\\\Models\\\\Transaksi'
+                        ), 0)
+                    ) as sisa
+                FROM jurnals j
+                JOIN jurnal_details jd ON jd.jurnal_id = j.id
+                LEFT JOIN akuns a ON a.id = jd.akun_id
+                LEFT JOIN kategoris k ON k.id = a.kategori_id
+                WHERE j.entitas_type = ? {$createdByFilter}
+                GROUP BY j.id
+                HAVING sisa > 0.001
+            ) t
+        ";
+
+        $jenisVal = $isHutang ? 'liabilitas' : 'aset';
+        $sql = str_replace("'{$entitasType}'", "'{$jenisVal}'", $sql);
+        array_unshift($bindings, $entitasType, $entitasType, $entitasType);
+
+        $result = DB::selectOne($sql, $bindings);
 
         return [
-            $entitasType => (float) $belumLunas->sum(fn (Jurnal $tagihan) => $tagihan->sisaEntitas()),
-            $entitasType.'Jumlah' => $belumLunas->count(),
+            $entitasType => (float) ($result?->sisa_total ?? 0),
+            $entitasType.'Jumlah' => (int) ($result?->jumlah ?? 0),
         ];
     }
 
@@ -463,22 +511,75 @@ class DashboardController extends Controller
     }
 
     /**
-     * Sisa tagihan (total - terbayar) per client.
+     * Sisa tagihan (total - terbayar) per client via SQL GROUP BY.
      *
      * @return array<int, float>
      */
     protected function sisaPerClient(string $entitasType): array
     {
-        $query = Jurnal::with(['pembayarans.details.akun', 'details.akun.kategori'])
-            ->where('entitas_type', $entitasType)
-            ->whereNotNull('client_id');
+        $createdByFilter = '';
+        $bindings = [$entitasType];
 
-        $this->scopeKepemilikan($query);
+        if (! auth()->user()?->bisaMelihatSemuaData()) {
+            $createdByFilter = 'AND j.created_by = ?';
+            $bindings[] = auth()->id();
+        }
 
-        return $query->get()
-            ->groupBy(fn (Jurnal $row) => (int) $row->client_id)
-            ->map(fn ($rows) => round((float) $rows->sum(fn (Jurnal $row) => $row->sisaEntitas()), 2))
-            ->all();
+        $isHutang = $entitasType === 'hutang';
+        $sumInvColumn = $isHutang ? 'jd.kredit' : 'jd.debit';
+        $sumPayColumn = $isHutang ? 'pjd.debit' : 'pjd.kredit';
+
+        $sql = "
+            SELECT 
+                t.client_id,
+                SUM(t.sisa) as total_sisa
+            FROM (
+                SELECT 
+                    j.client_id,
+                    j.id,
+                    (
+                        COALESCE(SUM(CASE WHEN a.system_code = ? OR k.jenis = '{$entitasType}' THEN {$sumInvColumn} ELSE 0 END), 0) -
+                        COALESCE((
+                            SELECT SUM(CASE WHEN pa.system_code = ? OR pk.jenis = '{$entitasType}' THEN {$sumPayColumn} ELSE 0 END)
+                            FROM jurnals pj
+                            JOIN jurnal_details pjd ON pjd.jurnal_id = pj.id
+                            LEFT JOIN akuns pa ON pa.id = pjd.akun_id
+                            LEFT JOIN kategoris pk ON pk.id = pa.kategori_id
+                            WHERE pj.journalable_type = 'App\\\\Models\\\\Jurnal' AND pj.journalable_id = j.id
+                        ), 0) -
+                        COALESCE((
+                            SELECT SUM(CASE WHEN ra.system_code = ? OR rk.jenis = '{$entitasType}' THEN rjd.{$sumPayColumn} ELSE 0 END)
+                            FROM transaksis ret
+                            JOIN jurnals rj ON rj.journalable_type = 'App\\\\Models\\\\Transaksi' AND rj.journalable_id = ret.id
+                            JOIN jurnal_details rjd ON rjd.jurnal_id = rj.id
+                            LEFT JOIN akuns ra ON ra.id = rjd.akun_id
+                            LEFT JOIN kategoris rk ON rk.id = ra.kategori_id
+                            WHERE ret.retur_dari_id = j.journalable_id AND j.journalable_type = 'App\\\\Models\\\\Transaksi'
+                        ), 0)
+                    ) as sisa
+                FROM jurnals j
+                JOIN jurnal_details jd ON jd.jurnal_id = j.id
+                LEFT JOIN akuns a ON a.id = jd.akun_id
+                LEFT JOIN kategoris k ON k.id = a.kategori_id
+                WHERE j.entitas_type = ? AND j.client_id IS NOT NULL {$createdByFilter}
+                GROUP BY j.client_id, j.id
+                HAVING sisa > 0.001
+            ) t
+            GROUP BY t.client_id
+        ";
+
+        $jenisVal = $isHutang ? 'liabilitas' : 'aset';
+        $sql = str_replace("'{$entitasType}'", "'{$jenisVal}'", $sql);
+        array_unshift($bindings, $entitasType, $entitasType, $entitasType);
+
+        $results = DB::select($sql, $bindings);
+
+        $out = [];
+        foreach ($results as $row) {
+            $out[(int) $row->client_id] = round((float) $row->total_sisa, 2);
+        }
+
+        return $out;
     }
 
     /**

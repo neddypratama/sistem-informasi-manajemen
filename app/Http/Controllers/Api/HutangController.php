@@ -83,14 +83,57 @@ class HutangController extends Controller
             $hutangs->setCollection($filtered);
         }
 
-        // Summary totals across all hutang
-        $allHutang = Jurnal::with(['pembayarans.details.akun', 'details.akun.kategori'])
-            ->where('entitas_type', 'hutang');
-        $this->scopeKepemilikan($allHutang);
-        $allHutang = $allHutang->get();
+        // Summary totals across all hutang via SQL Aggregation
+        $createdByFilter = '';
+        $bindings = ['hutang', 'hutang'];
 
-        $totalHutang = (float) $allHutang->sum(fn ($h) => $h->totalEntitas());
-        $sisaHutang = (float) $allHutang->sum(fn ($h) => $h->sisaEntitas());
+        if (! auth()->user()?->bisaMelihatSemuaData()) {
+            $createdByFilter = 'AND j.created_by = ?';
+            $bindings[] = auth()->id();
+        }
+
+        $sqlSummary = "
+            SELECT 
+                COALESCE(SUM(t.total), 0) as total_hutang,
+                COALESCE(SUM(t.sisa), 0) as sisa_hutang
+            FROM (
+                SELECT 
+                    j.id,
+                    COALESCE(SUM(CASE WHEN a.system_code = 'hutang' OR k.jenis = 'liabilitas' THEN jd.kredit ELSE 0 END), 0) as total,
+                    (
+                        COALESCE(SUM(CASE WHEN a.system_code = 'hutang' OR k.jenis = 'liabilitas' THEN jd.kredit ELSE 0 END), 0) -
+                        COALESCE((
+                            SELECT SUM(CASE WHEN pa.system_code = 'hutang' OR pk.jenis = 'liabilitas' THEN pjd.debit ELSE 0 END)
+                            FROM jurnals pj
+                            JOIN jurnal_details pjd ON pjd.jurnal_id = pj.id
+                            LEFT JOIN akuns pa ON pa.id = pjd.akun_id
+                            LEFT JOIN kategoris pk ON pk.id = pa.kategori_id
+                            WHERE pj.journalable_type = 'App\\\\Models\\\\Jurnal' AND pj.journalable_id = j.id
+                        ), 0) -
+                        COALESCE((
+                            SELECT SUM(CASE WHEN ra.system_code = 'hutang' OR rk.jenis = 'liabilitas' THEN rjd.debit ELSE 0 END)
+                            FROM transaksis ret
+                            JOIN jurnals rj ON rj.journalable_type = 'App\\\\Models\\\\Transaksi' AND rj.journalable_id = ret.id
+                            JOIN jurnal_details rjd ON rjd.jurnal_id = rj.id
+                            LEFT JOIN akuns ra ON ra.id = rjd.akun_id
+                            LEFT JOIN kategoris rk ON rk.id = ra.kategori_id
+                            WHERE ret.retur_dari_id = j.journalable_id AND j.journalable_type = 'App\\\\Models\\\\Transaksi'
+                        ), 0)
+                    ) as sisa
+                FROM jurnals j
+                JOIN jurnal_details jd ON jd.jurnal_id = j.id
+                LEFT JOIN akuns a ON a.id = jd.akun_id
+                LEFT JOIN kategoris k ON k.id = a.kategori_id
+                WHERE j.entitas_type = ? {$createdByFilter}
+                GROUP BY j.id
+            ) t
+        ";
+        array_unshift($bindings, 'hutang');
+
+        $summaryResult = DB::selectOne($sqlSummary, $bindings);
+
+        $totalHutang = (float) ($summaryResult?->total_hutang ?? 0);
+        $sisaHutang = (float) ($summaryResult?->sisa_hutang ?? 0);
         $lunasHutang = (float) ($totalHutang - $sisaHutang);
 
         $totalNilai = (float) $hutangs->getCollection()->sum('total');

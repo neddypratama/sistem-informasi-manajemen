@@ -67,38 +67,85 @@ class PelunasanController extends Controller
 
     protected function daftarPerClient(string $entitasType): Collection
     {
-        $query = Jurnal::with(['client', 'pembayarans.details.akun', 'details.akun.kategori'])
-            ->where('entitas_type', $entitasType);
-        $this->scopeKepemilikan($query);
+        $createdByFilter = '';
+        $bindings = [$entitasType];
 
-        return $query
-            ->get()
-            ->filter(fn (Jurnal $e) => $e->client !== null)
+        if (! auth()->user()?->bisaMelihatSemuaData()) {
+            $createdByFilter = 'AND j.created_by = ?';
+            $bindings[] = auth()->id();
+        }
+
+        $isHutang = $entitasType === 'hutang';
+        $sumInvColumn = $isHutang ? 'jd.kredit' : 'jd.debit';
+        $sumPayColumn = $isHutang ? 'pjd.debit' : 'pjd.kredit';
+
+        $sql = "
+            SELECT 
+                j.id,
+                j.nomor_jurnal,
+                j.tanggal,
+                j.keterangan,
+                j.client_id,
+                c.nama as client_nama,
+                COALESCE(SUM(CASE WHEN a.system_code = '{$entitasType}' OR k.jenis = '{$entitasType}' THEN {$sumInvColumn} ELSE 0 END), 0) as total,
+                (
+                    COALESCE(SUM(CASE WHEN a.system_code = '{$entitasType}' OR k.jenis = '{$entitasType}' THEN {$sumInvColumn} ELSE 0 END), 0) -
+                    COALESCE((
+                        SELECT SUM(CASE WHEN pa.system_code = '{$entitasType}' OR pk.jenis = '{$entitasType}' THEN {$sumPayColumn} ELSE 0 END)
+                        FROM jurnals pj
+                        JOIN jurnal_details pjd ON pjd.jurnal_id = pj.id
+                        LEFT JOIN akuns pa ON pa.id = pjd.akun_id
+                        LEFT JOIN kategoris pk ON pk.id = pa.kategori_id
+                        WHERE pj.journalable_type = 'App\\\\Models\\\\Jurnal' AND pj.journalable_id = j.id
+                    ), 0) -
+                    COALESCE((
+                        SELECT SUM(CASE WHEN ra.system_code = '{$entitasType}' OR rk.jenis = '{$entitasType}' THEN rjd.{$sumPayColumn} ELSE 0 END)
+                        FROM transaksis ret
+                        JOIN jurnals rj ON rj.journalable_type = 'App\\\\Models\\\\Transaksi' AND rj.journalable_id = ret.id
+                        JOIN jurnal_details rjd ON rjd.jurnal_id = rj.id
+                        LEFT JOIN akuns ra ON ra.id = rjd.akun_id
+                        LEFT JOIN kategoris rk ON rk.id = ra.kategori_id
+                        WHERE ret.retur_dari_id = j.journalable_id AND j.journalable_type = 'App\\\\Models\\\\Transaksi'
+                    ), 0)
+                ) as sisa
+            FROM jurnals j
+            JOIN clients c ON c.id = j.client_id
+            JOIN jurnal_details jd ON jd.jurnal_id = j.id
+            LEFT JOIN akuns a ON a.id = jd.akun_id
+            LEFT JOIN kategoris k ON k.id = a.kategori_id
+            WHERE j.entitas_type = ? AND j.client_id IS NOT NULL {$createdByFilter}
+            GROUP BY j.id, j.nomor_jurnal, j.tanggal, j.keterangan, j.client_id, c.nama
+            HAVING sisa > 0.001
+            ORDER BY j.tanggal ASC, j.id ASC
+        ";
+
+        $jenisVal = $isHutang ? 'liabilitas' : 'aset';
+        $sql = str_replace("'{$entitasType}'", "'{$jenisVal}'", $sql);
+
+        $results = DB::select($sql, $bindings);
+
+        return collect($results)
             ->groupBy('client_id')
             ->map(function (Collection $group): array {
-                $client = $group->first()->client;
-                $sisa = (float) $group->sum(fn (Jurnal $e) => $e->sisaEntitas());
+                $first = $group->first();
+                $sisa = (float) $group->sum('sisa');
+                $total = (float) $group->sum('total');
 
                 return [
-                    'client_id' => $client->id,
-                    'client' => $client->nama,
-                    'jumlah_tags' => $group->filter(fn (Jurnal $e) => $e->sisaEntitas() > 0)->count(),
-                    'total' => (float) $group->sum(fn (Jurnal $e) => $e->totalEntitas()),
-                    'sisa' => $sisa,
-                    'jumlah_dibayar' => (float) $group->sum(fn (Jurnal $e) => $e->dibayarEntitas()),
-                    'tagihans' => $group
-                        ->filter(fn (Jurnal $e) => $e->sisaEntitas() > 0)
-                        ->sortBy(fn (Jurnal $e) => $e->tanggal->toDateString().'-'.str_pad((string) $e->id, 8, '0', STR_PAD_LEFT))
-                        ->map(fn (Jurnal $e) => [
-                            'id' => $e->id,
-                            'no_tagihan' => $e->nomor_jurnal,
-                            'tanggal' => $e->tanggal->toDateString(),
-                            'total' => $e->totalEntitas(),
-                            'sisa' => $e->sisaEntitas(),
-                            'keterangan' => $e->keterangan,
-                        ])
-                        ->values()
-                        ->all(),
+                    'client_id' => (int) $first->client_id,
+                    'client' => $first->client_nama,
+                    'jumlah_tags' => $group->count(),
+                    'total' => round($total, 2),
+                    'sisa' => round($sisa, 2),
+                    'jumlah_dibayar' => round($total - $sisa, 2),
+                    'tagihans' => $group->map(fn ($e) => [
+                        'id' => (int) $e->id,
+                        'no_tagihan' => $e->nomor_jurnal,
+                        'tanggal' => (string) $e->tanggal,
+                        'total' => round((float) $e->total, 2),
+                        'sisa' => round((float) $e->sisa, 2),
+                        'keterangan' => $e->keterangan,
+                    ])->values()->all(),
                 ];
             })
             ->filter(fn (array $row) => $row['sisa'] > 0)

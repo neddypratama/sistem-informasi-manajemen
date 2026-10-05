@@ -29,17 +29,19 @@ class SaldoAkunService
 
     protected function hitung(Akun $akun, string $tanggal, string $operator): float
     {
-        $query = JurnalDetail::where('akun_id', $akun->id)
-            ->whereHas('jurnal', function ($q) use ($tanggal, $operator): void {
-                $q->where('tanggal', $operator, $tanggal);
+        $query = JurnalDetail::query()
+            ->join('jurnals', 'jurnals.id', '=', 'jurnal_details.jurnal_id')
+            ->where('jurnal_details.akun_id', $akun->id)
+            ->where('jurnals.tanggal', $operator, $tanggal);
 
-                if (! auth()->user()?->bisaMelihatSemuaData()) {
-                    $q->where('created_by', auth()->id());
-                }
-            });
+        if (! auth()->user()?->bisaMelihatSemuaData()) {
+            $query->where('jurnals.created_by', auth()->id());
+        }
 
-        $debit = (float) $query->sum('debit');
-        $kredit = (float) $query->sum('kredit');
+        $row = $query->selectRaw('SUM(jurnal_details.debit) as total_debit, SUM(jurnal_details.kredit) as total_kredit')->first();
+
+        $debit = (float) ($row?->total_debit ?? 0);
+        $kredit = (float) ($row?->total_kredit ?? 0);
 
         if ($akun->saldo_normal === 'debit') {
             return $debit - $kredit;
