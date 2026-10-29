@@ -1,7 +1,39 @@
 import axios from 'axios';
 
+/**
+ * Tentukan API Base URL secara dinamis:
+ * 1. Jika diset VITE_API_URL pada environment / build, gunakan itu.
+ * 2. Jika diakses di browser pada domain bimapratama.com, arahkan ke https://api.bimapratama.com/api/v1.
+ * 3. Jika diakses di localhost atau 127.0.0.1, gunakan http://localhost:4000/api/v1.
+ * 4. Jika diakses di domain/IP lain, arahkan ke port 4000 atau /api/v1 secara dinamis.
+ */
+export const getApiBaseUrl = (): string => {
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+
+  if (typeof window !== 'undefined') {
+    const { protocol, hostname } = window.location;
+
+    // Production bimapratama ecosystem
+    if (hostname.includes('bimapratama.com')) {
+      return `${protocol}//api.bimapratama.com/api/v1`;
+    }
+
+    // Localhost / Development
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:4000/api/v1';
+    }
+
+    // Custom Host / IP Network deployment
+    return `${protocol}//${hostname}:4000/api/v1`;
+  }
+
+  return 'http://localhost:4000/api/v1';
+};
+
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:4000/api/v1',
+  baseURL: getApiBaseUrl(),
   headers: {
     'Content-Type': 'application/json',
   },

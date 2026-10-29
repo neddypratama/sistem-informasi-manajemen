@@ -22,8 +22,7 @@
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio",
-    "migrate:legacy": "node --loader ts-node/esm src/scripts/migrate-legacy.ts"
+    "prisma:studio": "prisma studio"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",

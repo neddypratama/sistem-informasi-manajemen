@@ -22,9 +22,10 @@ async function bootstrap() {
     next();
   });
 
-  // CORS Configuration with strict origin controls
-  const configuredOrigins = process.env.CORS_ORIGIN
-    ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
+  // Dynamic CORS Configuration
+  const envCors = process.env.CORS_ORIGIN;
+  const configuredOrigins = envCors
+    ? envCors.split(',').map((o) => o.trim())
     : [
         'http://localhost:5173',
         'http://localhost:3000',
@@ -35,13 +36,37 @@ async function bootstrap() {
 
   app.enableCors({
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-      // Allow requests with no origin (e.g. mobile apps, curl, server-to-server) or matched origins
-      if (!origin || configuredOrigins.includes(origin) || configuredOrigins.includes('*')) {
-        callback(null, true);
-      } else {
-        logger.warn(`Blocked CORS request from unauthorized origin: ${origin}`);
-        callback(new Error(`Origin ${origin} not allowed by CORS`));
+      // 1. Izinkan request tanpa origin (seperti curl, mobile app, internal proxy)
+      if (!origin) {
+        return callback(null, true);
       }
+
+      // 2. Jika diset wildcard '*'
+      if (configuredOrigins.includes('*')) {
+        return callback(null, true);
+      }
+
+      // 3. Jika cocok persis dengan list origin terkonfigurasi
+      if (configuredOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      // 4. Izinkan otomatis semua subdomain bimapratama.com (e.g. sim.bimapratama.com, api.bimapratama.com)
+      if (/^https?:\/\/([a-zA-Z0-9-]+\.)*bimapratama\.com(?::\d+)?$/.test(origin)) {
+        return callback(null, true);
+      }
+
+      // 5. Izinkan localhost / 127.0.0.1 pada port berapapun untuk kemudahan development lokal
+      if (
+        process.env.NODE_ENV !== 'production' ||
+        origin.includes('localhost') ||
+        origin.includes('127.0.0.1')
+      ) {
+        return callback(null, true);
+      }
+
+      logger.warn(`Blocked CORS request from unauthorized origin: ${origin}`);
+      callback(new Error(`Origin ${origin} not allowed by CORS`));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -66,4 +91,7 @@ async function bootstrap() {
   logger.log(`🚀 Bima Pratama ERP 2.0 API is running on: http://localhost:${port}/api/v1`);
 }
 
-await bootstrap();
+bootstrap().catch((err) => {
+  new Logger('Bootstrap').error('Failed to start NestJS application', err);
+  process.exit(1);
+});

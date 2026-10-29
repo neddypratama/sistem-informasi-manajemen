@@ -121,7 +121,8 @@ export const ImportLegacyPage: React.FC = () => {
 
   const handleDownloadTemplate = async (type: 'barang' | 'client' | 'transaksi') => {
     try {
-      const response = await fetch(`http://localhost:4000/api/v1/migration/template/${type}`, {
+      const baseUrl = (apiClient.defaults.baseURL || '').replace(/\/+$/, '');
+      const response = await fetch(`${baseUrl}/migration/template/${type}`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`,
         },

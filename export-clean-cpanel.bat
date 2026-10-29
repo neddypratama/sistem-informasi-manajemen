@@ -24,7 +24,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "$zipFile = '%ZIP_PATH%';" ^
     "if (Test-Path $zipFile) { Remove-Item $zipFile -Force };" ^
     "New-Item -ItemType Directory -Path $tempFolder | Out-Null;" ^
-    "robocopy $baseDir $tempFolder /E /XD 'node_modules' 'dist' '.git' '.vscode' '.idea' /XF '*.tsbuildinfo' '.env' '*.log' '%ZIP_NAME%' | Out-Null;" ^
+    "robocopy $baseDir $tempFolder /E /XD 'node_modules' 'frontend\dist' '.git' '.vscode' '.idea' /XF '*.tsbuildinfo' '.env' '*.log' '%ZIP_NAME%' 'frontend-simv2.zip' '*.sql.zip' | Out-Null;" ^
     "Add-Type -AssemblyName System.IO.Compression.FileSystem;" ^
     "[System.IO.Compression.ZipFile]::CreateFromDirectory($tempFolder, $zipFile, [System.IO.Compression.CompressionLevel]::Optimal, $false);" ^
     "Remove-Item $tempFolder -Recurse -Force;" ^

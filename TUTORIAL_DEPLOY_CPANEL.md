@@ -78,35 +78,58 @@ Sebelum memulai, pastikan hosting cPanel Anda memiliki:
 
 ---
 
-## Langkah 2: Menyiapkan File Proyek (Ekspor Bersih Tanpa node_modules)
+## Langkah 2: Menyiapkan File Proyek di cPanel (Pilih Opsi A atau B)
 
 > [!CAUTION]
 > **JANGAN PERNAH meng-upload folder `node_modules` dari Windows ke cPanel!**  
 > Library seperti `@prisma/client` dan `bcrypt` menggunakan file binary native C++ yang berbeda antara Windows (.dll) dan Linux (.so). Folder `node_modules` juga berukuran sangat besar (~880 MB). Dependensi wajib di-install langsung di dalam server cPanel.
 
-Untuk membuat file arsip zip yang bersih dan ringan:
+### 🌟 Opsi A: Clone Langsung dari GitHub (Sangat Direkomendasikan & Paling Praktis)
+Jika Anda sudah meng-upload repository ke GitHub:
 
-1. Buka folder proyek di komputer Anda: `c:\laragon\www\erp-bimapratama`
+#### Cara 1: Menggunakan Terminal cPanel
+1. Buka menu **Terminal** di cPanel Anda.
+2. Pindah ke direktori home akun Anda:
+   ```bash
+   cd ~
+   ```
+3. Lakukan clone repository:
+   ```bash
+   git clone https://github.com/username-anda/nama-repo.git erp-bimapratama
+   ```
+   *(Jika repo bersifat Private, Anda akan diminta memasukkan username GitHub dan Personal Access Token sebagai password)*.
+4. Selesai! Semua file proyek sudah berada di folder `/home/usernamecpanel/erp-bimapratama` tanpa membawa sampah `node_modules`.
+
+#### Cara 2: Menggunakan Menu GUI "Git™ Version Control" di cPanel
+1. Di beranda cPanel, cari dan buka menu **Git™ Version Control**.
+2. Klik tombol **Create**:
+   - **Clone URL:** Masukkan link repository GitHub Anda (contoh: `https://github.com/username-anda/nama-repo.git`).
+   - **Repository Path:** `erp-bimapratama` (akan otomatis dibuat di `/home/usernamecpanel/erp-bimapratama`).
+   - **Repository Name:** `erp-bimapratama`.
+3. Klik **Create**. cPanel akan mengunduh repository secara otomatis.
+4. *Keuntungan fitur ini:* Kapan saja Anda melakukan update di GitHub, Anda cukup mengklik tombol **"Update from Remote"** di menu ini untuk menarik pembaruan kode terbaru secara instan!
+
+---
+
+### Opsi B: Upload Manual via File ZIP Ringan (Jika Tanpa Git)
+1. Buka folder proyek di komputer Anda: `c:\laragon\www\erp-bimapratama`.
 2. Klik ganda file:
    👉 **`export-clean-cpanel.bat`**
 3. Script akan otomatis menghasilkan file zip:
-   👉 **`erp-bimapratama-cpanel.zip`** *(Ukuran hanya ~3 - 5 MB, upload selesai dalam 5 detik!)*
+   👉 **`erp-bimapratama-cpanel.zip`** *(Ukuran hanya ~0.45 MB, selesai upload dalam 2 detik!)*.
+4. Upload dan ekstrak file zip tersebut di File Manager cPanel.
 
 ---
 
 ## Langkah 3: Deploy Backend API (NestJS) Menggunakan "Setup Node.js App"
 
-### A. Upload File Backend ke cPanel
-1. Buka **File Manager** di cPanel.
-2. Pastikan Anda berada di direktori home akun Anda (`/home/usernamecpanel/`).
-3. Buat folder baru bernama: **`api-bimapratama`** (sejajar dengan `public_html`, bukan di dalamnya).
-4. Masuk ke folder `api-bimapratama`, lalu klik **Upload**.
-5. Upload file **`erp-bimapratama-cpanel.zip`**, lalu klik kanan file zip tersebut dan pilih **Extract**.
-6. Pindahkan seluruh isi dari folder `backend` hasil ekstrak ke dalam folder `api-bimapratama`.
-   *(Struktur di dalam `api-bimapratama` harus langsung berisi `package.json`, `prisma/`, `src/`, `app.js`, dll).*
+### A. Lokasi Folder Backend
+- **Jika menggunakan Git Clone (Opsi A):** Folder backend Anda otomatis sudah berada di `/home/usernamecpanel/erp-bimapratama/backend`. Anda tidak perlu memindahkan file apapun!
+- **Jika menggunakan Upload ZIP (Opsi B):** Buat folder `/home/usernamecpanel/api-bimapratama`, upload file zip, ekstrak, dan pastikan seluruh isi folder `backend` berada di dalamnya.
 
 ### B. Konfigurasi File `.env` Backend di cPanel
-1. Di dalam folder `/home/usernamecpanel/api-bimapratama`, buat file baru bernama **`.env`** (klik tombol **+ File** di pojok kiri atas File Manager cPanel).
+1. Buka folder backend Anda (misal: `erp-bimapratama/backend` atau `api-bimapratama`).
+2. Buat file baru bernama **`.env`** (klik tombol **+ File** di pojok kiri atas File Manager cPanel).
 2. Isi file `.env` dengan konfigurasi berikut (sesuaikan nama database & user):
    ```env
    PORT=4000
@@ -136,7 +159,7 @@ Untuk membuat file arsip zip yang bersih dan ringan:
 2. Klik tombol **Create Application**:
    - **Node.js version:** Pilih **20.x** atau **22.x** (versi LTS terbaru).
    - **Application mode:** Pilih **Production**.
-   - **Application root:** Masukkan `api-bimapratama`.
+   - **Application root:** Masukkan `erp-bimapratama/backend` (jika pakai Git Clone) atau `api-bimapratama` (jika upload zip).
    - **Application URL:** Pilih subdomain backend, misal `api.domainanda.com`.
    - **Application startup file:** Masukkan `app.js` (atau `dist/main.js`).
 3. Klik **Create** di kanan atas.
