@@ -33,6 +33,8 @@ backend/uploads/*
 uploads/
 tmp/
 temp/
+*.zip
+*.tar.gz
 
 # Logs
 logs/

@@ -1,7 +1,10 @@
-# Panduan Cara Menjalankan Sistem Secara Manual (Local Dev & Production)
-## Bima Pratama ERP 2.0 (React 19 + NestJS 11 + MySQL)
+# Panduan Menjalankan Sistem di Komputer Lokal (Windows / Laragon)
+## Bima Pratama ERP 2.0 (React 19 + NestJS 11 + MySQL 8)
 
-Dokumen ini berisi tutorial lengkap langkah demi langkah untuk menjalankan sistem Bima Pratama ERP 2.0 di komputer lokal Anda (Windows).
+Dokumen ini berisi panduan praktis dan teruji untuk menjalankan sistem **Bima Pratama ERP 2.0** secara lokal di komputer Windows Anda (menggunakan Laragon atau XAMPP).
+
+> 💡 **Mau meng-upload ke server cPanel?**  
+> Silakan ikuti panduan khusus hosting di: [**`TUTORIAL_DEPLOY_CPANEL.md`**](./TUTORIAL_DEPLOY_CPANEL.md).
 
 ---
 
@@ -9,30 +12,32 @@ Dokumen ini berisi tutorial lengkap langkah demi langkah untuk menjalankan siste
 
 Sebelum menjalankan aplikasi, pastikan:
 1. **Database MySQL Aktif:**
-   - Jika menggunakan **Laragon**: Buka aplikasi Laragon, lalu klik tombol **"Start All"** (pastikan MySQL port 3306 menyala).
-   - Database yang digunakan adalah `bimapratama_v2` (data migrasi 83.614 transaksi sudah siap di dalamnya).
+   - Buka aplikasi **Laragon** (atau XAMPP), lalu klik tombol **"Start All"**.
+   - Pastikan service **MySQL (Port 3306)** berstatus *Running*.
+   - Database yang digunakan adalah `bimapratama_v2`.
 2. **Node.js Terinstal:**
    - Node.js v20 atau v22 LTS terpasang di sistem (`node -v`).
 
 ---
 
-## 2. Cara 1: Menjalankan Menggunakan 1-Click Script (Paling Mudah) 🌟
+## 2. Cara 1: Menjalankan Menggunakan 1-Click Script (Paling Praktis) 🌟
 
-Kami telah membuatkan script otomatis agar Anda tidak perlu membuka banyak terminal manual:
+Kami telah menyediakan script otomatis agar Anda tidak perlu membuka banyak terminal secara manual:
 
 1. Buka folder proyek di File Explorer: `c:\laragon\www\erp-bimapratama`
 2. Klik ganda (*double-click*) file:
    👉 **`start-all.bat`**
 3. Script otomatis akan:
-   - Membuka terminal untuk Backend API (port 4000).
-   - Membuka terminal untuk Frontend SPA (port 3000).
+   - Membuka terminal untuk Backend API (port `4000`).
+   - Membuka terminal untuk Frontend SPA (port `3000`).
    - Membuka browser langsung ke `http://localhost:3000`.
 
-> **Untuk menghentikan sistem:** Cukup klik ganda file **`stop-all.bat`**.
+> 🛑 **Untuk Menghentikan Sistem:**  
+> Cukup klik ganda file **`stop-all.bat`** untuk menutup seluruh service dan membebaskan port 4000 & 3000 secara bersih.
 
 ---
 
-## 3. Cara 2: Menjalankan Manual Melalui Terminal / Command Prompt
+## 3. Cara 2: Menjalankan Manual Melalui Terminal (Untuk Development)
 
 Jika Anda ingin melihat log proses secara langsung atau sedang melakukan modifikasi kode (*coding*), jalankan melalui **2 jendela Terminal terpisah** (PowerShell, Command Prompt, atau Git Bash):
 
@@ -50,9 +55,9 @@ Jika Anda ingin melihat log proses secara langsung atau sedang melakukan modifik
    ```powershell
    npm run start:dev
    ```
-   *(Atau jalankan versi build produksi yang super cepat: `node dist/main.js`)*
-5. Tunggu hingga muncul pesan log:
-   ```
+5. Tunggu hingga muncul pesan log sukses:
+   ```text
+   [NestApplication] Nest application successfully started
    🚀 Bima Pratama ERP 2.0 API is running on: http://localhost:4000/api/v1
    ```
 
@@ -69,7 +74,7 @@ Jika Anda ingin melihat log proses secara langsung atau sedang melakukan modifik
    npm run dev
    ```
 4. Terminal akan menampilkan:
-   ```
+   ```text
    VITE v6.1.0  ready in 300 ms
 
    ➜  Local:   http://localhost:3000/
@@ -79,9 +84,9 @@ Jika Anda ingin melihat log proses secara langsung atau sedang melakukan modifik
 
 ---
 
-## 4. Cara 3: Menjalankan Menggunakan Docker (Mode Produksi Lengkap)
+## 4. Cara 3: Menjalankan Menggunakan Docker Compose (Full Stack Isolated)
 
-Jika Anda ingin menjalankan seluruh ekosistem (MySQL 8 + Redis 7 + Backend NestJS + Frontend Nginx) dalam kontainer Docker:
+Jika komputer Anda memiliki Docker Desktop dan ingin menjalankan MySQL 8 + Redis 7 + Backend + Frontend dalam kontainer terisolasi:
 
 1. Pastikan Docker Desktop sedang aktif di Windows.
 2. Buka terminal di root direktori proyek:
@@ -96,11 +101,11 @@ Jika Anda ingin menjalankan seluruh ekosistem (MySQL 8 + Redis 7 + Backend NestJ
    ```powershell
    docker compose ps
    ```
-5. Buka web di `http://localhost:3000`.
+5. Akses sistem di `http://localhost:3000`.
 
 ---
 
-## 5. Kredensial Login
+## 5. Kredensial Login Default
 
 Gunakan akun berikut untuk masuk ke aplikasi:
 - **URL Login:** `http://localhost:3000/login`
@@ -109,26 +114,24 @@ Gunakan akun berikut untuk masuk ke aplikasi:
 
 ---
 
-## 6. Troubleshooting (Penyelesaian Masalah)
+## 6. Troubleshooting Masalah Lokal
 
 ### Masalah 1: `Error: listen EADDRINUSE: address already in use :::4000`
-**Penyebab:** Ada proses backend lama yang masih berjalan di latar belakang.  
-**Solusi:**
-1. Klik ganda file `stop-all.bat`, ATAU
-2. Jalankan perintah ini di PowerShell:
-   ```powershell
-   Get-Process -Id (Get-NetTCPConnection -LocalPort 4000).OwningProcess | Stop-Process -Force
-   ```
+- **Penyebab:** Ada proses backend node lama yang masih tertinggal berjalan di latar belakang.
+- **Solusi Cepat:**
+  1. Klik ganda file **`stop-all.bat`**, ATAU
+  2. Buka PowerShell dan jalankan perintah satu baris berikut:
+     ```powershell
+     Stop-Process -Id (Get-NetTCPConnection -LocalPort 4000).OwningProcess -Force
+     ```
 
-### Masalah 2: `Database connection failed / Can't connect to MySQL server on 'localhost:3306'`
-**Penyebab:** Laragon MySQL belum dinyalakan.  
-**Solusi:**
-Buka jendela aplikasi Laragon, lalu klik tombol **Start All**. Pastikan service MySQL berstatus *Running*.
+### Masalah 2: `Cannot find module '.../backend/dist/main'` saat `npm run start:dev`
+- **Penyebab:** File cache TypeScript `tsbuildinfo` konflik dengan pembersihan folder `dist`.
+- **Solusi:**
+  Pastikan opsi `"incremental": false` aktif di [backend/tsconfig.json](file:///c:/laragon\www\erp-bimapratama\backend\tsconfig.json#L16), lalu hapus file `backend/tsconfig.build.tsbuildinfo` jika ada.
 
-### Masalah 3: Ingin Melakukan Build Ulang Frontend
-Jika Anda mengubah kode frontend dan ingin membuat bundle produksi baru:
-```powershell
-cd c:\laragon\www\erp-bimapratama\frontend
-npm run build
-```
-Hasil kompilasi optimal akan tersimpan di folder `frontend/dist`.
+### Masalah 3: `Database connection failed / Can't connect to MySQL server on 'localhost:3306'`
+- **Penyebab:** Laragon MySQL belum dinyalakan atau nama database belum ada.
+- **Solusi:**
+  1. Buka jendela aplikasi Laragon, lalu klik tombol **Start All**. Pastikan service MySQL berstatus *Running*.
+  2. Pastikan database `bimapratama_v2` sudah dibuat di Laragon (bisa dicek lewat HeidiSQL di Laragon).

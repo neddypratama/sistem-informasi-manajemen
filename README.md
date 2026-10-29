@@ -1,41 +1,50 @@
 # Bima Pratama ERP 2.0 (Modernized Architecture)
 
-> **Enterprise Resource Planning (ERP) System Modernization**  
+> **Enterprise Resource Planning (ERP) System**  
 > Usaha Peternakan & Perdagangan Telur, Pakan, Obat Ternak, dan Egg Tray.  
-> Migrasi dari Legacy Monolith (Laravel 12 + Livewire Volt) ke **Decoupled Architecture (NestJS + React SPA + PostgreSQL/MySQL 8 + Redis)**.  
-> Dirancang untuk skalabilitas performa tinggi dengan ketahanan data **5–10 tahun ke depan**.
+> Arsitektur Terpisah (*Decoupled Architecture*): **React 19 SPA + NestJS 11 REST API + Prisma ORM + MySQL 8.0 + Redis 7**.  
+> Dirancang untuk skalabilitas transaksi tinggi dengan ketahanan data 5–10 tahun ke depan.
 
 ---
 
-## 📌 Daftar Dokumen Arsitektur
+## ⚡ Panduan Cepat (Pilih Sesuai Kebutuhan)
 
-Dokumentasi lengkap modernisasi sistem telah disusun secara komprehensif pada file-file berikut:
+| Kebutuhan | Dokumen Panduan | Keterangan |
+| :--- | :--- | :--- |
+| 🌐 **Upload & Hosting ke cPanel** | [**`TUTORIAL_DEPLOY_CPANEL.md`**](./TUTORIAL_DEPLOY_CPANEL.md) | **Langkah step-by-step deploy ke cPanel**, setup database via phpMyAdmin, "Setup Node.js App", dan upload React SPA. |
+| 💻 **Menjalankan di Komputer Lokal** | [**`TUTORIAL_RUN_MANUAL.md`**](./TUTORIAL_RUN_MANUAL.md) | Panduan menjalankan aplikasi di Windows menggunakan Laragon (MySQL) & skrip 1-klik `start-all.bat`. |
+| 🐳 **Deployment Server VPS / Docker** | [**`docs/deployment.md`**](./docs/deployment.md) | Panduan deployment kontainer penuh (Docker Compose) & instalasi mandiri di VPS Ubuntu (PM2 + Nginx). |
+
+---
+
+## 📦 Ekspor Cepat Tanpa `node_modules` (Untuk Upload ke Hosting)
+
+Folder `node_modules` berukuran besar (~880 MB) dan **tidak boleh** di-upload langsung ke hosting Linux karena binary native-nya berbeda. Kami telah menyediakan skrip otomatis untuk membuat arsip siap upload:
+
+1. Klik ganda file:
+   👉 **`export-clean-cpanel.bat`**
+2. Skrip akan secara otomatis memaketkan seluruh kode sumber penting ke dalam file:
+   👉 **`erp-bimapratama-cpanel.zip`** *(Hanya ~3 - 5 MB, siap di-upload ke File Manager cPanel).*
+
+---
+
+## 📌 Daftar Dokumen Arsitektur & Spesifikasi
+
+Dokumentasi teknis lengkap sistem tersimpan rapi di dalam folder [**`docs/`**](./docs):
 
 | Dokumen | Deskripsi & Isi Pokok |
 | :--- | :--- |
-| 📘 [**`design.md`**](./design.md) | **Spesifikasi Arsitektur Sistem Baru**: Desain modular NestJS, React SPA architecture, concurrency management, algoritma FIFO atomik, dan caching layer. |
-| 🗄️ [**`data.md`**](./data.md) | **Arsitektur Database & Relasi**: Normalisasi skema, penghapusan *triple-invoicing*, General Ledger (Jurnal Berpasangan), strategi Indexing, Partitioning, dan Snapshot Saldo Bulanan. |
-| 📋 [**`model_card.md`**](./model_card.md) | **Domain Models & Business Invariants**: Definisi lengkap entitas data, tipe data, validasi, state machine transaksi, dan aturan integritas bisnis. |
-| 🔌 [**`api_docs.md`**](./api_docs.md) | **Spesifikasi REST API v1**: Dokumentasi endpoint, format response terstandarisasi, RBAC permissions, payload request/response, dan background export jobs. |
-| 🚀 [**`deployment.md`**](./deployment.md) | **Panduan Deployment & Infrastruktur**: Setup Docker & Docker Compose, Nginx Reverse Proxy, Redis caching, backup otomatis, dan monitoring performa. |
-| 📜 [**`changelog.md`**](./changelog.md) | **Riwayat Perubahan & Migrasi**: Evolusi dari v1.0.0 (Legacy Livewire) ke v2.0.0 (Modern Stack), catatan breaking changes, dan roadmap rilis. |
-| 🔄 [**`migration_plan.md`**](./migration_plan.md) | **Strategi Migrasi Data**: Rencana ETL data lama 1 tahun ke skema baru, cleansing invoice ganda, rekonsiliasi saldo historis, dan skenario cutover. |
+| 📘 [**`docs/design.md`**](./docs/design.md) | **Spesifikasi Arsitektur Sistem Baru**: Desain modular NestJS, React SPA architecture, concurrency management, algoritma FIFO atomik, dan caching layer. |
+| 🗄️ [**`docs/data.md`**](./docs/data.md) | **Arsitektur Database & Relasi**: Normalisasi skema, penghapusan *triple-invoicing*, General Ledger (Jurnal Berpasangan), strategi Indexing, Partitioning, dan Snapshot Saldo Bulanan. |
+| 📋 [**`docs/model_card.md`**](./docs/model_card.md) | **Domain Models & Business Invariants**: Definisi lengkap entitas data, tipe data, validasi, state machine transaksi, dan aturan integritas bisnis. |
+| 🔌 [**`docs/api_docs.md`**](./docs/api_docs.md) | **Spesifikasi REST API v1**: Dokumentasi endpoint, format response terstandarisasi, RBAC permissions, payload request/response, dan background export jobs. |
+| 🚀 [**`docs/deployment.md`**](./docs/deployment.md) | **Panduan Infrastruktur Server & VPS**: Setup Docker & Docker Compose, Nginx Reverse Proxy, Redis caching, backup otomatis, dan monitoring performa. |
+| 📜 [**`docs/changelog.md`**](./docs/changelog.md) | **Riwayat Perubahan & Migrasi**: Evolusi arsitektur ke Modern Stack (v2.0), catatan breaking changes, dan roadmap rilis. |
+| 🔄 [**`docs/migration_plan.md`**](./docs/migration_plan.md) | **Strategi Migrasi Data**: Rencana ETL data lama ke skema baru, cleansing invoice ganda, dan rekonsiliasi saldo historis. |
 
 ---
 
-## 🎯 Latar Belakang & Masalah Sistem Lama (v1.0)
-
-Sistem legacy yang berada pada folder `SIM_Bima_Pratama` dibangun dengan stack **Laravel 12 + Livewire 3 Volt + Mary UI + MySQL**. Meskipun baru berjalan selama **1 tahun**, sistem sudah mengalami kelambatan (*sluggish/lemot*). 
-
-Berdasarkan audit teknis, akar permasalahannya adalah:
-1. **Pola *Triple Invoicing***: Satu kali transaksi penjualan telur menghasilkan 3 record transaksi (`INV-...-BON`, `INV-...-TLR`, `INV-...-HPP`). Volume data membengkak 300%–400% lebih cepat dari seharusnya.
-2. **Ketiadaan Database Indexing yang Tepat**: Kolom filter kritis seperti `tanggal`, `type`, dan `status` tidak diindeks. Query menggunakan fungsi `whereDate()` yang mematikan kinerja index (*index suppression*).
-3. **Livewire Server-Side Morphing Overhead**: Setiap interaksi filter dan pencarian memicu re-render Blade HTML utuh di server serta melakukan `SELECT *` tabel master (barang, client) secara berulang.
-4. **Kalkulasi Laporan Tanpa Snapshot**: Laporan Laba Rugi dan Neraca Aset menghitung seluruh baris transaksi historis secara dinamis melalui loop PHP dan *correlated subqueries* bertingkat. Untuk rentang 5–10 tahun, pendekatan ini dipastikan memicu PHP memory exhaustion dan execution timeout.
-
----
-
-## 🏗️ Gambaran Arsitektur Baru (v2.0)
+## 🏗️ Gambaran Arsitektur Sistem (v2.0)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -46,13 +55,13 @@ Berdasarkan audit teknis, akar permasalahannya adalah:
                                      ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                    GATEWAY & REVERSE PROXY LAYER                        │
-│             Nginx / Caddy (SSL, Gzip, Rate Limiter, Cache)              │
+│          cPanel Apache (.htaccess) / Nginx (SSL, Gzip, Cache)           │
 └────────────────────────────────────┬────────────────────────────────────┘
                                      │
                                      ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                      BACKEND APPLICATION LAYER                          │
-│               NestJS (Fastify/Express) + TypeScript                     │
+│                   NestJS 11 + Node.js 20/22 LTS                         │
 │  ┌─────────────────┬──────────────────┬────────────────┬──────────────┐ │
 │  │ Auth & RBAC     │ Master Data      │ Inventory/FIFO │ Transaksi    │ │
 │  ├─────────────────┼──────────────────┼────────────────┼──────────────┤ │
@@ -63,10 +72,10 @@ Berdasarkan audit teknis, akar permasalahannya adalah:
                          ▼                       ▼
 ┌─────────────────────────────────┐   ┌───────────────────────────────────┐
 │      DATABASE LAYER             │   │        CACHE & QUEUE LAYER        │
-│   PostgreSQL 16 / MySQL 8.0     │   │               Redis               │
-│ - B-Tree Composite Indexes      │   │ - Session & Auth Cache            │
-│ - Monthly Balance Snapshots     │   │ - Master Data In-Memory Cache     │
-│ - Yearly Table Partitioning     │   │ - BullMQ Asynchronous Jobs       │
+│          MySQL 8.0              │   │               Redis 7             │
+│ - Prisma ORM (Type-safe)        │   │ - Session & Auth Cache            │
+│ - B-Tree Composite Indexes      │   │ - Master Data In-Memory Cache     │
+│ - Monthly Balance Snapshots     │   │ - BullMQ Asynchronous Jobs       │
 └─────────────────────────────────┘   └───────────────────────────────────┘
 ```
 
@@ -77,53 +86,49 @@ Berdasarkan audit teknis, akar permasalahannya adalah:
 | Komponen | Teknologi Terpilih | Versi Target |
 | :--- | :--- | :--- |
 | **Frontend Framework** | React + Vite + TypeScript | React 19, TypeScript 5.x |
-| **UI Components** | Tailwind CSS v4 + Shadcn UI / Radix | Tailwind CSS, Lucide Icons |
+| **UI Components** | Tailwind CSS + Lucide Icons | Responsive & Fast |
 | **State & Data Table** | TanStack Query v5 + TanStack Table v8 | Client-side virtualization |
-| **Backend Framework** | NestJS (Modular Architecture) | NestJS 11+, Node.js 22 LTS |
-| **Database ORM** | Prisma ORM / Kysely Query Builder | Type-safe SQL query engine |
-| **Database Engine** | PostgreSQL 16+ (atau MySQL 8.0+) | InnoDB / Relational ACID |
+| **Backend Framework** | NestJS (Modular Architecture) | NestJS 11+, Node.js 20/22 LTS |
+| **Database ORM** | Prisma ORM | Type-safe SQL query engine |
+| **Database Engine** | MySQL 8.0+ | InnoDB, ACID compliant |
 | **Cache & Message Queue**| Redis 7.x + BullMQ | Fast In-memory cache & worker |
-| **Container & Ops** | Docker & Docker Compose | Containerized Multi-Service |
+| **Container & Ops** | Docker & Docker Compose / cPanel Passenger | Portabel & Cloud-ready |
 
 ---
 
-## 🚀 Panduan Memulai Cepat (Quick Start)
+## 📁 Struktur Folder Workspace
 
-### 1. Struktur Folder Workspace Baru
 ```
 erp-bimapratama/
-├── SIM_Bima_Pratama/       # Legacy Codebase (Archive/Reference)
-├── backend/                # NestJS API Application
-├── frontend/               # React SPA Application
-├── docker/                 # Konfigurasi Docker & Nginx
-├── docs/                   # Dokumen Arsitektur & Spesifikasi
-├── README.md               # Master Readme (File ini)
-├── design.md               # Technical Design
-├── data.md                 # Data Architecture
-├── model_card.md           # Domain Models
-├── api_docs.md             # API Documentation
-├── deployment.md           # Deployment Guide
-├── changelog.md            # Version History
-└── migration_plan.md       # Data Migration Plan
-```
-
-### 2. Menjalankan Lingkungan Pengembangan (Development)
-
-Lihat instruksi detail pada [**`deployment.md`**](./deployment.md) untuk setup Docker Compose satu perintah:
-```bash
-# Menjalankan database PostgreSQL dan Redis
-docker compose -f docker/docker-compose.dev.yml up -d
-
-# Menjalankan Backend API (Port 4000)
-cd backend && npm install && npm run start:dev
-
-# Menjalankan Frontend SPA (Port 3000)
-cd frontend && npm install && npm run dev
+├── backend/                        # Backend NestJS API
+│   ├── src/                        # Source code NestJS
+│   ├── prisma/                     # Schema Prisma & migrasi MySQL
+│   ├── app.js                      # Entry point untuk Phusion Passenger cPanel
+│   └── .env.example                # Template konfigurasi backend
+├── frontend/                       # Frontend React SPA
+│   ├── src/                        # Source code UI & Components
+│   ├── public/                     # Asset publik & .htaccess untuk routing cPanel
+│   └── .env.example                # Template konfigurasi frontend
+├── docs/                           # Dokumentasi Arsitektur & Rencana Kerja
+│   ├── api_docs.md                 # Spesifikasi REST API
+│   ├── data.md                     # Skema database & GL
+│   ├── design.md                   # Desain sistem modular
+│   ├── deployment.md               # Panduan deployment VPS & Docker
+│   ├── migration_plan.md           # Rencana migrasi data
+│   └── model_card.md               # Domain models & aturan bisnis
+├── docker-compose.yml              # Konfigurasi container lokal / VPS
+├── export-clean-cpanel.bat         # Skrip 1-klik export zip bersih untuk cPanel
+├── start-all.bat                   # Skrip 1-klik jalankan lokal
+├── stop-all.bat                    # Skrip 1-klik hentikan lokal
+├── TUTORIAL_DEPLOY_CPANEL.md       # Panduan deploy cPanel hosting
+├── TUTORIAL_RUN_MANUAL.md          # Panduan jalankan di Windows lokal
+└── README.md                       # Master dokumentasi proyek (file ini)
 ```
 
 ---
 
-## 📞 Tim & Pengembang
-* **Project Name**: Bima Pratama ERP 2.0
-* **Target Scale**: 5–10 Years operational life, 10,000,000+ transaction rows.
-* **Architecture Review**: Professional Modernization by Lead Architect.
+## 🔑 Kredensial Default Login
+
+- **URL Web:** `http://localhost:3000/login` *(atau domain hosting Anda)*
+- **Username:** `admin`
+- **Password:** `password`

@@ -1,32 +1,44 @@
-# React + TypeScript + Vite
+# Bima Pratama ERP 2.0 - Frontend Web SPA
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Aplikasi Single Page Application (SPA) antarmuka pengguna untuk **Bima Pratama ERP 2.0**, dibangun dengan **React 19 + TypeScript + Vite + Tailwind CSS + Lucide Icons + TanStack Query**.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 🚀 Fitur Utama Frontend
 
-## React Compiler
+- **Manajemen Transaksi Komprehensif:** Modul Transaksi Penjualan, Pembelian, Retur, dan Bon Titipan Telur & Pakan.
+- **Master Data Interaktif:** Searchable selector dengan caching cepat, modal validasi instan, dan datatable canggih.
+- **Laporan Keuangan Real-Time:** Laporan Laba Rugi (Umum & Curah), Neraca Saldo, Laporan Kas, Laporan Aset, dan Jurnal Umum.
+- **Ekspor Dokumen:** Ekspor laporan ke format Excel (`.xlsx`) dan PDF langsung dari browser.
+- **cPanel Apache Ready:** Dilengkapi file `public/.htaccess` untuk memastikan routing React Router bekerja mulus tanpa error 404 saat refresh halaman.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the Oxlint configuration
+## 🛠️ Perintah Pengembangan (Local Development)
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+```bash
+# 1. Install dependensi
+npm install
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+# 2. Jalankan development server (port 3000)
+npm run dev
+
+# 3. Kompilasi bundle produksi
+npm run build
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Hasil build tersimpan di folder `dist/` dan siap di-upload ke direktori web cPanel (`public_html`).
+
+---
+
+## ⚙️ Variabel Lingkungan (`.env`)
+
+Konfigurasi URL Backend API diatur melalui file `.env`:
+
+```env
+# Mode Lokal:
+VITE_API_URL=http://localhost:4000/api/v1
+
+# Mode Produksi cPanel (Subdomain API):
+# VITE_API_URL=https://api.bimapratama.com/api/v1
+```
