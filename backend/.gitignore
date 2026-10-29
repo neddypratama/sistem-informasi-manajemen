@@ -1,0 +1,11 @@
+# Backend Git Ignore
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+logs/
+*.log
+uploads/*
+!uploads/.gitkeep

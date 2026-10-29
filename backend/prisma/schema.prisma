@@ -1,0 +1,420 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Role {
+  id          BigInt           @id @default(autoincrement())
+  name        String           @unique @db.VarChar(50)
+  description String?          @db.Text
+  createdAt   DateTime         @default(now()) @map("created_at")
+  users       User[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          BigInt           @id @default(autoincrement())
+  name        String           @unique @db.VarChar(100)
+  group       String           @db.VarChar(50)
+  description String?          @db.Text
+  createdAt   DateTime         @default(now()) @map("created_at")
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           BigInt     @id @default(autoincrement())
+  roleId       BigInt     @map("role_id")
+  permissionId BigInt     @map("permission_id")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId], name: "idx_role_permission_unique")
+  @@index([roleId], name: "idx_role_permission_role")
+  @@index([permissionId], name: "idx_role_permission_perm")
+  @@map("role_permissions")
+}
+
+model User {
+  id          BigInt       @id @default(autoincrement())
+  name        String       @db.VarChar(100)
+  username    String       @unique @db.VarChar(50)
+  email       String?      @unique @db.VarChar(100)
+  password    String       @db.VarChar(255)
+  roleId      BigInt       @map("role_id")
+  isActive    Boolean      @default(true) @map("is_active")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  role        Role         @relation(fields: [roleId], references: [id])
+  transaksis   Transaksi[]
+  stokBatches  StokBatch[]
+  stokOpnames  StokOpname[]
+  activityLogs ActivityLog[]
+
+  @@map("users")
+}
+
+// ==========================================
+// 2. Master Barang & Satuan
+// ==========================================
+model JenisBarang {
+  id        BigInt   @id @default(autoincrement())
+  name      String   @unique @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at")
+  barangs   Barang[]
+
+  @@map("jenis_barangs")
+}
+
+model Satuan {
+  id        BigInt   @id @default(autoincrement())
+  name      String   @unique @db.VarChar(50)
+  createdAt DateTime @default(now()) @map("created_at")
+  barangs   Barang[]
+
+  @@map("satuans")
+}
+
+model Barang {
+  id               BigInt            @id @default(autoincrement())
+  code             String?           @unique @db.VarChar(50)
+  name             String            @db.VarChar(150)
+  jenisId          BigInt            @map("jenis_id")
+  satuanId         BigInt?           @map("satuan_id")
+  stokMinimum      Decimal           @default(0) @map("stok_minimum") @db.Decimal(12, 2)
+  isActive         Boolean           @default(true) @map("is_active")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  jenis            JenisBarang       @relation(fields: [jenisId], references: [id])
+  satuan           Satuan?           @relation(fields: [satuanId], references: [id])
+  detailTransaksis DetailTransaksi[]
+  stokBatches      StokBatch[]
+  stokOpnames      StokOpname[]
+
+  @@map("barangs")
+}
+
+// ==========================================
+// 3. Master Client (Pedagang, Peternak, Supplier)
+// ==========================================
+enum ClientType {
+  Pedagang
+  Peternak
+  Supplier
+  Karyawan
+  Truk
+}
+
+model Client {
+  id           BigInt      @id @default(autoincrement())
+  code         String?     @unique @db.VarChar(50)
+  name         String      @db.VarChar(150)
+  type         ClientType
+  phone        String?     @db.VarChar(30)
+  alamat       String?     @db.Text
+  keterangan   String?     @db.Text
+  saldoPiutang Decimal     @default(0) @map("saldo_piutang") @db.Decimal(15, 2)
+  saldoHutang  Decimal     @default(0) @map("saldo_hutang") @db.Decimal(15, 2)
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+  transaksis   Transaksi[]
+  jurnalUmums  JurnalUmum[]
+
+  @@map("clients")
+}
+
+// ==========================================
+// 4. Transaksi & Detail Transaksi
+// ==========================================
+enum TransaksiType {
+  PENJUALAN
+  PEMBELIAN
+  RETUR_PENJUALAN
+  RETUR_PEMBELIAN
+  KAS_MASUK
+  KAS_KELUAR
+}
+
+enum TransaksiStatus {
+  DRAFT
+  SELESAI
+  BATAL
+}
+
+enum PaymentMethod {
+  TUNAI
+  TRANSFER
+  KREDIT_BON
+}
+
+model Transaksi {
+  id            BigInt            @id @default(autoincrement())
+  invoice       String            @unique @db.VarChar(60)
+  tanggal       DateTime          @db.DateTime(0)
+  type          TransaksiType
+  status        TransaksiStatus   @default(DRAFT)
+  paymentMethod PaymentMethod     @default(TUNAI) @map("payment_method")
+  clientId      BigInt?           @map("client_id")
+  userId        BigInt            @map("user_id")
+  subtotal      Decimal           @default(0) @db.Decimal(15, 2)
+  diskon        Decimal           @default(0) @db.Decimal(15, 2)
+  total         Decimal           @default(0) @db.Decimal(15, 2)
+  keterangan    String?           @db.Text
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+  client        Client?           @relation(fields: [clientId], references: [id])
+  user          User              @relation(fields: [userId], references: [id])
+  details       DetailTransaksi[]
+  jurnalUmums   JurnalUmum[]
+
+  @@index([tanggal, status, type], name: "idx_transaksi_tgl_status")
+  @@index([clientId, tanggal], name: "idx_transaksi_client")
+  @@map("transaksis")
+}
+
+model DetailTransaksi {
+  id                BigInt            @id @default(autoincrement())
+  transaksiId       BigInt            @map("transaksi_id")
+  barangId          BigInt?           @map("barang_id")
+  kategoriId        BigInt?           @map("kategori_id")
+  qty               Decimal           @default(0) @db.Decimal(12, 2)
+  hargaSatuan       Decimal           @default(0) @map("harga_satuan") @db.Decimal(15, 2)
+  subtotal          Decimal           @default(0) @db.Decimal(15, 2)
+  hppSatuan         Decimal           @default(0) @map("hpp_satuan") @db.Decimal(15, 2)
+  totalHpp          Decimal           @default(0) @map("total_hpp") @db.Decimal(15, 2)
+  telurBentes       Decimal           @default(0) @map("telur_bentes") @db.Decimal(10, 2)
+  telurKotor        Decimal           @default(0) @map("telur_kotor") @db.Decimal(10, 2)
+  telurCeplok       Decimal           @default(0) @map("telur_ceplok") @db.Decimal(10, 2)
+  telurJumbo        Decimal           @default(0) @map("telur_jumbo") @db.Decimal(10, 2)
+  createdAt         DateTime          @default(now()) @map("created_at")
+  transaksi         Transaksi         @relation(fields: [transaksiId], references: [id], onDelete: Cascade)
+  barang            Barang?           @relation(fields: [barangId], references: [id])
+  kategori          Kategori?         @relation(fields: [kategoriId], references: [id])
+  stokBatches       StokBatch[]
+  stokKeluarBatches StokKeluarBatch[]
+
+  @@index([transaksiId], name: "idx_detail_transaksi_trans")
+  @@index([barangId], name: "idx_detail_transaksi_barang")
+  @@index([kategoriId], name: "idx_detail_transaksi_kategori")
+  @@map("detail_transaksis")
+}
+
+// ==========================================
+// 5. Stok Batches & Mutasi FIFO
+// ==========================================
+model StokBatch {
+  id                BigInt            @id @default(autoincrement())
+  barangId          BigInt            @map("barang_id")
+  detailTransaksiId BigInt?           @map("detail_transaksi_id")
+  userId            BigInt            @map("user_id")
+  tanggal           DateTime          @db.DateTime(0)
+  qtyMasuk          Decimal           @map("qty_masuk") @db.Decimal(12, 2)
+  qtySisa           Decimal           @map("qty_sisa") @db.Decimal(12, 2)
+  hargaBeli         Decimal           @map("harga_beli") @db.Decimal(15, 2)
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  barang            Barang            @relation(fields: [barangId], references: [id])
+  detailTransaksi   DetailTransaksi?  @relation(fields: [detailTransaksiId], references: [id], onDelete: SetNull)
+  user              User              @relation(fields: [userId], references: [id])
+  stokKeluarBatches StokKeluarBatch[]
+
+  @@index([barangId, qtySisa, tanggal], name: "idx_stok_batches_fifo")
+  @@map("stok_batches")
+}
+
+model StokKeluarBatch {
+  id                BigInt          @id @default(autoincrement())
+  detailTransaksiId BigInt          @map("detail_transaksi_id")
+  stokBatchId       BigInt          @map("stok_batch_id")
+  qty               Decimal         @db.Decimal(12, 2)
+  hargaBeli         Decimal         @map("harga_beli") @db.Decimal(15, 2)
+  returnedQty       Decimal         @default(0) @map("returned_qty") @db.Decimal(12, 2)
+  createdAt         DateTime        @default(now()) @map("created_at")
+  detailTransaksi   DetailTransaksi @relation(fields: [detailTransaksiId], references: [id], onDelete: Cascade)
+  stokBatch         StokBatch       @relation(fields: [stokBatchId], references: [id])
+
+  @@index([detailTransaksiId], name: "idx_stok_keluar_detail")
+  @@index([stokBatchId], name: "idx_stok_keluar_batch")
+  @@map("stok_keluar_batches")
+}
+
+model StokOpname {
+  id            BigInt      @id @default(autoincrement())
+  nomorOpname   String      @unique @map("nomor_opname") @db.VarChar(60)
+  tanggal       DateTime    @db.DateTime(0)
+  barangId      BigInt      @map("barang_id")
+  userId        BigInt      @map("user_id")
+  jenisOpname   String      @map("jenis_opname") @db.VarChar(20) // 'TELUR' | 'PAKAN' | 'OBAT' | 'TRAY'
+  stokSistem    Decimal     @default(0) @map("stok_sistem") @db.Decimal(12, 2)
+  stokFisik     Decimal     @default(0) @map("stok_fisik") @db.Decimal(12, 2)
+  selisih       Decimal     @default(0) @db.Decimal(12, 2)
+  hpp           Decimal     @default(0) @db.Decimal(15, 2)
+  totalNilai    Decimal     @default(0) @map("total_nilai") @db.Decimal(15, 2)
+  keterangan    String?     @db.Text
+  jurnalId      BigInt?     @map("jurnal_id")
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  // Rincian fisik susut / opname
+  selisihStok   Decimal     @default(0) @map("selisih_stok") @db.Decimal(12, 2)
+  bentes        Decimal     @default(0) @db.Decimal(12, 2)
+  ceplok        Decimal     @default(0) @db.Decimal(12, 2)
+  prok          Decimal     @default(0) @db.Decimal(12, 2)
+  kotor         Decimal     @default(0) @db.Decimal(12, 2)
+  jumbo         Decimal     @default(0) @db.Decimal(12, 2)
+  barangPakai   Decimal     @default(0) @map("barang_pakai") @db.Decimal(12, 2)
+  pemakaianTray Decimal     @default(0) @map("pemakaian_tray") @db.Decimal(12, 2)
+
+  barang        Barang      @relation(fields: [barangId], references: [id])
+  user          User        @relation(fields: [userId], references: [id])
+  jurnal        JurnalUmum? @relation(fields: [jurnalId], references: [id], onDelete: SetNull)
+
+  @@index([barangId, tanggal], name: "idx_stok_opnames_barang_tgl")
+  @@map("stok_opnames")
+}
+
+// ==========================================
+// 6. Master Detail Kategori & Kategori
+// ==========================================
+model DetailKategori {
+  id        BigInt     @id @default(autoincrement())
+  name      String     @db.VarChar(191)
+  deskripsi String?    @db.Text
+  type      String     @db.VarChar(191)
+  isActive  Boolean    @default(true) @map("is_active")
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+  kategoris Kategori[]
+
+  @@map("detail_kategoris")
+}
+
+model Kategori {
+  id               BigInt            @id @default(autoincrement())
+  code             String?           @unique @db.VarChar(50)
+  name             String            @db.VarChar(191)
+  deskripsi        String?           @db.Text
+  detailKategoriId BigInt            @map("detail_kategori_id")
+  isActive         Boolean           @default(true) @map("is_active")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  detailKategori   DetailKategori    @relation(fields: [detailKategoriId], references: [id])
+  detailTransaksis DetailTransaksi[]
+  jurnalDetails    JurnalDetail[]
+
+  @@index([detailKategoriId], name: "idx_kategoris_detail_kategori")
+  @@map("kategoris")
+}
+
+// ==========================================
+// 7. Akuntansi & Double-Entry General Ledger
+// ==========================================
+enum CoaType {
+  Aset
+  Liabilitas
+  Ekuitas
+  Pendapatan
+  Beban
+  HPP
+}
+
+model ChartOfAccount {
+  id               BigInt                  @id @default(autoincrement())
+  code             String                  @unique @db.VarChar(30)
+  name             String                  @db.VarChar(150)
+  type             CoaType
+  normalBalance    String                  @default("DEBIT") @map("normal_balance") @db.VarChar(6)
+  parentId         BigInt?                 @map("parent_id")
+  isActive         Boolean                 @default(true) @map("is_active")
+  createdAt        DateTime                @default(now()) @map("created_at")
+  parent           ChartOfAccount?         @relation("CoaHierarchy", fields: [parentId], references: [id])
+  children         ChartOfAccount[]        @relation("CoaHierarchy")
+  jurnalDetails    JurnalDetail[]
+  monthlyBalances  MonthlyAccountBalance[]
+
+  @@map("chart_of_accounts")
+}
+
+model JurnalUmum {
+  id          BigInt         @id @default(autoincrement())
+  transaksiId BigInt?        @map("transaksi_id")
+  clientId    BigInt?        @map("client_id")
+  nomorJurnal String         @unique @map("nomor_jurnal") @db.VarChar(60)
+  tanggal     DateTime       @db.DateTime(0)
+  keterangan  String?        @db.Text
+  createdAt   DateTime       @default(now()) @map("created_at")
+  transaksi   Transaksi?     @relation(fields: [transaksiId], references: [id], onDelete: Cascade)
+  client      Client?        @relation(fields: [clientId], references: [id])
+  details     JurnalDetail[]
+  stokOpnames StokOpname[]
+
+  @@index([tanggal], name: "idx_jurnal_umums_tanggal")
+  @@index([clientId, tanggal], name: "idx_jurnal_umums_client")
+  @@map("jurnal_umums")
+}
+
+model JurnalDetail {
+  id         BigInt          @id @default(autoincrement())
+  jurnalId   BigInt          @map("jurnal_id")
+  coaId      BigInt          @map("coa_id")
+  kategoriId BigInt?         @map("kategori_id")
+  debit      Decimal         @default(0) @db.Decimal(15, 2)
+  kredit     Decimal         @default(0) @db.Decimal(15, 2)
+  createdAt  DateTime        @default(now()) @map("created_at")
+  jurnal     JurnalUmum      @relation(fields: [jurnalId], references: [id], onDelete: Cascade)
+  coa        ChartOfAccount  @relation(fields: [coaId], references: [id])
+  kategori   Kategori?       @relation(fields: [kategoriId], references: [id])
+
+  @@index([coaId, jurnalId], name: "idx_jurnal_details_coa")
+  @@index([kategoriId], name: "idx_jurnal_details_kategori")
+  @@map("jurnal_details")
+}
+
+// ==========================================
+// 7. Monthly Balance Snapshot (Buku Besar Bulanan)
+// ==========================================
+model MonthlyAccountBalance {
+  id             BigInt         @id @default(autoincrement())
+  coaId          BigInt         @map("coa_id")
+  periodYear     Int            @map("period_year")
+  periodMonth    Int            @map("period_month")
+  openingBalance Decimal        @default(0) @map("opening_balance") @db.Decimal(15, 2)
+  totalDebit     Decimal        @default(0) @map("total_debit") @db.Decimal(15, 2)
+  totalKredit    Decimal        @default(0) @map("total_kredit") @db.Decimal(15, 2)
+  closingBalance Decimal        @default(0) @map("closing_balance") @db.Decimal(15, 2)
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  coa            ChartOfAccount @relation(fields: [coaId], references: [id])
+
+  @@unique([coaId, periodYear, periodMonth], name: "unique_period_coa")
+  @@index([periodYear, periodMonth, coaId], name: "idx_monthly_balances_period")
+  @@map("monthly_account_balances")
+}
+
+// ==========================================
+// 8. User Activity Logs & Audit Trail
+// ==========================================
+model ActivityLog {
+  id          BigInt   @id @default(autoincrement())
+  userId      BigInt?  @map("user_id")
+  action      String   @db.VarChar(100)
+  module      String   @db.VarChar(50)
+  description String   @db.Text
+  ipAddress   String?  @map("ip_address") @db.VarChar(45)
+  details     Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt], name: "idx_activity_logs_created_at")
+  @@index([module], name: "idx_activity_logs_module")
+  @@map("activity_logs")
+}
+

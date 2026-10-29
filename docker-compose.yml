@@ -1,0 +1,100 @@
+version: '3.8'
+
+services:
+  # 1. MySQL 8 Database (High-throughput InnoDB configuration)
+  db:
+    image: mysql:8.0
+    container_name: bimapratama-db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root_secret_2026}
+      MYSQL_DATABASE: ${DB_NAME:-bimapratama_v2}
+      MYSQL_USER: ${DB_USER:-bima_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-bima_password_2026}
+    command: >
+      mysqld
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --innodb_buffer_pool_size=1G
+      --innodb_log_file_size=256M
+      --innodb_flush_log_at_trx_commit=2
+      --max_connections=500
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - bimapratama-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD:-root_secret_2026}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 2. Redis 7 (In-memory Cache & High-speed Queuing)
+  redis:
+    image: redis:7-alpine
+    container_name: bimapratama-redis
+    restart: always
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - bimapratama-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # 3. Backend API (NestJS 11 + Node 22 LTS)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bimapratama-backend
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: mysql://${DB_USER:-bima_user}:${DB_PASSWORD:-bima_password_2026}@db:3306/${DB_NAME:-bimapratama_v2}
+      JWT_SECRET: ${JWT_SECRET:-bimapratama_jwt_super_secret_key_2026_scalable_5_10_years}
+      JWT_EXPIRES_IN: 24h
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - bimapratama-net
+
+  # 4. Frontend SPA (React 19 + Nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: bimapratama-frontend
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - bimapratama-net
+
+volumes:
+  db_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  bimapratama-net:
+    driver: bridge
