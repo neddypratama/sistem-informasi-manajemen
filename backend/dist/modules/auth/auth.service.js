@@ -88,7 +88,15 @@ let AuthService = AuthService_1 = class AuthService {
                     { name: { contains: cleanInput } },
                 ],
             },
-            include: { role: true },
+            include: {
+                role: {
+                    include: {
+                        permissions: {
+                            include: { permission: true },
+                        },
+                    },
+                },
+            },
         });
         if (!user) {
             this.recordFailedAttempt(rateLimitKey);
@@ -142,11 +150,13 @@ let AuthService = AuthService_1 = class AuthService {
             throw new UnauthorizedException('Kata sandi yang Anda masukkan salah.');
         }
         this.clearRateLimit(rateLimitKey);
+        const permissions = (user.role?.permissions || []).map((rp) => rp.permission.name);
         const payload = {
             sub: Number(user.id),
             username: user.username,
             roleId: Number(user.roleId),
             roleName: user.role.name,
+            permissions,
         };
         const accessToken = this.jwtService.sign(payload);
         try {
@@ -177,17 +187,27 @@ let AuthService = AuthService_1 = class AuthService {
                 email: user.email,
                 roleId: Number(user.roleId),
                 role: user.role.name,
+                permissions,
             },
         };
     }
     async getProfile(userId) {
         const user = await this.prisma.user.findUnique({
             where: { id: BigInt(userId) },
-            include: { role: true },
+            include: {
+                role: {
+                    include: {
+                        permissions: {
+                            include: { permission: true },
+                        },
+                    },
+                },
+            },
         });
         if (!user) {
             throw new UnauthorizedException('Pengguna tidak ditemukan.');
         }
+        const permissions = (user.role?.permissions || []).map((rp) => rp.permission.name);
         return {
             id: Number(user.id),
             name: user.name,
@@ -195,6 +215,7 @@ let AuthService = AuthService_1 = class AuthService {
             email: user.email,
             roleId: Number(user.roleId),
             role: user.role.name,
+            permissions,
             createdAt: user.createdAt,
         };
     }

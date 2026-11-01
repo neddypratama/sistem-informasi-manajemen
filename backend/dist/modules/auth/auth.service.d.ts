@@ -20,6 +20,7 @@ export declare class AuthService {
             email: string | null;
             roleId: number;
             role: string;
+            permissions: any[];
         };
     }>;
     getProfile(userId: number): Promise<{
@@ -29,6 +30,7 @@ export declare class AuthService {
         email: string | null;
         roleId: number;
         role: string;
+        permissions: any[];
         createdAt: Date;
     }>;
 }

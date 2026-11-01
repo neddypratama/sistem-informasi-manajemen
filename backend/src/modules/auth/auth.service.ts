@@ -115,7 +115,15 @@ export class AuthService {
           { name: { contains: cleanInput } },
         ],
       },
-      include: { role: true },
+      include: {
+        role: {
+          include: {
+            permissions: {
+              include: { permission: true },
+            },
+          },
+        },
+      },
     });
 
     if (!user) {
@@ -176,11 +184,14 @@ export class AuthService {
     // Login sukses: hapus counter gagal
     this.clearRateLimit(rateLimitKey);
 
+    const permissions = (user.role?.permissions || []).map((rp: any) => rp.permission.name);
+
     const payload = {
       sub: Number(user.id),
       username: user.username,
       roleId: Number(user.roleId),
       roleName: user.role.name,
+      permissions,
     };
 
     const accessToken = this.jwtService.sign(payload);
@@ -214,6 +225,7 @@ export class AuthService {
         email: user.email,
         roleId: Number(user.roleId),
         role: user.role.name,
+        permissions,
       },
     };
   }
@@ -221,12 +233,22 @@ export class AuthService {
   async getProfile(userId: number) {
     const user = await this.prisma.user.findUnique({
       where: { id: BigInt(userId) },
-      include: { role: true },
+      include: {
+        role: {
+          include: {
+            permissions: {
+              include: { permission: true },
+            },
+          },
+        },
+      },
     });
 
     if (!user) {
       throw new UnauthorizedException('Pengguna tidak ditemukan.');
     }
+
+    const permissions = (user.role?.permissions || []).map((rp: any) => rp.permission.name);
 
     return {
       id: Number(user.id),
@@ -235,6 +257,7 @@ export class AuthService {
       email: user.email,
       roleId: Number(user.roleId),
       role: user.role.name,
+      permissions,
       createdAt: user.createdAt,
     };
   }

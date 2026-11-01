@@ -29,26 +29,31 @@ import {
   X,
   BookOpen,
   History,
+  Home,
 } from 'lucide-react';
-import { useAuthStore } from '../../stores/auth.store';
+import { useAuthStore, hasPermission, isAdminOrManager } from '../../stores/auth.store';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api-client';
 
+interface NavItem {
+  label: string;
+  path: string;
+  icon: React.ComponentType<{ className?: string }>;
+  badge?: string;
+  badgeColor?: string;
+  permission?: string;
+  adminOrManagerOnly?: boolean;
+}
+
 interface NavSection {
   title: string;
-  items: {
-    label: string;
-    path: string;
-    icon: React.ComponentType<{ className?: string }>;
-    badge?: string;
-    badgeColor?: string;
-  }[];
+  items: NavItem[];
 }
 
 export const AppLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuthStore();
+  const { user, setUser, logout } = useAuthStore();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
@@ -56,6 +61,33 @@ export const AppLayout: React.FC = () => {
     logout();
     navigate('/login');
   };
+
+  // Sinkronisasi otomatis permission terbaru dari server (menjamin permission selalu up to date)
+  useQuery({
+    queryKey: ['userProfileSync', user?.id],
+    queryFn: async () => {
+      try {
+        const res: any = await apiClient.get('/auth/profile');
+        const profile = res?.data || res;
+        if (profile && profile.id) {
+          setUser({
+            id: profile.id,
+            name: profile.name,
+            username: profile.username,
+            email: profile.email,
+            roleId: profile.roleId,
+            role: profile.role,
+            permissions: profile.permissions || [],
+          });
+        }
+        return profile;
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!user?.id,
+    staleTime: 1000 * 60 * 3, // sinkron setiap 3 menit
+  });
 
   // Live count queries for Master Barang and Mitra & Peternak
   const { data: barangsCount } = useQuery({
@@ -76,48 +108,50 @@ export const AppLayout: React.FC = () => {
     staleTime: 60000,
   });
 
-  const navSections: NavSection[] = [
+  const rawNavSections: NavSection[] = [
     {
       title: 'UTAMA',
       items: [
-        { label: 'Dashboard Analitik', path: '/', icon: LayoutDashboard },
+        isAdminOrManager(user)
+          ? { label: 'Dashboard Analitik', path: '/', icon: LayoutDashboard }
+          : { label: 'Beranda Staf', path: '/', icon: Home, badge: 'Home', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
       ],
     },
     {
       title: 'KOMODITAS OPERASIONAL',
       items: [
-        { label: 'Menu Telur', path: '/telur', icon: Egg, badge: 'Telur', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
-        { label: 'Menu Pakan', path: '/pakan', icon: Wheat, badge: 'Pakan', badgeColor: 'bg-amber-500/20 text-amber-400' },
-        { label: 'Menu Obat', path: '/obat', icon: Pill, badge: 'Obat', badgeColor: 'bg-indigo-500/20 text-indigo-400' },
-        { label: 'Menu Tray', path: '/tray', icon: Layers, badge: 'Tray', badgeColor: 'bg-teal-500/20 text-teal-400' },
+        { label: 'Menu Telur', path: '/telur', icon: Egg, permission: 'telur:read', badge: 'Telur', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
+        { label: 'Menu Pakan', path: '/pakan', icon: Wheat, permission: 'pakan:read', badge: 'Pakan', badgeColor: 'bg-amber-500/20 text-amber-400' },
+        { label: 'Menu Obat', path: '/obat', icon: Pill, permission: 'obat:read', badge: 'Obat', badgeColor: 'bg-indigo-500/20 text-indigo-400' },
+        { label: 'Menu Tray', path: '/tray', icon: Layers, permission: 'tray:read', badge: 'Tray', badgeColor: 'bg-teal-500/20 text-teal-400' },
       ],
     },
     {
       title: 'STOK',
       items: [
-        { label: 'Monitoring Stok Global', path: '/stok', icon: Boxes, badge: 'Gudang', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
-        { label: 'Stok Opname & Penyesuaian', path: '/stok-opname', icon: ClipboardCheck, badge: 'Opname', badgeColor: 'bg-amber-500/20 text-amber-400' },
+        { label: 'Monitoring Stok Global', path: '/stok', icon: Boxes, permission: 'stok:read', badge: 'Gudang', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
+        { label: 'Stok Opname & Penyesuaian', path: '/stok-opname', icon: ClipboardCheck, permission: 'stok:read', badge: 'Opname', badgeColor: 'bg-amber-500/20 text-amber-400' },
       ],
     },
     {
       title: 'KEUANGAN & KAS OPERASIONAL',
       items: [
-        { label: 'Monitoring Kas & Bank', path: '/kas', icon: Banknote, badge: 'In/Out', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
-        { label: 'Hutang Usaha', path: '/hutang', icon: CreditCard, badge: 'Hutang', badgeColor: 'bg-rose-500/20 text-rose-400' },
-        { label: 'Piutang Usaha', path: '/piutang', icon: WalletCards, badge: 'Piutang', badgeColor: 'bg-amber-500/20 text-amber-400' },
-        { label: 'Pengeluaran Beban', path: '/beban', icon: Receipt, badge: 'PGN', badgeColor: 'bg-rose-500/20 text-rose-400' },
-        { label: 'Pendapatan Lainnya', path: '/pendapatan-lain', icon: Coins, badge: 'LNY', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
-        { label: 'Bon - Titipan Mitra', path: '/bon-titipan', icon: WalletCards, badge: 'P/H', badgeColor: 'bg-indigo-500/20 text-indigo-400' },
+        { label: 'Monitoring Kas & Bank', path: '/kas', icon: Banknote, permission: 'kas:read', badge: 'In/Out', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
+        { label: 'Hutang Usaha', path: '/hutang', icon: CreditCard, permission: 'hutang:read', badge: 'Hutang', badgeColor: 'bg-rose-500/20 text-rose-400' },
+        { label: 'Piutang Usaha', path: '/piutang', icon: WalletCards, permission: 'piutang:read', badge: 'Piutang', badgeColor: 'bg-amber-500/20 text-amber-400' },
+        { label: 'Pengeluaran Beban', path: '/beban', icon: Receipt, permission: 'beban:read', badge: 'PGN', badgeColor: 'bg-rose-500/20 text-rose-400' },
+        { label: 'Pendapatan Lainnya', path: '/pendapatan-lain', icon: Coins, permission: 'pendapatan_lain:read', badge: 'LNY', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
+        { label: 'Bon - Titipan Mitra', path: '/bon-titipan', icon: WalletCards, permission: 'bon_titipan:read', badge: 'P/H', badgeColor: 'bg-indigo-500/20 text-indigo-400' },
       ],
     },
     {
       title: 'LAPORAN & AKUNTANSI',
       items: [
-        { label: 'Laba Rugi Komoditas', path: '/laporan', icon: FileSpreadsheet, badge: 'P&L', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
-        { label: 'Laba Rugi Curah', path: '/laporan-curah', icon: Wheat, badge: 'Curah', badgeColor: 'bg-orange-500/20 text-orange-400' },
-        { label: 'Jurnal Umum & Detail', path: '/jurnal-umum', icon: BookOpen, badge: 'Double-Entry', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
-        { label: 'Neraca Saldo', path: '/neraca-saldo', icon: Scale, badge: 'Trial', badgeColor: 'bg-blue-500/20 text-blue-400' },
-        { label: 'Laporan Aset & Modal', path: '/laporan-aset', icon: Landmark, badge: 'Aset', badgeColor: 'bg-purple-500/20 text-purple-400' },
+        { label: 'Laba Rugi Komoditas', path: '/laporan', icon: FileSpreadsheet, permission: 'laporan:laba_rugi', badge: 'P&L', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
+        { label: 'Laba Rugi Curah', path: '/laporan-curah', icon: Wheat, permission: 'laporan:curah', badge: 'Curah', badgeColor: 'bg-orange-500/20 text-orange-400' },
+        { label: 'Jurnal Umum & Detail', path: '/jurnal-umum', icon: BookOpen, permission: 'laporan:neraca_saldo', badge: 'Double-Entry', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
+        { label: 'Neraca Saldo', path: '/neraca-saldo', icon: Scale, permission: 'laporan:neraca_saldo', badge: 'Trial', badgeColor: 'bg-blue-500/20 text-blue-400' },
+        { label: 'Laporan Aset & Modal', path: '/laporan-aset', icon: Landmark, permission: 'laporan:aset', badge: 'Aset', badgeColor: 'bg-purple-500/20 text-purple-400' },
       ],
     },
     {
@@ -127,6 +161,7 @@ export const AppLayout: React.FC = () => {
           label: 'Master Barang',
           path: '/barangs',
           icon: Package,
+          permission: 'master:barang',
           badge: barangsCount !== undefined ? `${barangsCount}` : undefined,
           badgeColor: 'bg-emerald-500/20 text-emerald-400',
         },
@@ -134,22 +169,35 @@ export const AppLayout: React.FC = () => {
           label: 'Mitra & Peternak',
           path: '/clients',
           icon: Users,
+          permission: 'master:client',
           badge: clientsCount !== undefined ? `${clientsCount}` : undefined,
           badgeColor: 'bg-indigo-500/20 text-indigo-400',
         },
-        { label: 'Master Kategori', path: '/kategoris', icon: Tag, badge: '100' },
-        { label: 'Detail Kategori', path: '/detail-kategoris', icon: FolderTree, badge: '40' },
+        { label: 'Master Kategori', path: '/kategoris', icon: Tag, permission: 'master:kategori', badge: '100' },
+        { label: 'Detail Kategori', path: '/detail-kategoris', icon: FolderTree, permission: 'master:kategori', badge: '40' },
       ],
     },
     {
       title: 'PENGATURAN & AUDIT',
       items: [
-        { label: 'Riwayat Log Aktivitas', path: '/logs', icon: History, badge: 'Audit', badgeColor: 'bg-blue-500/20 text-blue-400' },
-        { label: 'Pengguna & Role (RBAC)', path: '/users', icon: ShieldCheck, badge: 'Akses', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
-        { label: 'Import Sistem Lama', path: '/import-legacy', icon: Database, badge: 'ETL', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
+        { label: 'Riwayat Log Aktivitas', path: '/logs', icon: History, badge: 'Audit', badgeColor: 'bg-blue-500/20 text-blue-400', adminOrManagerOnly: true },
+        { label: 'Pengguna & Role (RBAC)', path: '/users', icon: ShieldCheck, permission: 'users:read', badge: 'Akses', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
+        { label: 'Import Sistem Lama', path: '/import-legacy', icon: Database, badge: 'ETL', badgeColor: 'bg-emerald-500/20 text-emerald-400', adminOrManagerOnly: true },
       ],
     },
   ];
+
+  // Saring menu sidebar agar HANYA menampilkan menu yang memiliki hak akses
+  const navSections: NavSection[] = rawNavSections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => {
+        if (item.adminOrManagerOnly && !isAdminOrManager(user)) return false;
+        if (item.permission && !hasPermission(user, item.permission)) return false;
+        return true;
+      }),
+    }))
+    .filter((section) => section.items.length > 0);
 
   const renderNavItems = (onItemClick?: () => void) => (
     <nav className="p-3 space-y-4 overflow-y-auto flex-1 custom-scrollbar">

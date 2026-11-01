@@ -29,7 +29,8 @@ import { UserManagementPage } from './features/users/UserManagementPage';
 import { ActivityLogPage } from './features/users/ActivityLogPage';
 import { JurnalUmumPage } from './features/reports/JurnalUmumPage';
 import { ImportLegacyPage } from './features/migration/ImportLegacyPage';
-import { useAuthStore } from './stores/auth.store';
+import { WelcomePage } from './features/dashboard/WelcomePage';
+import { useAuthStore, isAdminOrManager, hasPermission } from './stores/auth.store';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -48,6 +49,31 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
   return children;
 };
 
+// Guard route berdasarkan permission & role pengguna
+const PermissionRoute: React.FC<{
+  children: React.ReactElement;
+  permission?: string;
+  adminOrManagerOnly?: boolean;
+}> = ({ children, permission, adminOrManagerOnly }) => {
+  const { user } = useAuthStore();
+  if (adminOrManagerOnly && !isAdminOrManager(user)) {
+    return <Navigate to="/" replace />;
+  }
+  if (permission && !hasPermission(user, permission)) {
+    return <Navigate to="/" replace />;
+  }
+  return children;
+};
+
+// Landing Page: Dashboard Analitik untuk Admin & Manager, Welcome Page untuk Staf Operasional lainnya
+const MainLanding: React.FC = () => {
+  const { user } = useAuthStore();
+  if (isAdminOrManager(user)) {
+    return <DashboardPage />;
+  }
+  return <WelcomePage />;
+};
+
 export const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
@@ -62,43 +88,220 @@ export const App: React.FC = () => {
               </ProtectedRoute>
             }
           >
-            <Route index element={<DashboardPage />} />
-            {/* 4 Komoditas Operasional Lengkap (Jual, Beli, Retur Jual, Retur Beli, Stok) */}
-            <Route path="telur" element={<TelurModulePage />} />
-            <Route path="pakan" element={<PakanModulePage />} />
-            <Route path="obat" element={<MenuObatPage />} />
-            <Route path="tray" element={<MenuTrayPage />} />
+            {/* Landing page dinamis: Dashboard untuk Admin/Manager, Welcome Page untuk peran lainnya */}
+            <Route index element={<MainLanding />} />
+            
+            {/* 4 Komoditas Operasional Lengkap */}
+            <Route
+              path="telur"
+              element={
+                <PermissionRoute permission="telur:read">
+                  <TelurModulePage />
+                </PermissionRoute>
+              }
+            />
+            <Route
+              path="pakan"
+              element={
+                <PermissionRoute permission="pakan:read">
+                  <PakanModulePage />
+                </PermissionRoute>
+              }
+            />
+            <Route
+              path="obat"
+              element={
+                <PermissionRoute permission="obat:read">
+                  <MenuObatPage />
+                </PermissionRoute>
+              }
+            />
+            <Route
+              path="tray"
+              element={
+                <PermissionRoute permission="tray:read">
+                  <MenuTrayPage />
+                </PermissionRoute>
+              }
+            />
 
             {/* Quick POS & Global Monitoring */}
-            <Route path="penjualan" element={<PenjualanPage />} />
-            <Route path="stok" element={<StokTelurPage />} />
-            <Route path="stok-opname" element={<StokOpnamePage />} />
+            <Route
+              path="penjualan"
+              element={
+                <PermissionRoute permission="pos:access">
+                  <PenjualanPage />
+                </PermissionRoute>
+              }
+            />
+            <Route
+              path="stok"
+              element={
+                <PermissionRoute permission="stok:read">
+                  <StokTelurPage />
+                </PermissionRoute>
+              }
+            />
+            <Route
+              path="stok-opname"
+              element={
+                <PermissionRoute permission="stok:read">
+                  <StokOpnamePage />
+                </PermissionRoute>
+              }
+            />
 
             {/* Keuangan & Kas Operasional */}
-            <Route path="kas" element={<LaporanKasPage />} />
-            <Route path="hutang" element={<HutangPage />} />
-            <Route path="piutang" element={<PiutangPage />} />
-            <Route path="beban" element={<BebanPage />} />
-            <Route path="pendapatan-lain" element={<PendapatanLainPage />} />
-            <Route path="bon-titipan" element={<BonTitipanPage />} />
+            <Route
+              path="kas"
+              element={
+                <PermissionRoute permission="kas:read">
+                  <LaporanKasPage />
+                </PermissionRoute>
+              }
+            />
+            <Route
+              path="hutang"
+              element={
+                <PermissionRoute permission="hutang:read">
+                  <HutangPage />
+                </PermissionRoute>
+              }
+            />
+            <Route
+              path="piutang"
+              element={
+                <PermissionRoute permission="piutang:read">
+                  <PiutangPage />
+                </PermissionRoute>
+              }
+            />
+            <Route
+              path="beban"
+              element={
+                <PermissionRoute permission="beban:read">
+                  <BebanPage />
+                </PermissionRoute>
+              }
+            />
+            <Route
+              path="pendapatan-lain"
+              element={
+                <PermissionRoute permission="pendapatan_lain:read">
+                  <PendapatanLainPage />
+                </PermissionRoute>
+              }
+            />
+            <Route
+              path="bon-titipan"
+              element={
+                <PermissionRoute permission="bon_titipan:read">
+                  <BonTitipanPage />
+                </PermissionRoute>
+              }
+            />
 
             {/* Modul Laporan Eksekutif & Akuntansi */}
-            <Route path="laporan" element={<LabaRugiPage />} />
-            <Route path="laporan-curah" element={<LabaRugiCurahPage />} />
-            <Route path="jurnal-umum" element={<JurnalUmumPage />} />
-            <Route path="neraca-saldo" element={<NeracaSaldoPage />} />
-            <Route path="laporan-aset" element={<LaporanAsetPage />} />
+            <Route
+              path="laporan"
+              element={
+                <PermissionRoute permission="laporan:laba_rugi">
+                  <LabaRugiPage />
+                </PermissionRoute>
+              }
+            />
+            <Route
+              path="laporan-curah"
+              element={
+                <PermissionRoute permission="laporan:curah">
+                  <LabaRugiCurahPage />
+                </PermissionRoute>
+              }
+            />
+            <Route
+              path="jurnal-umum"
+              element={
+                <PermissionRoute permission="laporan:neraca_saldo">
+                  <JurnalUmumPage />
+                </PermissionRoute>
+              }
+            />
+            <Route
+              path="neraca-saldo"
+              element={
+                <PermissionRoute permission="laporan:neraca_saldo">
+                  <NeracaSaldoPage />
+                </PermissionRoute>
+              }
+            />
+            <Route
+              path="laporan-aset"
+              element={
+                <PermissionRoute permission="laporan:aset">
+                  <LaporanAsetPage />
+                </PermissionRoute>
+              }
+            />
 
             {/* Master Data & Pengguna */}
-            <Route path="barangs" element={<BarangPage />} />
-            <Route path="clients" element={<ClientPage />} />
-            <Route path="kategoris" element={<KategoriPage />} />
-            <Route path="detail-kategoris" element={<DetailKategoriPage />} />
-            <Route path="users" element={<UserManagementPage />} />
-            <Route path="logs" element={<ActivityLogPage />} />
+            <Route
+              path="barangs"
+              element={
+                <PermissionRoute permission="master:barang">
+                  <BarangPage />
+                </PermissionRoute>
+              }
+            />
+            <Route
+              path="clients"
+              element={
+                <PermissionRoute permission="master:client">
+                  <ClientPage />
+                </PermissionRoute>
+              }
+            />
+            <Route
+              path="kategoris"
+              element={
+                <PermissionRoute permission="master:kategori">
+                  <KategoriPage />
+                </PermissionRoute>
+              }
+            />
+            <Route
+              path="detail-kategoris"
+              element={
+                <PermissionRoute permission="master:kategori">
+                  <DetailKategoriPage />
+                </PermissionRoute>
+              }
+            />
+            <Route
+              path="users"
+              element={
+                <PermissionRoute permission="users:read">
+                  <UserManagementPage />
+                </PermissionRoute>
+              }
+            />
+            <Route
+              path="logs"
+              element={
+                <PermissionRoute adminOrManagerOnly>
+                  <ActivityLogPage />
+                </PermissionRoute>
+              }
+            />
 
             {/* Sistem & Migrasi Data */}
-            <Route path="import-legacy" element={<ImportLegacyPage />} />
+            <Route
+              path="import-legacy"
+              element={
+                <PermissionRoute adminOrManagerOnly>
+                  <ImportLegacyPage />
+                </PermissionRoute>
+              }
+            />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
