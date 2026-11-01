@@ -12,9 +12,14 @@ export class ReportsController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
-    const today = new Date().toISOString().slice(0, 10);
-    const start = startDate || '2026-01-01';
-    const end = endDate || today;
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const startOfMonth = `${y}-${m}-01`;
+    const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
+    const endOfMonth = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
+    const start = startDate || startOfMonth;
+    const end = endDate || endOfMonth;
     return this.reportsService.getLabaRugi(start, end);
   }
 
@@ -23,9 +28,14 @@ export class ReportsController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
-    const today = new Date().toISOString().slice(0, 10);
-    const start = startDate || '2026-01-01';
-    const end = endDate || today;
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const startOfMonth = `${y}-${m}-01`;
+    const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
+    const endOfMonth = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
+    const start = startDate || startOfMonth;
+    const end = endDate || endOfMonth;
     return this.reportsService.getLabaRugiCurah(start, end);
   }
 
@@ -41,8 +51,9 @@ export class ReportsController {
   async getNeracaSaldo(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('mode') mode?: string,
   ) {
-    return this.reportsService.getNeracaSaldo(startDate, endDate);
+    return this.reportsService.getNeracaSaldo(startDate, endDate, mode);
   }
 
   @Get('aset')

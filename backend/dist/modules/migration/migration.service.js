@@ -339,6 +339,16 @@ let MigrationService = MigrationService_1 = class MigrationService {
                     subCategoryLabel = 'Pendapatan Lain';
                     countPendapatanLain++;
                 }
+                else if (inv.includes('-UTG-')) {
+                    isOperational = true;
+                    modernType = isDebit ? 'KAS_KELUAR' : 'KAS_MASUK';
+                    subCategoryLabel = 'Hutang';
+                }
+                else if (inv.includes('-BON-')) {
+                    isOperational = true;
+                    modernType = isDebit ? 'KAS_KELUAR' : 'KAS_MASUK';
+                    subCategoryLabel = 'Piutang';
+                }
                 if (!isOperational) {
                     continue;
                 }

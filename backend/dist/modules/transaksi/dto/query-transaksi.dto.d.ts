@@ -1,6 +1,6 @@
-import { TransaksiType, TransaksiStatus } from '@prisma/client';
+import { TransaksiStatus } from '@prisma/client';
 export declare class QueryTransaksiDto {
-    type?: TransaksiType;
+    type?: string;
     status?: TransaksiStatus;
     module?: string;
     search?: string;

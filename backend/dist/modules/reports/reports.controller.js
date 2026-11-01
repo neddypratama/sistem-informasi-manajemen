@@ -19,22 +19,32 @@ let ReportsController = class ReportsController {
         this.reportsService = reportsService;
     }
     async getLabaRugi(startDate, endDate) {
-        const today = new Date().toISOString().slice(0, 10);
-        const start = startDate || '2026-01-01';
-        const end = endDate || today;
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const startOfMonth = `${y}-${m}-01`;
+        const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
+        const endOfMonth = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
+        const start = startDate || startOfMonth;
+        const end = endDate || endOfMonth;
         return this.reportsService.getLabaRugi(start, end);
     }
     async getLabaRugiCurah(startDate, endDate) {
-        const today = new Date().toISOString().slice(0, 10);
-        const start = startDate || '2026-01-01';
-        const end = endDate || today;
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const startOfMonth = `${y}-${m}-01`;
+        const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
+        const endOfMonth = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
+        const start = startDate || startOfMonth;
+        const end = endDate || endOfMonth;
         return this.reportsService.getLabaRugiCurah(start, end);
     }
     async getBonTitipan(search, type) {
         return this.reportsService.getBonTitipan(search, type);
     }
-    async getNeracaSaldo(startDate, endDate) {
-        return this.reportsService.getNeracaSaldo(startDate, endDate);
+    async getNeracaSaldo(startDate, endDate, mode) {
+        return this.reportsService.getNeracaSaldo(startDate, endDate, mode);
     }
     async getLaporanAset(startDate, endDate) {
         return this.reportsService.getLaporanAset(startDate, endDate);
@@ -89,8 +99,9 @@ __decorate([
     Get('neraca-saldo'),
     __param(0, Query('startDate')),
     __param(1, Query('endDate')),
+    __param(2, Query('mode')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:paramtypes", [String, String, String]),
     __metadata("design:returntype", Promise)
 ], ReportsController.prototype, "getNeracaSaldo", null);
 __decorate([

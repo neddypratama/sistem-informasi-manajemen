@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api-client';
 import { ExportButtonGroup } from '../../components/ExportButtonGroup';
 import { exportToExcel } from '../../lib/export-utils';
+import { Pagination } from '../../components/Pagination';
 import {
   Users,
   Search,
@@ -22,6 +23,7 @@ export const ClientPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [type, setType] = useState('');
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
 
   // Modals state
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -45,9 +47,9 @@ export const ClientPage: React.FC = () => {
   const [editKeterangan, setEditKeterangan] = useState('');
 
   const { data: clientsData, isLoading } = useQuery({
-    queryKey: ['clientsGrid', search, type, page],
+    queryKey: ['clientsGrid', search, type, page, limit],
     queryFn: async () => {
-      let url = `/master/clients?page=${page}&limit=25`;
+      let url = `/master/clients?page=${page}&limit=${limit}`;
       if (search) url += `&search=${encodeURIComponent(search)}`;
       if (type) url += `&type=${type}`;
       const res: any = await apiClient.get(url);
@@ -383,31 +385,19 @@ export const ClientPage: React.FC = () => {
           </tbody>
         </table>
 
-        {/* Pagination Controls */}
-        {meta && meta.totalPages > 1 && (
-          <div className="p-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <div>
-              Halaman <span className="font-bold text-slate-800">{meta.page}</span> dari{' '}
-              <span className="font-bold text-slate-800">{meta.totalPages}</span> (Total {meta.total} Mitra)
-            </div>
-            <div className="flex space-x-2">
-              <button
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-100 disabled:opacity-40"
-              >
-                Sebelumnya
-              </button>
-              <button
-                disabled={page >= meta.totalPages}
-                onClick={() => setPage((p) => p + 1)}
-                className="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-100 disabled:opacity-40"
-              >
-                Selanjutnya
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Pagination Bar */}
+        <Pagination
+          page={page}
+          limit={limit}
+          total={meta?.total || 0}
+          totalPages={meta?.totalPages || 1}
+          onPageChange={(p) => setPage(p)}
+          onLimitChange={(l) => {
+            setLimit(l);
+            setPage(1);
+          }}
+          entityName="mitra / klien"
+        />
       </div>
 
       {/* ========================================================= */}

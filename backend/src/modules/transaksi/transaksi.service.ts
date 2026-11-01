@@ -22,7 +22,16 @@ export class TransaksiService {
     const where: any = {};
     const andClauses: any[] = [];
 
-    if (query.type) where.type = query.type;
+    if (query.type) {
+      const qType = String(query.type);
+      if (qType === 'Debit') {
+        where.type = 'KAS_KELUAR';
+      } else if (qType === 'Kredit') {
+        where.type = 'KAS_MASUK';
+      } else {
+        where.type = query.type;
+      }
+    }
     if (query.status) where.status = query.status;
     if (query.clientId) where.clientId = BigInt(query.clientId);
     if (query.jenisIds) {
@@ -157,7 +166,7 @@ export class TransaksiService {
       where.AND = andClauses;
     }
 
-    const [items, total] = await Promise.all([
+    const [items, total, aggregateTotal] = await Promise.all([
       this.prisma.transaksi.findMany({
         where,
         include: {
@@ -194,15 +203,35 @@ export class TransaksiService {
         take: limit,
       }),
       this.prisma.transaksi.count({ where }),
+      this.prisma.transaksi.aggregate({
+        where,
+        _sum: { total: true },
+      }),
     ]);
 
+    const mappedItems = items.map((it) => {
+      let posisi: 'Debit' | 'Kredit' = 'Debit';
+      if (it.type === 'KAS_MASUK' || it.type === 'PENJUALAN') {
+        posisi = 'Kredit';
+      } else if (it.type === 'KAS_KELUAR' || it.type === 'PEMBELIAN') {
+        posisi = 'Debit';
+      }
+      return {
+        ...it,
+        posisi,
+      };
+    });
+
+    const totalKeseluruhan = Number(aggregateTotal._sum?.total || 0);
+
     return {
-      items,
+      items: mappedItems,
       meta: {
         page,
         limit,
         total,
         totalPages: Math.ceil(total / limit),
+        totalKeseluruhan,
       },
     };
   }

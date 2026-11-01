@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api-client';
 import { ExportButtonGroup } from '../../components/ExportButtonGroup';
 import { exportToExcel, exportToPdf, formatDateIndo } from '../../lib/export-utils';
+import { Pagination } from '../../components/Pagination';
+import { getTodayDateString } from '../../lib/date-utils';
 import {
   BookOpen,
   Search,
@@ -20,17 +22,18 @@ import {
 
 export const JurnalUmumPage: React.FC = () => {
   const [search, setSearch] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate, setStartDate] = useState(getTodayDateString());
+  const [endDate, setEndDate] = useState(getTodayDateString());
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [modalJurnal, setModalJurnal] = useState<any | null>(null);
   const [isExporting, setIsExporting] = useState(false);
 
   const { data: responseData, isLoading } = useQuery({
-    queryKey: ['jurnalUmum', page, search, startDate, endDate],
+    queryKey: ['jurnalUmum', page, limit, search, startDate, endDate],
     queryFn: async () => {
-      let url = `/reports/jurnal-umum?limit=25&page=${page}`;
+      let url = `/reports/jurnal-umum?limit=${limit}&page=${page}`;
       if (search) url += `&search=${encodeURIComponent(search)}`;
       if (startDate) url += `&startDate=${startDate}`;
       if (endDate) url += `&endDate=${endDate}`;
@@ -245,28 +248,65 @@ export const JurnalUmumPage: React.FC = () => {
           />
         </div>
 
-        <div className="flex items-center space-x-2 text-xs w-full sm:w-auto">
-          <Calendar className="w-4 h-4 text-slate-400 ml-1" />
-          <span className="text-slate-500 font-semibold">Tgl:</span>
-          <input
-            type="date"
-            value={startDate}
-            onChange={(e) => {
-              setStartDate(e.target.value);
-              setPage(1);
-            }}
-            className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 font-medium"
-          />
-          <span className="text-slate-400">s/d</span>
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => {
-              setEndDate(e.target.value);
-              setPage(1);
-            }}
-            className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 font-medium"
-          />
+        <div className="flex flex-wrap items-center gap-2 text-xs w-full sm:w-auto">
+          {/* Quick Date Presets */}
+          <div className="flex items-center space-x-1 bg-slate-100 p-0.5 rounded-lg text-[11px] font-semibold">
+            <button
+              type="button"
+              onClick={() => {
+                const today = getTodayDateString();
+                setStartDate(today);
+                setEndDate(today);
+                setPage(1);
+              }}
+              className={`px-2.5 py-1 rounded-md transition-all ${
+                startDate === getTodayDateString() && endDate === getTodayDateString()
+                  ? 'bg-white text-emerald-700 shadow-xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Hari Ini
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setStartDate('');
+                setEndDate('');
+                setPage(1);
+              }}
+              className={`px-2.5 py-1 rounded-md transition-all ${
+                !startDate && !endDate
+                  ? 'bg-white text-emerald-700 shadow-xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Semua
+            </button>
+          </div>
+
+          <div className="flex items-center space-x-1.5">
+            <Calendar className="w-4 h-4 text-slate-400 ml-1" />
+            <span className="text-slate-500 font-semibold">Tgl:</span>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                setPage(1);
+              }}
+              className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 font-medium"
+            />
+            <span className="text-slate-400">s/d</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                setPage(1);
+              }}
+              className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 font-medium"
+            />
+          </div>
         </div>
       </div>
 
@@ -447,35 +487,18 @@ export const JurnalUmumPage: React.FC = () => {
         </div>
 
         {/* Pagination Bar */}
-        <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
-          <div>
-            Menampilkan halaman <span className="font-bold text-slate-800">{meta.page}</span> dari{' '}
-            <span className="font-bold text-slate-800">{meta.totalPages}</span> (Total{' '}
-            {meta.total.toLocaleString('id-ID')} jurnal)
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setPage(Math.max(1, page - 1))}
-              disabled={page <= 1}
-              className="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              <span>Sebelumnya</span>
-            </button>
-            <span className="px-3 py-1.5 bg-slate-100 rounded-lg font-bold text-slate-700">
-              {page}
-            </span>
-            <button
-              onClick={() => setPage(Math.min(meta.totalPages, page + 1))}
-              disabled={page >= meta.totalPages}
-              className="px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed flex items-center space-x-1"
-            >
-              <span>Selanjutnya</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        <Pagination
+          page={page}
+          limit={limit}
+          total={meta.total || 0}
+          totalPages={meta.totalPages}
+          onPageChange={(p) => setPage(p)}
+          onLimitChange={(l) => {
+            setLimit(l);
+            setPage(1);
+          }}
+          entityName="jurnal umum"
+        />
       </div>
 
       {/* Modal Detail Jurnal Pop-up */}

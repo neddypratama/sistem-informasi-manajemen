@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api-client';
+import { SearchableSelect } from '../../components/SearchableSelect';
 import { ExportButtonGroup } from '../../components/ExportButtonGroup';
 import { exportToExcel } from '../../lib/export-utils';
+import { Pagination } from '../../components/Pagination';
 import {
   Package,
   Plus,
@@ -19,6 +21,7 @@ export const BarangPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [jenisId, setJenisId] = useState<number | ''>('');
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
 
   // Modals state
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -59,9 +62,9 @@ export const BarangPage: React.FC = () => {
 
   // 3. Fetch Barangs
   const { data: barangsData, isLoading } = useQuery({
-    queryKey: ['barangsGrid', search, jenisId, page],
+    queryKey: ['barangsGrid', search, jenisId, page, limit],
     queryFn: async () => {
-      let url = `/master/barangs?page=${page}&limit=25`;
+      let url = `/master/barangs?page=${page}&limit=${limit}`;
       if (search) url += `&search=${encodeURIComponent(search)}`;
       if (jenisId) url += `&jenisId=${jenisId}`;
       const res: any = await apiClient.get(url);
@@ -229,21 +232,22 @@ export const BarangPage: React.FC = () => {
         </div>
 
         <div className="w-full sm:w-64">
-          <select
+          <SearchableSelect
+            placeholder="Semua Jenis Komoditas"
+            searchPlaceholder="Cari jenis komoditas..."
             value={jenisId}
-            onChange={(e) => {
-              setJenisId(e.target.value ? Number(e.target.value) : '');
+            onChange={(val) => {
+              setJenisId(val ? Number(val) : '');
               setPage(1);
             }}
-            className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-          >
-            <option value="">Semua Jenis Komoditas</option>
-            {jenisData?.map((j: any) => (
-              <option key={j.id} value={j.id}>
-                {j.name}
-              </option>
-            ))}
-          </select>
+            options={[
+              { value: '', label: 'Semua Jenis Komoditas' },
+              ...(jenisData?.map((j: any) => ({
+                value: j.id,
+                label: j.name,
+              })) || []),
+            ]}
+          />
         </div>
       </div>
 
@@ -279,7 +283,7 @@ export const BarangPage: React.FC = () => {
               items.map((b: any, idx: number) => (
                 <tr key={b.id || idx} className="hover:bg-slate-50/80 transition-colors">
                   <td className="p-4 text-center font-mono text-slate-400 text-xs">
-                    {(page - 1) * 25 + idx + 1}
+                    {(page - 1) * limit + idx + 1}
                   </td>
                   <td className="p-4 font-mono font-bold text-xs text-emerald-700">
                     {b.code || `BRG-${String(b.id).padStart(4, '0')}`}
@@ -330,30 +334,19 @@ export const BarangPage: React.FC = () => {
           </tbody>
         </table>
 
-        {/* Pagination */}
-        {meta && meta.totalPages > 1 && (
-          <div className="p-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>
-              Halaman {page} dari {meta.totalPages} ({meta.total} Total Barang)
-            </span>
-            <div className="flex gap-2">
-              <button
-                disabled={page <= 1}
-                onClick={() => setPage(page - 1)}
-                className="px-3 py-1 border border-slate-200 rounded-lg disabled:opacity-50 hover:bg-slate-100"
-              >
-                Sebelumnya
-              </button>
-              <button
-                disabled={page >= meta.totalPages}
-                onClick={() => setPage(page + 1)}
-                className="px-3 py-1 border border-slate-200 rounded-lg disabled:opacity-50 hover:bg-slate-100"
-              >
-                Selanjutnya
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Pagination Bar */}
+        <Pagination
+          page={page}
+          limit={limit}
+          total={meta?.total || 0}
+          totalPages={meta?.totalPages || 1}
+          onPageChange={(p) => setPage(p)}
+          onLimitChange={(l) => {
+            setLimit(l);
+            setPage(1);
+          }}
+          entityName="master barang"
+        />
       </div>
 
       {/* ================= MODAL TAMBAH BARANG ================= */}

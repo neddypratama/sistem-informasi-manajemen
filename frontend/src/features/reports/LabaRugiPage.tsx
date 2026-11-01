@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api-client';
 import { ExportButtonGroup } from '../../components/ExportButtonGroup';
 import { exportToExcel, exportToPdf } from '../../lib/export-utils';
+import { getCurrentMonthRange, getLastMonthRange, getCurrentYearRange } from '../../lib/date-utils';
 import {
   FileSpreadsheet,
   Calendar,
@@ -23,8 +24,9 @@ import {
 } from 'lucide-react';
 
 export const LabaRugiPage: React.FC = () => {
-  const [startDate, setStartDate] = useState('2026-01-01');
-  const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 10));
+  const defaultMonth = getCurrentMonthRange();
+  const [startDate, setStartDate] = useState(defaultMonth.startDate);
+  const [endDate, setEndDate] = useState(defaultMonth.endDate);
   const [expandedCommodities, setExpandedCommodities] = useState<Record<string, boolean>>({});
   const [isBebanCardOpen, setIsBebanCardOpen] = useState(true);
   const [isPendapatanCardOpen, setIsPendapatanCardOpen] = useState(true);
@@ -201,23 +203,72 @@ export const LabaRugiPage: React.FC = () => {
             <ArrowUpRight className="w-3.5 h-3.5" />
           </Link>
 
-          {/* Date Filter */}
-          <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex items-center space-x-2 text-xs">
-            <Calendar className="w-4 h-4 text-emerald-600 ml-1" />
-            <span className="font-semibold text-slate-600">Periode:</span>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="px-2.5 py-1.5 border border-slate-200 rounded-lg font-medium text-slate-700 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-            />
-            <span className="text-slate-400 font-bold">s/d</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="px-2.5 py-1.5 border border-slate-200 rounded-lg font-medium text-slate-700 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-            />
+          {/* Date Presets & Filter */}
+          <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-center gap-2 text-xs">
+            <div className="flex items-center space-x-1 bg-slate-100 p-0.5 rounded-lg text-[11px] font-semibold">
+              <button
+                type="button"
+                onClick={() => {
+                  const m = getCurrentMonthRange();
+                  setStartDate(m.startDate);
+                  setEndDate(m.endDate);
+                }}
+                className={`px-2.5 py-1 rounded-md transition-all ${
+                  startDate === getCurrentMonthRange().startDate && endDate === getCurrentMonthRange().endDate
+                    ? 'bg-white text-emerald-700 shadow-xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Bulan Ini
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const m = getLastMonthRange();
+                  setStartDate(m.startDate);
+                  setEndDate(m.endDate);
+                }}
+                className={`px-2.5 py-1 rounded-md transition-all ${
+                  startDate === getLastMonthRange().startDate && endDate === getLastMonthRange().endDate
+                    ? 'bg-white text-emerald-700 shadow-xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Bulan Lalu
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const y = getCurrentYearRange();
+                  setStartDate(y.startDate);
+                  setEndDate(y.endDate);
+                }}
+                className={`px-2.5 py-1 rounded-md transition-all ${
+                  startDate === getCurrentYearRange().startDate && endDate === getCurrentYearRange().endDate
+                    ? 'bg-white text-emerald-700 shadow-xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Tahun Ini
+              </button>
+            </div>
+
+            <div className="flex items-center space-x-1.5">
+              <Calendar className="w-4 h-4 text-emerald-600 ml-1" />
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="px-2 py-1 border border-slate-200 rounded-lg font-medium text-slate-700 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+              <span className="text-slate-400 font-bold">s/d</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="px-2 py-1 border border-slate-200 rounded-lg font-medium text-slate-700 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+            </div>
           </div>
 
           <ExportButtonGroup

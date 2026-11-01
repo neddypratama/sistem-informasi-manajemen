@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 import { IsOptional, IsString, IsEnum, IsNumber } from 'class-validator';
 import { Type } from 'class-transformer';
-import { TransaksiType, TransaksiStatus } from '@prisma/client';
+import { TransaksiStatus } from '@prisma/client';
 export class QueryTransaksiDto {
     type;
     status;
@@ -26,7 +26,7 @@ export class QueryTransaksiDto {
 }
 __decorate([
     IsOptional(),
-    IsEnum(TransaksiType),
+    IsString(),
     __metadata("design:type", String)
 ], QueryTransaksiDto.prototype, "type", void 0);
 __decorate([

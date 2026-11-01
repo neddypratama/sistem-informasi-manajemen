@@ -22,15 +22,17 @@ export const NeracaSaldoPage: React.FC = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [search, setSearch] = useState('');
+  const [viewMode, setViewMode] = useState<'gross' | 'net'>('gross');
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   const { data: reportData, isLoading } = useQuery({
-    queryKey: ['neracaSaldo', startDate, endDate],
+    queryKey: ['neracaSaldo', startDate, endDate, viewMode],
     queryFn: async () => {
       let url = '/reports/neraca-saldo';
       const params = new URLSearchParams();
       if (startDate) params.append('startDate', startDate);
       if (endDate) params.append('endDate', endDate);
+      params.append('mode', viewMode);
       const q = params.toString();
       if (q) url += `?${q}`;
       const res: any = await apiClient.get(url);
@@ -115,17 +117,17 @@ export const NeracaSaldoPage: React.FC = () => {
     });
 
     exportToExcel({
-      filename: `Neraca_Saldo_${startDate || 'Awal'}_sd_${endDate || 'Kini'}`,
+      filename: `Neraca_Saldo_${viewMode}_${startDate || 'Awal'}_sd_${endDate || 'Kini'}`,
       sheetName: 'Neraca Saldo',
-      title: `LAPORAN NERACA SALDO / TRIAL BALANCE (${startDate || 'Awal'} s/d ${endDate || 'Kini'})`,
+      title: `LAPORAN NERACA SALDO (${viewMode === 'gross' ? 'MUTASI BRUTO' : 'SALDO BERSIH'}) (${startDate || 'Awal'} s/d ${endDate || 'Kini'})`,
       columns: [
         { header: 'No', key: '_index', width: 8 },
         { header: 'Kelompok Akun', key: 'kelompok', width: 18 },
         { header: 'Grup Akun', key: 'group', width: 24 },
         { header: 'Kode', key: 'code', width: 14 },
         { header: 'Nama Akun / Kategori', key: 'kategori', width: 32 },
-        { header: 'Debit (Rp)', key: 'debit', width: 20 },
-        { header: 'Kredit (Rp)', key: 'kredit', width: 20 },
+        { header: viewMode === 'gross' ? 'Mutasi Debit (Rp)' : 'Debit (Rp)', key: 'debit', width: 20 },
+        { header: viewMode === 'gross' ? 'Mutasi Kredit (Rp)' : 'Kredit (Rp)', key: 'kredit', width: 20 },
       ],
       data: rows,
     });
@@ -224,28 +226,70 @@ export const NeracaSaldoPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Mode Selector Switcher */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs gap-3">
+        <div className="flex items-center space-x-2.5">
+          <span className="text-xs font-bold text-slate-800">Format Neraca Saldo:</span>
+          <span className="text-xs text-slate-500">
+            {viewMode === 'gross' 
+              ? 'Mode Mutasi Bruto (Debit & Kredit Kumulatif Sesuai SIM Lama / Gross Turnover)' 
+              : 'Mode Saldo Bersih Buku Besar (Standar Akuntansi SAK/IFRS / Net Ending Balance)'}
+          </span>
+        </div>
+        <div className="flex items-center bg-slate-100 p-1 rounded-xl w-full sm:w-auto">
+          <button
+            onClick={() => setViewMode('gross')}
+            className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              viewMode === 'gross'
+                ? 'bg-white text-blue-700 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Mutasi Bruto (SIM Lama)
+          </button>
+          <button
+            onClick={() => setViewMode('net')}
+            className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              viewMode === 'net'
+                ? 'bg-white text-blue-700 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Saldo Bersih (Standar Akuntansi)
+          </button>
+        </div>
+      </div>
+
       {/* KPI Highlight Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-bold uppercase tracking-wider">Total Debit</span>
+            <span className="text-xs font-bold uppercase tracking-wider">
+              {viewMode === 'gross' ? 'Total Mutasi Debit' : 'Total Saldo Debit'}
+            </span>
             <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">DR</span>
           </div>
           <p className="text-2xl font-extrabold text-blue-700 font-mono mt-2">
             {isLoading ? '...' : formatRupiah(totalDebit)}
           </p>
-          <span className="text-xs text-slate-500 mt-1 block">Akumulasi Saldo Sisi Debit</span>
+          <span className="text-xs text-slate-500 mt-1 block">
+            {viewMode === 'gross' ? 'Akumulasi Seluruh Mutasi Debit (Masuk)' : 'Akumulasi Saldo Sisi Debit'}
+          </span>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-bold uppercase tracking-wider">Total Kredit</span>
+            <span className="text-xs font-bold uppercase tracking-wider">
+              {viewMode === 'gross' ? 'Total Mutasi Kredit' : 'Total Saldo Kredit'}
+            </span>
             <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">CR</span>
           </div>
           <p className="text-2xl font-extrabold text-emerald-700 font-mono mt-2">
             {isLoading ? '...' : formatRupiah(totalKredit)}
           </p>
-          <span className="text-xs text-slate-500 mt-1 block">Akumulasi Saldo Sisi Kredit</span>
+          <span className="text-xs text-slate-500 mt-1 block">
+            {viewMode === 'gross' ? 'Akumulasi Seluruh Mutasi Kredit (Keluar)' : 'Akumulasi Saldo Sisi Kredit'}
+          </span>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
@@ -275,13 +319,23 @@ export const NeracaSaldoPage: React.FC = () => {
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-bold uppercase tracking-wider">Integritas Jurnal</span>
+            <span className="text-xs font-bold uppercase tracking-wider">
+              {viewMode === 'gross' ? 'Saldo Bersih (Net)' : 'Mutasi Bruto (Gross)'}
+            </span>
             <FolderTree className="w-4 h-4 text-purple-500" />
           </div>
           <p className="text-2xl font-extrabold text-purple-900 font-mono mt-2">
-            100 Akun
+            {isLoading
+              ? '...'
+              : formatRupiah(
+                  viewMode === 'gross'
+                    ? reportData?.summary?.net?.totalDebit || 0
+                    : reportData?.summary?.gross?.totalDebit || 0
+                )}
           </p>
-          <span className="text-xs text-slate-500 mt-1 block">40 Detail Kategori Terintegrasi</span>
+          <span className="text-xs text-slate-500 mt-1 block">
+            {viewMode === 'gross' ? 'Nilai Sisa Buku Besar Riil' : 'Volume Total Transaksi'}
+          </span>
         </div>
       </div>
 
@@ -398,8 +452,12 @@ export const NeracaSaldoPage: React.FC = () => {
                 <th className="py-3.5 px-4 w-12 text-center">No</th>
                 <th className="py-3.5 px-4">Akun / Kategori Buku Besar</th>
                 <th className="py-3.5 px-4 w-32 text-center">Kode Akun</th>
-                <th className="py-3.5 px-4 text-right w-48">Debit (Rp)</th>
-                <th className="py-3.5 px-4 text-right w-48">Kredit (Rp)</th>
+                <th className="py-3.5 px-4 text-right w-48">
+                  {viewMode === 'gross' ? 'Mutasi Debit (Rp)' : 'Debit (Rp)'}
+                </th>
+                <th className="py-3.5 px-4 text-right w-48">
+                  {viewMode === 'gross' ? 'Mutasi Kredit (Rp)' : 'Kredit (Rp)'}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">

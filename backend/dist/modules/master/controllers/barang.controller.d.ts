@@ -43,6 +43,11 @@ export declare class BarangController {
         createdAt: Date;
         name: string;
     }[]>;
+    getSatuanAlias(): Promise<{
+        id: bigint;
+        createdAt: Date;
+        name: string;
+    }[]>;
     findOne(id: string): Promise<{
         satuan: {
             id: bigint;

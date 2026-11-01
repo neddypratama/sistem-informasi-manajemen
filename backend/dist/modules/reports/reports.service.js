@@ -30,7 +30,7 @@ let ReportsService = class ReportsService {
         const start = new Date(`${startDate} 00:00:00`);
         const end = new Date(`${endDate} 23:59:59`);
         const salesResult = await this.prisma.$queryRaw `
-      SELECT jd.kategori_id, k.name, SUM(jd.kredit) as total_penjualan
+      SELECT jd.kategori_id, k.name, SUM(jd.kredit - jd.debit) as total_penjualan
       FROM jurnal_details jd
       JOIN jurnal_umums ju ON ju.id = jd.jurnal_id
       JOIN kategoris k ON k.id = jd.kategori_id
@@ -39,7 +39,7 @@ let ReportsService = class ReportsService {
       GROUP BY jd.kategori_id, k.name
     `;
         const hppResult = await this.prisma.$queryRaw `
-      SELECT jd.kategori_id, k.name, SUM(jd.debit) as total_hpp
+      SELECT jd.kategori_id, k.name, SUM(jd.debit - jd.kredit) as total_hpp
       FROM jurnal_details jd
       JOIN jurnal_umums ju ON ju.id = jd.jurnal_id
       JOIN kategoris k ON k.id = jd.kategori_id
@@ -48,7 +48,7 @@ let ReportsService = class ReportsService {
       GROUP BY jd.kategori_id, k.name
     `;
         const bebanResult = await this.prisma.$queryRaw `
-      SELECT jd.kategori_id, k.name, dk.name as group_name, SUM(jd.debit) as total_beban
+      SELECT jd.kategori_id, k.name, dk.name as group_name, SUM(jd.debit - jd.kredit) as total_beban
       FROM jurnal_details jd
       JOIN jurnal_umums ju ON ju.id = jd.jurnal_id
       JOIN kategoris k ON k.id = jd.kategori_id
@@ -59,7 +59,7 @@ let ReportsService = class ReportsService {
       ORDER BY total_beban DESC
     `;
         const pendapatanLainResult = await this.prisma.$queryRaw `
-      SELECT jd.kategori_id, k.name, dk.name as group_name, SUM(jd.kredit) as total_pendapatan
+      SELECT jd.kategori_id, k.name, dk.name as group_name, SUM(jd.kredit - jd.debit) as total_pendapatan
       FROM jurnal_details jd
       JOIN jurnal_umums ju ON ju.id = jd.jurnal_id
       JOIN kategoris k ON k.id = jd.kategori_id
@@ -75,9 +75,9 @@ let ReportsService = class ReportsService {
         b.id as barang_id,
         b.name as barang_name,
         COALESCE(s.name, 'Kg') as satuan,
-        COALESCE(SUM(dt.qty), 0) as total_qty,
-        COALESCE(SUM(dt.subtotal), 0) as total_penjualan,
-        COALESCE(SUM(dt.total_hpp), 0) as total_hpp
+        COALESCE(SUM(CASE WHEN t.type = 'RETUR_PENJUALAN' THEN -dt.qty ELSE dt.qty END), 0) as total_qty,
+        COALESCE(SUM(CASE WHEN t.type = 'RETUR_PENJUALAN' THEN -dt.subtotal ELSE dt.subtotal END), 0) as total_penjualan,
+        COALESCE(SUM(CASE WHEN t.type = 'RETUR_PENJUALAN' THEN -dt.total_hpp ELSE dt.total_hpp END), 0) as total_hpp
       FROM detail_transaksis dt
       JOIN transaksis t ON t.id = dt.transaksi_id
       JOIN barangs b ON b.id = dt.barang_id
@@ -208,8 +208,8 @@ let ReportsService = class ReportsService {
         const end = new Date(`${endDate} 23:59:59`);
         const salesCurah = await this.prisma.$queryRaw `
       SELECT 
-        COALESCE(SUM(dt.subtotal), 0) as total_penjualan,
-        COALESCE(SUM(dt.qty), 0) as total_qty
+        COALESCE(SUM(CASE WHEN t.type = 'RETUR_PENJUALAN' THEN -dt.subtotal ELSE dt.subtotal END), 0) as total_penjualan,
+        COALESCE(SUM(CASE WHEN t.type = 'RETUR_PENJUALAN' THEN -dt.qty ELSE dt.qty END), 0) as total_qty
       FROM detail_transaksis dt
       JOIN transaksis t ON t.id = dt.transaksi_id
       WHERE dt.kategori_id = 8
@@ -217,7 +217,7 @@ let ReportsService = class ReportsService {
         AND t.tanggal BETWEEN ${start} AND ${end}
     `;
         const hppCurah = await this.prisma.$queryRaw `
-      SELECT COALESCE(SUM(jd.debit), 0) as total_hpp
+      SELECT COALESCE(SUM(jd.debit - jd.kredit), 0) as total_hpp
       FROM jurnal_details jd
       JOIN jurnal_umums ju ON ju.id = jd.jurnal_id
       WHERE jd.coa_id = 96
@@ -329,7 +329,8 @@ let ReportsService = class ReportsService {
             items,
         };
     }
-    async getNeracaSaldo(startDate, endDate) {
+    async getNeracaSaldo(startDate, endDate, mode = 'gross') {
+        const reportMode = mode === 'net' ? 'net' : 'gross';
         let dateFilter = Prisma.sql `WHERE (t.status IS NULL OR t.status != 'BATAL')`;
         if (startDate && endDate) {
             const start = new Date(`${startDate} 00:00:00`);
@@ -367,42 +368,72 @@ let ReportsService = class ReportsService {
         };
         let grandTotalDebit = 0;
         let grandTotalKredit = 0;
+        let grandGrossDebit = 0;
+        let grandGrossKredit = 0;
+        let grandNetDebit = 0;
+        let grandNetKredit = 0;
         for (const r of rows) {
             const type = r.group_type || 'Aset';
             const grpMap = groupsByType[type] || (groupsByType[type] = new Map());
             const grpName = r.group_name;
             const rawDebit = Number(r.total_debit || 0);
             const rawKredit = Number(r.total_kredit || 0);
-            let debit = 0;
-            let kredit = 0;
+            grandGrossDebit += rawDebit;
+            grandGrossKredit += rawKredit;
+            let netDebit = 0;
+            let netKredit = 0;
             if (type === 'Aset' || type === 'Pengeluaran' || type === 'Beban') {
-                debit = rawDebit - rawKredit;
-                kredit = 0;
-                grandTotalDebit += debit;
+                netDebit = rawDebit - rawKredit;
+                netKredit = 0;
+                grandNetDebit += netDebit;
             }
             else {
-                debit = 0;
-                kredit = rawKredit - rawDebit;
-                grandTotalKredit += kredit;
+                netDebit = 0;
+                netKredit = rawKredit - rawDebit;
+                grandNetKredit += netKredit;
             }
+            let debit = 0;
+            let kredit = 0;
+            if (reportMode === 'gross') {
+                debit = rawDebit;
+                kredit = rawKredit;
+            }
+            else {
+                debit = netDebit;
+                kredit = netKredit;
+            }
+            grandTotalDebit += debit;
+            grandTotalKredit += kredit;
             if (!grpMap.has(grpName)) {
                 grpMap.set(grpName, {
                     group: grpName,
                     detailKategoriId: Number(r.detail_kategori_id),
                     debit: 0,
                     kredit: 0,
+                    grossDebit: 0,
+                    grossKredit: 0,
+                    netDebit: 0,
+                    netKredit: 0,
                     details: [],
                 });
             }
             const g = grpMap.get(grpName);
             g.debit += debit;
             g.kredit += kredit;
+            g.grossDebit += rawDebit;
+            g.grossKredit += rawKredit;
+            g.netDebit += netDebit;
+            g.netKredit += netKredit;
             g.details.push({
                 kategoriId: Number(r.kategori_id),
                 kategori: r.kategori_name,
                 code: r.kategori_code,
                 debit,
                 kredit,
+                rawDebit,
+                rawKredit,
+                netDebit,
+                netKredit,
             });
         }
         const formatKelompok = (type) => {
@@ -420,6 +451,7 @@ let ReportsService = class ReportsService {
         const selisih = Math.abs(grandTotalDebit - grandTotalKredit);
         return {
             periode: { startDate: startDate || null, endDate: endDate || null },
+            mode: reportMode,
             pendapatan: formatKelompok('Pendapatan'),
             pengeluaran: formatKelompok('Pengeluaran'),
             aset: formatKelompok('Aset'),
@@ -429,16 +461,23 @@ let ReportsService = class ReportsService {
             totalKredit: grandTotalKredit,
             selisih,
             isBalanced: selisih < 1,
+            summary: {
+                mode: reportMode,
+                gross: { totalDebit: grandGrossDebit, totalKredit: grandGrossKredit },
+                net: { totalDebit: grandNetDebit, totalKredit: grandNetKredit },
+            },
         };
     }
     async getLaporanAset(startDate, endDate) {
-        let dateFilter = Prisma.sql `WHERE (t.status IS NULL OR t.status != 'BATAL')`;
+        let dateCondition = Prisma.empty;
+        let start = null;
+        let end = null;
         if (startDate && endDate) {
-            const start = new Date(`${startDate} 00:00:00`);
-            const end = new Date(`${endDate} 23:59:59`);
-            dateFilter = Prisma.sql `WHERE (t.status IS NULL OR t.status != 'BATAL') AND ju.tanggal BETWEEN ${start} AND ${end}`;
+            start = new Date(`${startDate} 00:00:00`);
+            end = new Date(`${endDate} 23:59:59`);
+            dateCondition = Prisma.sql `AND ju.tanggal BETWEEN ${start} AND ${end}`;
         }
-        const rows = await this.prisma.$queryRaw `
+        const nonClientRows = await this.prisma.$queryRaw `
       SELECT 
         k.id as kategori_id,
         k.name as kategori_name,
@@ -446,8 +485,14 @@ let ReportsService = class ReportsService {
         dk.id as detail_kategori_id,
         dk.name as group_name,
         dk.type as group_type,
-        COALESCE(SUM(filtered_jd.debit), 0) as total_debit,
-        COALESCE(SUM(filtered_jd.kredit), 0) as total_kredit
+        COALESCE(
+          SUM(
+            CASE 
+              WHEN dk.type = 'Aset' THEN jd.debit - jd.kredit
+              ELSE jd.kredit - jd.debit
+            END
+          ), 0
+        ) as saldo
       FROM detail_kategoris dk
       JOIN kategoris k ON k.detail_kategori_id = dk.id
       LEFT JOIN (
@@ -455,74 +500,163 @@ let ReportsService = class ReportsService {
         FROM jurnal_details jd
         JOIN jurnal_umums ju ON ju.id = jd.jurnal_id
         LEFT JOIN transaksis t ON t.id = ju.transaksi_id
-        ${dateFilter}
-      ) filtered_jd ON filtered_jd.kategori_id = k.id
+        WHERE (t.status IS NULL OR t.status != 'BATAL')
+          ${dateCondition}
+      ) jd ON jd.kategori_id = k.id
       WHERE dk.type IN ('Aset', 'Liabilitas')
+        AND k.name != 'Penyesuaian Stok'
       GROUP BY k.id, k.name, k.code, dk.id, dk.name, dk.type
+      ORDER BY dk.id, k.id
+    `;
+        const flatAset = {};
+        const flatLiabilitas = {};
+        for (const r of nonClientRows) {
+            if (r.group_type === 'Aset') {
+                flatAset[r.kategori_name] = Number(r.saldo || 0);
+            }
+            else {
+                flatLiabilitas[r.kategori_name] = Number(r.saldo || 0);
+            }
+        }
+        let clientRows;
+        if (!startDate && !endDate) {
+            clientRows = await this.prisma.$queryRaw `
+        SELECT id, name, type, saldo_piutang, saldo_hutang
+        FROM clients
+      `;
+        }
+        else {
+            clientRows = await this.prisma.$queryRaw `
+        SELECT 
+          c.id, c.name, c.type,
+          COALESCE((
+            SELECT SUM(t.total) FROM transaksis t
+            WHERE t.client_id = c.id AND t.type = 'PENJUALAN' AND t.status = 'SELESAI'
+              AND t.payment_method = 'KREDIT_BON'
+              AND t.tanggal BETWEEN ${start} AND ${end}
+          ), 0) as saldo_piutang,
+          COALESCE((
+            SELECT SUM(t.total) FROM transaksis t
+            WHERE t.client_id = c.id AND t.type = 'PEMBELIAN' AND t.status = 'SELESAI'
+              AND t.payment_method = 'KREDIT_BON'
+              AND t.tanggal BETWEEN ${start} AND ${end}
+          ), 0) as saldo_hutang
+        FROM clients c
+      `;
+        }
+        const piutangNet = {
+            'Piutang Peternak': 0,
+            'Piutang Karyawan': 0,
+            'Piutang Pedagang': 0,
+            'Supplier Bp.Supriyadi': 0,
+            'Piutang Tray Diamond /DM': 0,
+            'Piutang Tray Super Buah /SB': 0,
+            'Piutang Tray Random': 0,
+            'Piutang Obat SK': 0,
+            'Piutang Obat Ponggok': 0,
+            'Piutang Obat Random': 0,
+            'Piutang Sentrat SK': 0,
+            'Piutang Sentrat Ponggok': 0,
+            'Piutang Sentrat Random': 0,
+        };
+        const hutangNet = {
+            'Hutang Peternak': 0,
+            'Hutang Karyawan': 0,
+            'Hutang Pedagang': 0,
+            'Saldo Bp.Supriyadi': 0,
+            'Hutang Tray Diamond /DM': 0,
+            'Hutang Tray Super Buah /SB': 0,
+            'Hutang Tray Random': 0,
+            'Hutang Obat SK': 0,
+            'Hutang Obat Ponggok': 0,
+            'Hutang Obat Random': 0,
+            'Hutang Sentrat SK': 0,
+            'Hutang Sentrat Ponggok': 0,
+            'Hutang Sentrat Random': 0,
+        };
+        for (const c of clientRows) {
+            const p = Number(c.saldo_piutang || 0);
+            const h = Number(c.saldo_hutang || 0);
+            const saldo = p - h;
+            if (saldo === 0)
+                continue;
+            if (saldo > 0) {
+                if (c.type === 'Peternak')
+                    piutangNet['Piutang Peternak'] += saldo;
+                else if (c.type === 'Pedagang')
+                    piutangNet['Piutang Pedagang'] += saldo;
+                else if (c.type === 'Karyawan')
+                    piutangNet['Piutang Karyawan'] += saldo;
+                else if (c.type === 'Supplier') {
+                    for (const k in piutangNet) {
+                        if (k.includes(c.name))
+                            piutangNet[k] += saldo;
+                    }
+                }
+            }
+            else {
+                const nilai = Math.abs(saldo);
+                if (c.type === 'Peternak')
+                    hutangNet['Hutang Peternak'] += nilai;
+                else if (c.type === 'Pedagang')
+                    hutangNet['Hutang Pedagang'] += nilai;
+                else if (c.type === 'Karyawan')
+                    hutangNet['Hutang Karyawan'] += nilai;
+                else if (c.type === 'Supplier') {
+                    for (const k in hutangNet) {
+                        if (k.includes(c.name))
+                            hutangNet[k] += nilai;
+                    }
+                }
+            }
+        }
+        for (const k in piutangNet)
+            flatAset[k] = piutangNet[k];
+        for (const k in hutangNet)
+            flatLiabilitas[k] = hutangNet[k];
+        const mapping = await this.prisma.$queryRaw `
+      SELECT dk.id as dk_id, dk.name as group_name, dk.type as group_type, k.id as kat_id, k.code as kat_code, k.name as kat_name
+      FROM detail_kategoris dk
+      LEFT JOIN kategoris k ON k.detail_kategori_id = dk.id
+      WHERE dk.type IN ('Aset', 'Liabilitas')
       ORDER BY dk.id, k.id
     `;
         const asetMap = new Map();
         const liabilitasMap = new Map();
-        let totalAset = 0;
-        let totalLiabilitas = 0;
-        for (const r of rows) {
-            const deb = Number(r.total_debit || 0);
-            const kre = Number(r.total_kredit || 0);
-            if (r.group_type === 'Aset') {
-                const saldo = deb - kre;
-                totalAset += saldo;
-                const grp = r.group_name;
-                if (!asetMap.has(grp)) {
-                    asetMap.set(grp, {
-                        group: grp,
-                        detailKategoriId: Number(r.detail_kategori_id),
-                        total: 0,
-                        details: [],
-                    });
-                }
-                const g = asetMap.get(grp);
-                g.total += saldo;
-                g.details.push({
-                    kategoriId: Number(r.kategori_id),
-                    kategori: r.kategori_name,
-                    code: r.kategori_code,
-                    saldo,
-                    debit: deb,
-                    kredit: kre,
+        for (const row of mapping) {
+            const isAset = row.group_type === 'Aset';
+            const targetMap = isAset ? asetMap : liabilitasMap;
+            const flatSource = isAset ? flatAset : flatLiabilitas;
+            if (!targetMap.has(row.group_name)) {
+                targetMap.set(row.group_name, {
+                    group: row.group_name,
+                    detailKategoriId: Number(row.dk_id),
+                    total: 0,
+                    details: [],
                 });
             }
-            else if (r.group_type === 'Liabilitas') {
-                const saldo = kre - deb;
-                totalLiabilitas += saldo;
-                const grp = r.group_name;
-                if (!liabilitasMap.has(grp)) {
-                    liabilitasMap.set(grp, {
-                        group: grp,
-                        detailKategoriId: Number(r.detail_kategori_id),
-                        total: 0,
-                        details: [],
-                    });
-                }
-                const g = liabilitasMap.get(grp);
-                g.total += saldo;
-                g.details.push({
-                    kategoriId: Number(r.kategori_id),
-                    kategori: r.kategori_name,
-                    code: r.kategori_code,
-                    saldo,
-                    debit: deb,
-                    kredit: kre,
-                });
-            }
+            const grp = targetMap.get(row.group_name);
+            const saldo = Number(flatSource[row.kat_name] || 0);
+            grp.total += saldo;
+            grp.details.push({
+                kategoriId: Number(row.kat_id),
+                kategori: row.kat_name,
+                code: row.kat_code,
+                saldo,
+            });
         }
+        const asetGroups = Array.from(asetMap.values());
+        const liabilitasGroups = Array.from(liabilitasMap.values());
+        const totalAset = asetGroups.reduce((acc, curr) => acc + curr.total, 0);
+        const totalLiabilitas = liabilitasGroups.reduce((acc, curr) => acc + curr.total, 0);
         const totalModal = totalAset - totalLiabilitas;
         return {
             periode: { startDate: startDate || null, endDate: endDate || null },
             totalAset,
             totalLiabilitas,
             totalModal,
-            asetGroups: Array.from(asetMap.values()),
-            liabilitasGroups: Array.from(liabilitasMap.values()),
+            asetGroups,
+            liabilitasGroups,
         };
     }
     async getNeraca(startDate, endDate) {

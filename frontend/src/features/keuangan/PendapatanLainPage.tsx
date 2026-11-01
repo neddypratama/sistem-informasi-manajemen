@@ -3,7 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api-client';
 import { SearchableSelect } from '../../components/SearchableSelect';
 import { ExportButtonGroup } from '../../components/ExportButtonGroup';
+import { Pagination } from '../../components/Pagination';
 import { exportToExcel, formatDateIndo } from '../../lib/export-utils';
+import { getTodayDateString } from '../../lib/date-utils';
 import {
   Coins,
   Plus,
@@ -25,10 +27,11 @@ import {
 export const PendapatanLainPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate, setStartDate] = useState(getTodayDateString());
+  const [endDate, setEndDate] = useState(getTodayDateString());
   const [selectedKategoriId, setSelectedKategoriId] = useState('');
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
 
   // Modals state
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -70,9 +73,9 @@ export const PendapatanLainPage: React.FC = () => {
 
   // 2. Fetch Transaksi Pendapatan Lain (module = PENDAPATAN_LAIN)
   const { data: txData, isLoading } = useQuery({
-    queryKey: ['transaksiPendapatanLain', search, startDate, endDate, selectedKategoriId, page],
+    queryKey: ['transaksiPendapatanLain', search, startDate, endDate, selectedKategoriId, page, limit],
     queryFn: async () => {
-      let url = `/transaksi?module=PENDAPATAN_LAIN&limit=25&page=${page}`;
+      let url = `/transaksi?module=PENDAPATAN_LAIN&limit=${limit}&page=${page}`;
       if (search) url += `&search=${encodeURIComponent(search)}`;
       if (startDate) url += `&startDate=${startDate}`;
       if (endDate) url += `&endDate=${endDate}`;
@@ -258,14 +261,14 @@ export const PendapatanLainPage: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between text-slate-400">
-            <span className="text-xs font-bold uppercase tracking-wider">Total Pendapatan (Page)</span>
-            <TrendingUp className="w-4 h-4 text-emerald-500" />
+            <span className="text-xs font-bold uppercase tracking-wider">Total Keseluruhan Pendapatan</span>
+            <TrendingUp className="w-4 h-4 text-emerald-600" />
           </div>
-          <p className="text-2xl font-extrabold text-slate-900 font-mono mt-2">
-            {formatRupiah(totalNominal)}
+          <p className="text-2xl font-extrabold text-emerald-800 font-mono mt-2">
+            {formatRupiah(meta.totalKeseluruhan ?? totalNominal)}
           </p>
           <span className="text-xs text-emerald-600 font-semibold mt-1 flex items-center gap-1">
-            <ArrowUpRight className="w-3.5 h-3.5" /> Pemasukan Bersih
+            <ArrowUpRight className="w-3.5 h-3.5" /> Akumulasi Seluruh Halaman ({meta.total.toLocaleString('id-ID')} Data)
           </span>
         </div>
 
@@ -320,22 +323,60 @@ export const PendapatanLainPage: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          {/* Category Filter */}
-          <select
-            value={selectedKategoriId}
-            onChange={(e) => {
-              setSelectedKategoriId(e.target.value);
-              setPage(1);
-            }}
-            className="px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          >
-            <option value="">Semua Kategori Pendapatan</option>
-            {kategorisData?.map((k: any) => (
-              <option key={k.id} value={k.id}>
-                {k.name}
-              </option>
-            ))}
-          </select>
+          {/* Category Filter (Searchable) */}
+          <div className="w-full sm:w-56">
+            <SearchableSelect
+              placeholder="Semua Kategori Pendapatan"
+              searchPlaceholder="Cari kategori pendapatan..."
+              value={selectedKategoriId}
+              onChange={(val) => {
+                setSelectedKategoriId(val ? String(val) : '');
+                setPage(1);
+              }}
+              options={[
+                { value: '', label: 'Semua Kategori Pendapatan' },
+                ...(kategorisData?.map((k: any) => ({
+                  value: String(k.id),
+                  label: k.name,
+                })) || []),
+              ]}
+            />
+          </div>
+
+          {/* Quick Date Presets */}
+          <div className="flex items-center space-x-1 bg-slate-100 p-0.5 rounded-xl text-[11px] font-semibold">
+            <button
+              type="button"
+              onClick={() => {
+                const today = getTodayDateString();
+                setStartDate(today);
+                setEndDate(today);
+                setPage(1);
+              }}
+              className={`px-2.5 py-1.5 rounded-lg transition-all ${
+                startDate === getTodayDateString() && endDate === getTodayDateString()
+                  ? 'bg-white text-emerald-700 shadow-xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Hari Ini
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setStartDate('');
+                setEndDate('');
+                setPage(1);
+              }}
+              className={`px-2.5 py-1.5 rounded-lg transition-all ${
+                !startDate && !endDate
+                  ? 'bg-white text-emerald-700 shadow-xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Semua
+            </button>
+          </div>
 
           {/* Date Range */}
           <div className="flex items-center space-x-1.5 bg-slate-50 px-3 py-1.5 border border-slate-200 rounded-xl text-xs">
@@ -408,7 +449,7 @@ export const PendapatanLainPage: React.FC = () => {
                       }`}
                     >
                       <td className="p-4 text-center font-mono text-slate-400 text-xs">
-                        {(page - 1) * 25 + i + 1}
+                        {(page - 1) * limit + i + 1}
                       </td>
                       <td className="p-4 font-medium text-slate-700 whitespace-nowrap">
                         {item.tanggal ? item.tanggal.slice(0, 10) : '-'}
@@ -485,36 +526,42 @@ export const PendapatanLainPage: React.FC = () => {
                 })
               )}
             </tbody>
+            <tfoot className="bg-slate-50 border-t-2 border-slate-300 font-bold text-xs">
+              <tr className="border-b border-slate-200 text-slate-600">
+                <td colSpan={6} className="py-2.5 px-4 text-right">
+                  Subtotal Halaman Ini ({rawItems.length} Transaksi):
+                </td>
+                <td className="py-2.5 px-4 text-right font-mono text-slate-800 whitespace-nowrap">
+                  {formatRupiah(totalNominal)}
+                </td>
+                <td colSpan={2}></td>
+              </tr>
+              <tr className="bg-emerald-50/70 text-slate-900 font-extrabold text-[13px]">
+                <td colSpan={6} className="py-3.5 px-4 text-right uppercase tracking-wider text-emerald-900">
+                  Total Keseluruhan ({meta.total.toLocaleString('id-ID')} Transaksi):
+                </td>
+                <td className="py-3.5 px-4 text-right font-mono text-emerald-700 whitespace-nowrap">
+                  {formatRupiah(meta.totalKeseluruhan ?? totalNominal)}
+                </td>
+                <td colSpan={2}></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
 
-        {/* Pagination */}
-        {meta.totalPages > 1 && (
-          <div className="p-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            <span>
-              Menampilkan {rawItems.length} dari {meta.total} transaksi
-            </span>
-            <div className="flex items-center space-x-1">
-              <button
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="px-3 py-1.5 border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50"
-              >
-                Sebelumnya
-              </button>
-              <span className="px-3 py-1.5 font-bold text-slate-700">
-                Halaman {page} dari {meta.totalPages}
-              </span>
-              <button
-                disabled={page >= meta.totalPages}
-                onClick={() => setPage((p) => Math.min(meta.totalPages, p + 1))}
-                className="px-3 py-1.5 border border-slate-200 rounded-lg disabled:opacity-40 hover:bg-slate-50"
-              >
-                Selanjutnya
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Pagination Bar */}
+        <Pagination
+          page={page}
+          limit={limit}
+          total={meta.total || 0}
+          totalPages={meta.totalPages}
+          onPageChange={(p) => setPage(p)}
+          onLimitChange={(l) => {
+            setLimit(l);
+            setPage(1);
+          }}
+          entityName="transaksi pendapatan"
+        />
       </div>
 
       {/* Modal 1: + Catat Pendapatan Baru */}

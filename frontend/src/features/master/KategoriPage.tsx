@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api-client';
+import { SearchableSelect } from '../../components/SearchableSelect';
 import { ExportButtonGroup } from '../../components/ExportButtonGroup';
 import { exportToExcel } from '../../lib/export-utils';
 import {
@@ -240,21 +241,22 @@ export const KategoriPage: React.FC = () => {
             />
           </div>
 
-          {/* Filter by Detail Kategori */}
-          <div className="flex items-center gap-1.5">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <select
+          {/* Filter by Detail Kategori (Searchable) */}
+          <div className="w-56">
+            <SearchableSelect
+              placeholder="Semua Detail Kategori"
+              searchPlaceholder="Cari detail kategori..."
               value={selectedDk}
-              onChange={(e) => setSelectedDk(e.target.value)}
-              className="border border-slate-200 rounded-xl text-xs px-3 py-2 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-            >
-              <option value="">Semua Detail Kategori</option>
-              {detailKategoris?.map((dk: any) => (
-                <option key={dk.id} value={dk.id}>
-                  {dk.name}
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setSelectedDk(val ? String(val) : '')}
+              options={[
+                { value: '', label: 'Semua Detail Kategori' },
+                ...(detailKategoris?.map((dk: any) => ({
+                  value: String(dk.id),
+                  label: dk.name,
+                  sublabel: dk.type,
+                })) || []),
+              ]}
+            />
           </div>
         </div>
 

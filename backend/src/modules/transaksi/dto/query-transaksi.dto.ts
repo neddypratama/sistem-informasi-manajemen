@@ -4,8 +4,8 @@ import { TransaksiType, TransaksiStatus } from '@prisma/client';
 
 export class QueryTransaksiDto {
   @IsOptional()
-  @IsEnum(TransaksiType)
-  type?: TransaksiType;
+  @IsString()
+  type?: string;
 
   @IsOptional()
   @IsEnum(TransaksiStatus)

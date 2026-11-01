@@ -89,11 +89,12 @@ export declare class ReportsController {
             statusSaldo: string;
         }[];
     }>;
-    getNeracaSaldo(startDate?: string, endDate?: string): Promise<{
+    getNeracaSaldo(startDate?: string, endDate?: string, mode?: string): Promise<{
         periode: {
             startDate: string | null;
             endDate: string | null;
         };
+        mode: string;
         pendapatan: {
             type: string;
             groups: any[];
@@ -128,14 +129,25 @@ export declare class ReportsController {
         totalKredit: number;
         selisih: number;
         isBalanced: boolean;
+        summary: {
+            mode: string;
+            gross: {
+                totalDebit: number;
+                totalKredit: number;
+            };
+            net: {
+                totalDebit: number;
+                totalKredit: number;
+            };
+        };
     }>;
     getLaporanAset(startDate?: string, endDate?: string): Promise<{
         periode: {
             startDate: string | null;
             endDate: string | null;
         };
-        totalAset: number;
-        totalLiabilitas: number;
+        totalAset: any;
+        totalLiabilitas: any;
         totalModal: number;
         asetGroups: any[];
         liabilitasGroups: any[];
@@ -145,8 +157,8 @@ export declare class ReportsController {
             startDate: string | null;
             endDate: string | null;
         };
-        totalAset: number;
-        totalLiabilitas: number;
+        totalAset: any;
+        totalLiabilitas: any;
         totalModal: number;
         asetGroups: any[];
         liabilitasGroups: any[];

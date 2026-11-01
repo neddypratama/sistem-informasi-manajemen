@@ -10,7 +10,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, BadRequestException } from '@nestjs/common';
 import { BarangService } from '../services/barang.service.js';
 import { QueryBarangDto } from '../dto/query-barang.dto.js';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard.js';
@@ -28,8 +28,15 @@ let BarangController = class BarangController {
     async getSatuans() {
         return this.barangService.getSatuans();
     }
+    async getSatuanAlias() {
+        return this.barangService.getSatuans();
+    }
     async findOne(id) {
-        return this.barangService.findOne(Number(id));
+        const numId = Number(id);
+        if (isNaN(numId)) {
+            throw new BadRequestException(`ID barang tidak valid: ${id}`);
+        }
+        return this.barangService.findOne(numId);
     }
     async create(body) {
         return this.barangService.create(body);
@@ -60,6 +67,12 @@ __decorate([
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
 ], BarangController.prototype, "getSatuans", null);
+__decorate([
+    Get('satuan'),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", []),
+    __metadata("design:returntype", Promise)
+], BarangController.prototype, "getSatuanAlias", null);
 __decorate([
     Get(':id'),
     __param(0, Param('id')),

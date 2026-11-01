@@ -4,7 +4,9 @@ import { apiClient } from '../../lib/api-client';
 import { SearchableClientSelect } from '../../components/SearchableClientSelect';
 import { SearchableBarangSelect } from '../../components/SearchableBarangSelect';
 import { ExportButtonGroup } from '../../components/ExportButtonGroup';
+import { Pagination } from '../../components/Pagination';
 import { exportToExcel, formatDateIndo } from '../../lib/export-utils';
+import { getTodayDateString } from '../../lib/date-utils';
 import { useAuthStore, hasPermission } from '../../stores/auth.store';
 import {
   Boxes,
@@ -25,6 +27,9 @@ import {
   Loader2,
   Lock,
   ChevronDown,
+  Coins,
+  Wallet,
+  Scale,
 } from 'lucide-react';
 
 interface CommodityConfig {
@@ -198,8 +203,8 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
   const [activeTab, setActiveTab] = useState<'PEMBELIAN' | 'PENJUALAN' | 'RETUR_PEMBELIAN' | 'RETUR_PENJUALAN' | 'STOK'>('PENJUALAN');
   const [search, setSearch] = useState('');
   const [filterClientId, setFilterClientId] = useState<string>('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate, setStartDate] = useState(getTodayDateString());
+  const [endDate, setEndDate] = useState(getTodayDateString());
 
   // Helper dates (Local Indonesia YYYY-MM-DD)
   const getTodayString = () => {
@@ -309,11 +314,14 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
   });
 
   // 3. Fetch Transactions for activeTab
+  const [page, setPage] = useState<number>(1);
+  const [limit, setLimit] = useState<number>(25);
+
   const { data: txData, isLoading: loadingTx } = useQuery({
-    queryKey: ['txCommodity', activeTab, jenisIds, search, filterClientId, startDate, endDate],
+    queryKey: ['txCommodity', activeTab, jenisIds, search, filterClientId, startDate, endDate, page, limit],
     queryFn: async () => {
       if (activeTab === 'STOK') return null;
-      let url = `/transaksi?type=${activeTab}&limit=50`;
+      let url = `/transaksi?type=${activeTab}&limit=${limit}&page=${page}`;
       if (jenisIds && jenisIds.length > 0) {
         url += `&jenisIds=${jenisIds.join(',')}`;
       }
@@ -408,10 +416,15 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
     return list.length > 0 ? list : clientsData;
   }, [clientsData, isBeli, commodityKey, isEgg]);
 
-  // Reset client filter when switching tab or monitoring transaction type
+  // Reset client filter & page when switching tab or monitoring transaction type
   useEffect(() => {
     setFilterClientId('');
+    setPage(1);
   }, [activeTab, monitoringType]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, filterClientId, startDate, endDate]);
 
 
   // Filter clients specifically per commodity on Pembelian & Penjualan
@@ -1103,6 +1116,22 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
     return [];
   }, [txData]);
 
+  const txMeta = txData?.meta || {
+    total: txList.length,
+    totalKeseluruhan: txList.reduce((acc: number, curr: any) => acc + (Number(curr.total) || 0), 0),
+  };
+
+  const pageTotal = useMemo(() => {
+    return txList.reduce((acc: number, curr: any) => acc + (Number(curr.total) || 0), 0);
+  }, [txList]);
+
+  const pageQtyTotal = useMemo(() => {
+    return txList.reduce((acc: number, curr: any) => {
+      const q = (curr.details || []).reduce((sum: number, d: any) => sum + Number(d.qty || 0), 0);
+      return acc + q;
+    }, 0);
+  }, [txList]);
+
   const filteredStock = useMemo(() => {
     if (!stockItems) return [];
     if (!search) return stockItems;
@@ -1347,34 +1376,55 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
         </div>
 
         {activeTab !== 'STOK' ? (
-          <div className="flex items-center space-x-2 text-xs shrink-0 self-start xl:self-auto">
-            <Calendar className="w-4 h-4 text-slate-400 ml-1" />
-            <span className="text-slate-500 font-semibold">Tgl:</span>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="px-2 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 font-medium"
-            />
-            <span className="text-slate-400">s/d</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="px-2 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 font-medium"
-            />
-            {(startDate || endDate) && (
+          <div className="flex flex-wrap items-center gap-2 text-xs shrink-0 self-start xl:self-auto">
+            <div className="flex items-center space-x-1 bg-slate-100 p-0.5 rounded-lg text-[11px] font-semibold">
+              <button
+                type="button"
+                onClick={() => {
+                  const today = getTodayDateString();
+                  setStartDate(today);
+                  setEndDate(today);
+                }}
+                className={`px-2.5 py-1 rounded-md transition-all ${
+                  startDate === getTodayDateString() && endDate === getTodayDateString()
+                    ? 'bg-white text-emerald-700 shadow-xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Hari Ini
+              </button>
               <button
                 type="button"
                 onClick={() => {
                   setStartDate('');
                   setEndDate('');
                 }}
-                className="text-xs text-rose-500 font-bold hover:underline"
+                className={`px-2.5 py-1 rounded-md transition-all ${
+                  !startDate && !endDate
+                    ? 'bg-white text-emerald-700 shadow-xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
               >
-                Reset
+                Semua
               </button>
-            )}
+            </div>
+
+            <div className="flex items-center space-x-1.5">
+              <Calendar className="w-4 h-4 text-slate-400 ml-1" />
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="px-2 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 font-medium"
+              />
+              <span className="text-slate-400">s/d</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="px-2 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 font-medium"
+              />
+            </div>
           </div>
         ) : (
           /* Filter Bar Khusus Monitoring Tab (Pembelian / Penjualan & Per Tanggal Default Hari Ini) */
@@ -1445,7 +1495,50 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
 
       {/* Content: Transaksi Table (Penjualan / Pembelian / Retur) */}
       {activeTab !== 'STOK' && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="space-y-4">
+          {/* KPI Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+              <div className="flex items-center justify-between text-slate-400">
+                <span className="text-xs font-bold uppercase tracking-wider">Total Keseluruhan Transaksi</span>
+                <Coins className="w-4 h-4 text-emerald-600" />
+              </div>
+              <p className="text-xl font-extrabold text-slate-900 font-mono mt-1.5">
+                {formatRupiah(txMeta.totalKeseluruhan ?? pageTotal)}
+              </p>
+              <span className="text-xs text-emerald-600 font-semibold mt-1 flex items-center gap-1">
+                Akumulasi Seluruh Halaman ({txMeta.total?.toLocaleString('id-ID') || txList.length} Transaksi)
+              </span>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+              <div className="flex items-center justify-between text-slate-400">
+                <span className="text-xs font-bold uppercase tracking-wider">Subtotal Halaman Ini</span>
+                <Wallet className="w-4 h-4 text-blue-500" />
+              </div>
+              <p className="text-xl font-extrabold text-blue-900 font-mono mt-1.5">
+                {formatRupiah(pageTotal)}
+              </p>
+              <span className="text-xs text-slate-500 mt-1 block">
+                {txList.length} Transaksi Ditampilkan
+              </span>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+              <div className="flex items-center justify-between text-slate-400">
+                <span className="text-xs font-bold uppercase tracking-wider">Volume Item (Halaman Ini)</span>
+                <Scale className="w-4 h-4 text-amber-500" />
+              </div>
+              <p className="text-xl font-extrabold text-amber-800 font-mono mt-1.5">
+                {formatNumber(pageQtyTotal)} <span className="text-xs font-normal text-slate-500">Unit / Qty</span>
+              </p>
+              <span className="text-xs text-slate-500 mt-1 block">
+                Akumulasi Kuantitas Fisik
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase">
@@ -1478,7 +1571,9 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                     const itemCount = tx.details?.length || 0;
                     return (
                       <tr key={tx.id || idx} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="p-4 text-center font-mono text-slate-400 text-xs">{idx + 1}</td>
+                        <td className="p-4 text-center font-mono text-slate-400 text-xs">
+                          {(page - 1) * limit + idx + 1}
+                        </td>
                         <td className="p-4">
                           <p className="font-bold text-slate-900 font-mono text-xs">{tx.invoice}</p>
                           <span className="text-[11px] text-slate-400">
@@ -1556,8 +1651,43 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                   })
                 )}
               </tbody>
+              <tfoot className="bg-slate-50 border-t-2 border-slate-300 font-bold text-xs">
+                <tr className="border-b border-slate-200 text-slate-600">
+                  <td colSpan={5} className="py-2.5 px-4 text-right">
+                    Subtotal Halaman Ini ({txList.length} Transaksi):
+                  </td>
+                  <td className="py-2.5 px-4 text-right font-mono text-slate-800 whitespace-nowrap">
+                    {formatRupiah(pageTotal)}
+                  </td>
+                  <td></td>
+                </tr>
+                <tr className="bg-blue-50/70 text-slate-900 font-extrabold text-[13px]">
+                  <td colSpan={5} className="py-3.5 px-4 text-right uppercase tracking-wider text-blue-900">
+                    Total Keseluruhan ({txMeta.total?.toLocaleString('id-ID') || txList.length} Transaksi):
+                  </td>
+                  <td className="py-3.5 px-4 text-right font-mono text-blue-700 whitespace-nowrap">
+                    {formatRupiah(txMeta.totalKeseluruhan ?? pageTotal)}
+                  </td>
+                  <td></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
+
+          {/* Pagination & Show Entries */}
+          <Pagination
+            page={page}
+            limit={limit}
+            total={txMeta.total || 0}
+            totalPages={txMeta.totalPages}
+            onPageChange={(p) => setPage(p)}
+            onLimitChange={(l) => {
+              setLimit(l);
+              setPage(1);
+            }}
+            entityName="transaksi"
+          />
+        </div>
         </div>
       )}
 
@@ -1694,7 +1824,9 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                           return (
                             <React.Fragment key={r.barangId || idx}>
                               <tr className="hover:bg-slate-50/80 transition-colors">
-                                <td className="p-4 text-center font-mono text-slate-400 text-xs">{idx + 1}</td>
+                                <td className="p-4 text-center font-mono text-slate-400 text-xs">
+                          {(page - 1) * limit + idx + 1}
+                        </td>
                                 <td className="p-4">
                                   <div className="font-bold text-slate-900">{r.namaBarang}</div>
                                 </td>
@@ -1834,7 +1966,9 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                         const isLow = Number(item.totalStok) <= Number(item.stokMinimum || 5);
                         return (
                           <tr key={item.id || idx} className="hover:bg-slate-50/80">
-                            <td className="p-4 text-center font-mono text-slate-400 text-xs">{idx + 1}</td>
+                            <td className="p-4 text-center font-mono text-slate-400 text-xs">
+                          {(page - 1) * limit + idx + 1}
+                        </td>
                             <td className="p-4">
                               <div className="font-bold text-slate-800">{item.name || item.barang}</div>
                               <div className="text-[11px] font-mono text-slate-400">{item.code || `ID-${item.id}`}</div>

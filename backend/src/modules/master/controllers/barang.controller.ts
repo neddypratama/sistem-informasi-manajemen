@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, BadRequestException } from '@nestjs/common';
 import { BarangService } from '../services/barang.service.js';
 import { QueryBarangDto } from '../dto/query-barang.dto.js';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard.js';
@@ -23,9 +23,18 @@ export class BarangController {
     return this.barangService.getSatuans();
   }
 
+  @Get('satuan')
+  async getSatuanAlias() {
+    return this.barangService.getSatuans();
+  }
+
   @Get(':id')
   async findOne(@Param('id') id: string) {
-    return this.barangService.findOne(Number(id));
+    const numId = Number(id);
+    if (isNaN(numId)) {
+      throw new BadRequestException(`ID barang tidak valid: ${id}`);
+    }
+    return this.barangService.findOne(numId);
   }
 
   @Post()

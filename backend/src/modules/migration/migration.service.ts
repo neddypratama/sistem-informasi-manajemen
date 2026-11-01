@@ -386,6 +386,14 @@ export class MigrationService {
           modernType = 'KAS_MASUK';
           subCategoryLabel = 'Pendapatan Lain';
           countPendapatanLain++;
+        } else if (inv.includes('-UTG-')) {
+          isOperational = true;
+          modernType = isDebit ? 'KAS_KELUAR' : 'KAS_MASUK';
+          subCategoryLabel = 'Hutang';
+        } else if (inv.includes('-BON-')) {
+          isOperational = true;
+          modernType = isDebit ? 'KAS_KELUAR' : 'KAS_MASUK';
+          subCategoryLabel = 'Piutang';
         }
 
         if (!isOperational) {

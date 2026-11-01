@@ -5,7 +5,8 @@ export declare class TransaksiController {
     private readonly transaksiService;
     constructor(transaksiService: TransaksiService);
     findAll(query: QueryTransaksiDto): Promise<{
-        items: ({
+        items: {
+            posisi: "Debit" | "Kredit";
             user: {
                 id: bigint;
                 name: string;
@@ -64,7 +65,6 @@ export declare class TransaksiController {
                     kredit: import("@prisma/client/runtime/library").Decimal;
                 }[];
             }[];
-        } & {
             id: bigint;
             createdAt: Date;
             userId: bigint;
@@ -79,12 +79,13 @@ export declare class TransaksiController {
             status: import("@prisma/client").$Enums.TransaksiStatus;
             invoice: string;
             subtotal: import("@prisma/client/runtime/library").Decimal;
-        })[];
+        }[];
         meta: {
             page: number;
             limit: number;
             total: number;
             totalPages: number;
+            totalKeseluruhan: number;
         };
     }>;
     getClientLedger(clientId: string): Promise<{

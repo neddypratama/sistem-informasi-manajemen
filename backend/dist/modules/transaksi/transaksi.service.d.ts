@@ -7,7 +7,8 @@ export declare class TransaksiService {
     private fifoService;
     constructor(prisma: PrismaService, fifoService: FifoService);
     findAll(query: QueryTransaksiDto): Promise<{
-        items: ({
+        items: {
+            posisi: "Debit" | "Kredit";
             user: {
                 id: bigint;
                 name: string;
@@ -66,7 +67,6 @@ export declare class TransaksiService {
                     kredit: import("@prisma/client/runtime/library").Decimal;
                 }[];
             }[];
-        } & {
             id: bigint;
             createdAt: Date;
             userId: bigint;
@@ -81,12 +81,13 @@ export declare class TransaksiService {
             status: import("@prisma/client").$Enums.TransaksiStatus;
             invoice: string;
             subtotal: import("@prisma/client/runtime/library").Decimal;
-        })[];
+        }[];
         meta: {
             page: number;
             limit: number;
             total: number;
             totalPages: number;
+            totalKeseluruhan: number;
         };
     }>;
     findOne(id: number): Promise<{
