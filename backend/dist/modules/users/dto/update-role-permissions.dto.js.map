@@ -1,0 +1,1 @@
+{"version":3,"file":"update-role-permissions.dto.js","sourceRoot":"","sources":["../../../../src/modules/users/dto/update-role-permissions.dto.ts"],"names":[],"mappings":";;;;;;;;;AAAA,OAAO,EAAE,OAAO,EAAE,QAAQ,EAAE,MAAM,iBAAiB,CAAC;AAEpD,MAAM,OAAO,wBAAwB;IAGnC,aAAa,CAAW;CACzB;AADC;IAFC,OAAO,EAAE;IACT,QAAQ,CAAC,EAAE,EAAE,EAAE,IAAI,EAAE,IAAI,EAAE,CAAC;;+DACL"}

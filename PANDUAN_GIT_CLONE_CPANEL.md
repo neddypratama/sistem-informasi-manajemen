@@ -209,7 +209,8 @@ Jika repository GitHub Anda bersifat **Private** (paling umum), Anda perlu membe
 ### B. Install Dependencies & Build Frontend
 Jalankan di Terminal:
 ```bash
-npm install
+# Wajib gunakan --include=dev karena virtualenv cPanel mengeset NODE_ENV=production
+npm install --include=dev
 npm run build
 ```
 Proses ini akan menghasilkan folder `dist/` yang memuat `index.html`, bundle CSS/JS, dan file `.htaccess`.

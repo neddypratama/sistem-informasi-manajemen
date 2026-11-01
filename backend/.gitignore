@@ -1,6 +1,6 @@
 # Backend Git Ignore
 node_modules/
-dist/
+# dist/ (di-track agar server cPanel cukup git pull langsung live)
 *.tsbuildinfo
 .env
 .env.*

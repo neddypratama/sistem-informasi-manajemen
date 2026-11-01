@@ -1,0 +1,12 @@
+import { AppService } from './app.service.js';
+export declare class AppController {
+    private readonly appService;
+    constructor(appService: AppService);
+    getHealth(): {
+        status: string;
+        service: string;
+        version: string;
+        timestamp: string;
+        uptimeSeconds: number;
+    };
+}

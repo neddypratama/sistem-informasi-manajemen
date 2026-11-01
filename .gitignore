@@ -6,9 +6,7 @@
 node_modules/
 */node_modules/
 
-# Production build outputs
-dist/
-*/dist/
+# Production build outputs (frontend/dist dan backend/dist diizinkan masuk Git agar cPanel cukup git pull langsung live)
 dist-ssr/
 *.tsbuildinfo
 */tsconfig.build.tsbuildinfo

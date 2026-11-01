@@ -38,8 +38,9 @@ echo ""
 echo "🎨 [3/5] Memproses Frontend (React SPA)..."
 cd ../frontend
 
-npm install
-npm run build
+# Wajib gunakan --include=dev karena cPanel virtualenv defaultnya NODE_ENV=production
+npm install --include=dev
+node ./node_modules/vite/bin/vite.js build || npx vite build
 
 echo ""
 echo "🌐 [4/5] Sinkronisasi file Frontend ke web root cPanel..."
