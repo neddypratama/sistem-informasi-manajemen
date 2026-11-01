@@ -5,6 +5,7 @@ import { SearchableClientSelect } from '../../components/SearchableClientSelect'
 import { SearchableBarangSelect } from '../../components/SearchableBarangSelect';
 import { ExportButtonGroup } from '../../components/ExportButtonGroup';
 import { exportToExcel, formatDateIndo } from '../../lib/export-utils';
+import { useAuthStore, hasPermission } from '../../stores/auth.store';
 import {
   Boxes,
   ArrowDownLeft,
@@ -189,6 +190,11 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
   isEgg = false,
 }) => {
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+  const canCreate = hasPermission(user, `${commodityKey}:create`);
+  const canRetur = hasPermission(user, `${commodityKey}:retur`);
+  const canDelete = hasPermission(user, `${commodityKey}:delete`);
+
   const [activeTab, setActiveTab] = useState<'PEMBELIAN' | 'PENJUALAN' | 'RETUR_PEMBELIAN' | 'RETUR_PENJUALAN' | 'STOK'>('PENJUALAN');
   const [search, setSearch] = useState('');
   const [filterClientId, setFilterClientId] = useState<string>('');
@@ -1182,7 +1188,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
 
         <div className="flex flex-wrap items-center gap-2">
           <ExportButtonGroup onExportExcel={handleExportExcel} />
-          {activeTab === 'RETUR_PENJUALAN' ? (
+          {canRetur && activeTab === 'RETUR_PENJUALAN' ? (
             <button
               onClick={() => handleOpenAddModal('RETUR_PENJUALAN')}
               className="flex items-center gap-1.5 px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95"
@@ -1190,7 +1196,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
               <RotateCcw className="w-4 h-4" />
               <span>+ Catat Retur Penjualan</span>
             </button>
-          ) : activeTab === 'RETUR_PEMBELIAN' ? (
+          ) : canRetur && activeTab === 'RETUR_PEMBELIAN' ? (
             <button
               onClick={() => handleOpenAddModal('RETUR_PEMBELIAN')}
               className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95"
@@ -1198,7 +1204,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
               <RotateCcw className="w-4 h-4" />
               <span>+ Catat Retur Pembelian</span>
             </button>
-          ) : (
+          ) : canCreate ? (
             <>
               <button
                 onClick={() => handleOpenAddModal('PEMBELIAN')}
@@ -1215,7 +1221,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                 <span>Catat Penjualan</span>
               </button>
             </>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -1245,29 +1251,33 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
           <span>Pembelian</span>
         </button>
 
-        <button
-          onClick={() => setActiveTab('RETUR_PENJUALAN')}
-          className={`px-4 py-3 border-b-2 flex items-center space-x-2 whitespace-nowrap transition-all ${
-            activeTab === 'RETUR_PENJUALAN'
-              ? 'border-rose-600 text-rose-600 font-bold'
-              : 'border-transparent hover:text-slate-700 hover:border-slate-300'
-          }`}
-        >
-          <RotateCcw className="w-4 h-4" />
-          <span>Retur Penjualan</span>
-        </button>
+        {canRetur && (
+          <button
+            onClick={() => setActiveTab('RETUR_PENJUALAN')}
+            className={`px-4 py-3 border-b-2 flex items-center space-x-2 whitespace-nowrap transition-all ${
+              activeTab === 'RETUR_PENJUALAN'
+                ? 'border-rose-600 text-rose-600 font-bold'
+                : 'border-transparent hover:text-slate-700 hover:border-slate-300'
+            }`}
+          >
+            <RotateCcw className="w-4 h-4" />
+            <span>Retur Penjualan</span>
+          </button>
+        )}
 
-        <button
-          onClick={() => setActiveTab('RETUR_PEMBELIAN')}
-          className={`px-4 py-3 border-b-2 flex items-center space-x-2 whitespace-nowrap transition-all ${
-            activeTab === 'RETUR_PEMBELIAN'
-              ? 'border-amber-600 text-amber-600 font-bold'
-              : 'border-transparent hover:text-slate-700 hover:border-slate-300'
-          }`}
-        >
-          <RotateCcw className="w-4 h-4" />
-          <span>Retur Pembelian</span>
-        </button>
+        {canRetur && (
+          <button
+            onClick={() => setActiveTab('RETUR_PEMBELIAN')}
+            className={`px-4 py-3 border-b-2 flex items-center space-x-2 whitespace-nowrap transition-all ${
+              activeTab === 'RETUR_PEMBELIAN'
+                ? 'border-amber-600 text-amber-600 font-bold'
+                : 'border-transparent hover:text-slate-700 hover:border-slate-300'
+            }`}
+          >
+            <RotateCcw className="w-4 h-4" />
+            <span>Retur Pembelian</span>
+          </button>
+        )}
 
         <button
           onClick={() => setActiveTab('STOK')}
@@ -1521,20 +1531,24 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                             >
                               <Eye className="w-4 h-4" />
                             </button>
-                            <button
-                              onClick={() => handleOpenEdit(tx)}
-                              className="p-1 text-slate-400 hover:text-emerald-600 rounded"
-                              title="Edit Keterangan"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => setDeleteModalTx(tx)}
-                              className="p-1 text-slate-400 hover:text-rose-600 rounded"
-                              title="Hapus Transaksi"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {canCreate && (
+                              <button
+                                onClick={() => handleOpenEdit(tx)}
+                                className="p-1 text-slate-400 hover:text-emerald-600 rounded"
+                                title="Edit Keterangan"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button
+                                onClick={() => setDeleteModalTx(tx)}
+                                className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                                title="Hapus Transaksi"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>

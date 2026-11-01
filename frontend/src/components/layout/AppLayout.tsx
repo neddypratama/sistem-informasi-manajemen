@@ -113,7 +113,7 @@ export const AppLayout: React.FC = () => {
       title: 'UTAMA',
       items: [
         isAdminOrManager(user)
-          ? { label: 'Dashboard Analitik', path: '/', icon: LayoutDashboard }
+          ? { label: 'Dashboard Analitik', path: '/', icon: LayoutDashboard, permission: 'dashboard:read' }
           : { label: 'Beranda Staf', path: '/', icon: Home, badge: 'Home', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
       ],
     },
@@ -130,7 +130,7 @@ export const AppLayout: React.FC = () => {
       title: 'STOK',
       items: [
         { label: 'Monitoring Stok Global', path: '/stok', icon: Boxes, permission: 'stok:read', badge: 'Gudang', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
-        { label: 'Stok Opname & Penyesuaian', path: '/stok-opname', icon: ClipboardCheck, permission: 'stok:read', badge: 'Opname', badgeColor: 'bg-amber-500/20 text-amber-400' },
+        { label: 'Stok Opname & Penyesuaian', path: '/stok-opname', icon: ClipboardCheck, permission: 'stok:opname', badge: 'Opname', badgeColor: 'bg-amber-500/20 text-amber-400' },
       ],
     },
     {
@@ -149,7 +149,7 @@ export const AppLayout: React.FC = () => {
       items: [
         { label: 'Laba Rugi Komoditas', path: '/laporan', icon: FileSpreadsheet, permission: 'laporan:laba_rugi', badge: 'P&L', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
         { label: 'Laba Rugi Curah', path: '/laporan-curah', icon: Wheat, permission: 'laporan:curah', badge: 'Curah', badgeColor: 'bg-orange-500/20 text-orange-400' },
-        { label: 'Jurnal Umum & Detail', path: '/jurnal-umum', icon: BookOpen, permission: 'laporan:neraca_saldo', badge: 'Double-Entry', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
+        { label: 'Jurnal Umum & Detail', path: '/jurnal-umum', icon: BookOpen, permission: 'jurnal:read', badge: 'Double-Entry', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
         { label: 'Neraca Saldo', path: '/neraca-saldo', icon: Scale, permission: 'laporan:neraca_saldo', badge: 'Trial', badgeColor: 'bg-blue-500/20 text-blue-400' },
         { label: 'Laporan Aset & Modal', path: '/laporan-aset', icon: Landmark, permission: 'laporan:aset', badge: 'Aset', badgeColor: 'bg-purple-500/20 text-purple-400' },
       ],
@@ -180,7 +180,7 @@ export const AppLayout: React.FC = () => {
     {
       title: 'PENGATURAN & AUDIT',
       items: [
-        { label: 'Riwayat Log Aktivitas', path: '/logs', icon: History, badge: 'Audit', badgeColor: 'bg-blue-500/20 text-blue-400', adminOrManagerOnly: true },
+        { label: 'Riwayat Log Aktivitas', path: '/logs', icon: History, permission: 'logs:read', badge: 'Audit', badgeColor: 'bg-blue-500/20 text-blue-400' },
         { label: 'Pengguna & Role (RBAC)', path: '/users', icon: ShieldCheck, permission: 'users:read', badge: 'Akses', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
         { label: 'Import Sistem Lama', path: '/import-legacy', icon: Database, badge: 'ETL', badgeColor: 'bg-emerald-500/20 text-emerald-400', adminOrManagerOnly: true },
       ],

@@ -145,7 +145,7 @@ export const App: React.FC = () => {
             <Route
               path="stok-opname"
               element={
-                <PermissionRoute permission="stok:read">
+                <PermissionRoute permission="stok:opname">
                   <StokOpnamePage />
                 </PermissionRoute>
               }
@@ -221,7 +221,7 @@ export const App: React.FC = () => {
             <Route
               path="jurnal-umum"
               element={
-                <PermissionRoute permission="laporan:neraca_saldo">
+                <PermissionRoute permission="jurnal:read">
                   <JurnalUmumPage />
                 </PermissionRoute>
               }
@@ -287,7 +287,7 @@ export const App: React.FC = () => {
             <Route
               path="logs"
               element={
-                <PermissionRoute adminOrManagerOnly>
+                <PermissionRoute permission="logs:read">
                   <ActivityLogPage />
                 </PermissionRoute>
               }
