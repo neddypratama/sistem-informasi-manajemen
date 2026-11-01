@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Buku Panduan Penggunaan Sistem - Bima Pratama ERP 2.0</title>
+<style>
+  @page {
+    size: A4;
+    margin: 20mm 18mm 20mm 18mm;
+    @top-right {
+      content: "Bima Pratama ERP 2.0 - User Manual";
+      font-size: 8pt;
+      color: #64748b;
+    }
+    @bottom-center {
+      content: counter(page);
+      font-size: 9pt;
+      color: #64748b;
+    }
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #1e293b;
+    line-height: 1.55;
+    font-size: 10pt;
+  }
+  .cover {
+    page-break-after: always;
+    text-align: center;
+    padding-top: 80px;
+    padding-bottom: 60px;
+  }
+  .cover-badge {
+    display: inline-block;
+    background-color: #ecfdf5;
+    color: #059669;
+    padding: 6px 16px;
+    border-radius: 9999px;
+    font-weight: 700;
+    font-size: 10pt;
+    letter-spacing: 1px;
+    border: 1px solid #a7f3d0;
+  }
+  .cover-title {
+    font-size: 26pt;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 20px 0 10px 0;
+    line-height: 1.2;
+  }
+  .cover-subtitle {
+    font-size: 13pt;
+    color: #475569;
+    margin-bottom: 40px;
+  }
+  .divider {
+    height: 3px;
+    background: linear-gradient(to right, #059669, #10b981, #059669);
+    width: 200px;
+    margin: 0 auto 40px auto;
+    border-radius: 2px;
+  }
+  .cover-meta {
+    margin-top: 50px;
+    font-size: 10pt;
+    color: #334155;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 20px;
+    display: inline-block;
+    text-align: left;
+    max-width: 500px;
+  }
+  h1 {
+    color: #059669;
+    font-size: 16pt;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 6px;
+    margin-top: 28px;
+    margin-bottom: 12px;
+    page-break-after: avoid;
+  }
+  h2 {
+    color: #0f172a;
+    font-size: 12pt;
+    margin-top: 18px;
+    margin-bottom: 8px;
+    page-break-after: avoid;
+  }
+  p {
+    margin-top: 0;
+    margin-bottom: 10px;
+    text-align: justify;
+  }
+  ul, ol {
+    margin-top: 0;
+    margin-bottom: 12px;
+    padding-left: 20px;
+  }
+  li {
+    margin-bottom: 5px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0;
+    font-size: 9pt;
+  }
+  th {
+    background-color: #059669;
+    color: white;
+    font-weight: 700;
+    text-align: left;
+    padding: 8px 10px;
+    border: 1px solid #047857;
+  }
+  td {
+    padding: 7px 10px;
+    border: 1px solid #cbd5e1;
+  }
+  tr:nth-child(even) td {
+    background-color: #f8fafc;
+  }
+  .callout {
+    background-color: #ecfdf5;
+    border-left: 4px solid #059669;
+    padding: 10px 14px;
+    border-radius: 0 8px 8px 0;
+    margin: 14px 0;
+    font-size: 9.5pt;
+  }
+  .callout-warning {
+    background-color: #fffbeb;
+    border-left-color: #d97706;
+  }
+  .callout-title {
+    font-weight: 700;
+    color: #059669;
+    margin-bottom: 3px;
+  }
+  .callout-warning .callout-title {
+    color: #d97706;
+  }
+  .page-break {
+    page-break-after: always;
+  }
+</style>
+</head>
+<body>
+
+<!-- COVER PAGE -->
+<div class="cover">
+  <div class="cover-badge">BIMA PRATAMA ENTERPRISE RESOURCE PLANNING</div>
+  <div class="cover-title">PANDUAN LENGKAP PENGGUNAAN SISTEM<br>(USER MANUAL & SOP OPERASIONAL)</div>
+  <div class="cover-subtitle">Sistem Informasi Manajemen Terpadu & Akuntansi Double-Entry Komoditas Peternakan<br>Versi 2.0 (Tahun 2026)</div>
+  <div class="divider"></div>
+  <div class="cover-meta">
+    <strong>Disusun untuk:</strong><br>
+    Manajemen, Staff Operasional Kasir, Pengelola Gudang, dan Divisi Akuntansi<br>
+    <strong>Perusahaan:</strong> CV / UD Bima Pratama<br><br>
+    <strong>Akses Sistem:</strong> https://sim.bimapratama.com<br>
+    <strong>Backend API:</strong> https://api.bimapratama.com/api/v1
+  </div>
+</div>
+
+<!-- BAB 1 -->
+<h1>BAB 1: PENDAHULUAN & ARSITEKTUR SISTEM</h1>
+<p><strong>Bima Pratama ERP 2.0</strong> adalah sistem informasi manajemen terintegrasi generasi terbaru yang dirancang khusus untuk memenuhi kebutuhan operasional industri perdagangan komoditas peternakan (Telur Ayam, Telur Bebek, Telur Puyuh, Telur Arab, Pakan Sentrat Pabrikan & Curah, Obat-obatan, dan EggTray). Sistem ini dibangun dengan fondasi teknologi modern (React 19, NestJS 11, dan MySQL 8 Enterprise) dengan keunggulan utama berupa otomatisasi akuntansi double-entry dan perhitungan harga pokok penjualan (HPP) berbasis First-In-First-Out (FIFO) yang presisi 1:1.</p>
+
+<h2>1.1. Keunggulan Utama ERP 2.0</h2>
+<ul>
+  <li><strong>Otomatisasi Akuntansi Double-Entry:</strong> Setiap transaksi fisik (penjualan, pembelian, retur, kas, beban) otomatis membukukan jurnal Debit dan Kredit seimbang.</li>
+  <li><strong>Algoritma Stok Batch FIFO:</strong> Pelacakan batch kedatangan barang memastikan HPP penjualan dan margin laba kotor selalu akurat.</li>
+  <li><strong>Isolasi Opname Fisik:</strong> Fitur pemisahan telur bentes, kotor, ceplok, jumbo, dan afkir secara rapi.</li>
+  <li><strong>Manajemen Mitra 360°:</strong> Riwayat piutang agen dan hutang peternak ter-update seketika.</li>
+  <li><strong>Akses Multi-Device:</strong> Kompatibel diakses dari PC kasir, laptop kantor, maupun smartphone.</li>
+</ul>
+
+<div class="callout">
+  <div class="callout-title">📌 ALAMAT RESMI AKSES SISTEM</div>
+  Aplikasi Web: <strong>https://sim.bimapratama.com</strong><br>
+  Backend API: <strong>https://api.bimapratama.com/api/v1</strong>
+</div>
+
+<div class="page-break"></div>
+
+<!-- BAB 2 -->
+<h1>BAB 2: MANAJEMEN AKSES & KEAMANAN PENGGUNA</h1>
+<h2>2.1. Prosedur Login Sistem</h2>
+<ol>
+  <li>Buka browser dan akses: <strong>https://sim.bimapratama.com</strong></li>
+  <li>Masukkan Username / Email dan Password Anda.</li>
+  <li>Klik tombol <strong>Masuk ke Sistem</strong>.</li>
+</ol>
+
+<div class="callout callout-warning">
+  <div class="callout-title">⚠️ KREDENSIAL DEFAULT ADMINISTRATOR</div>
+  Username: <strong>admin</strong> (atau admin@bimapratama.com)<br>
+  Password Default: <strong>password</strong><br>
+  <em>Segera ubah password default Anda pada menu Pengaturan Akun demi keamanan data.</em>
+</div>
+
+<h2>2.2. Pembagian Peran & Hak Akses (Role Permission)</h2>
+<table>
+  <thead>
+    <tr><th style="width:28%">Peran (Role)</th><th>Cakupan Hak Akses & Wewenang</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>Administrator</strong></td><td>Akses penuh 100%: Konfigurasi sistem, manajemen pengguna, modul akuntansi, master data, dan audit trail.</td></tr>
+    <tr><td><strong>Staff Keuangan</strong></td><td>Akses modul Akuntansi: Jurnal Umum, Buku Besar, Neraca Saldo, Laporan Laba Rugi, Piutang/Hutang, dan Kas.</td></tr>
+    <tr><td><strong>Staff Kasir / Operasional</strong></td><td>Akses transaksi harian: Input Penjualan, Pembelian dari Peternak, Cetak Nota/Invoice, dan Surat Jalan.</td></tr>
+    <tr><td><strong>Staff Gudang</strong></td><td>Akses persediaan: Pengecekan stok batch FIFO dan input formulir sortir Stok Opname fisik.</td></tr>
+  </tbody>
+</table>
+
+<!-- BAB 3 -->
+<h1>BAB 3: MEMAHAMI DASHBOARD UTAMA & ANALITIK</h1>
+<p>Dashboard utama memberikan gambaran performa perusahaan dalam hitungan detik:</p>
+<ul>
+  <li><strong>Kartu Omzet Penjualan:</strong> Nilai nominal omzet hari ini dan akumulasi bulan berjalan.</li>
+  <li><strong>Kartu Pembelian Peternak:</strong> Total pengeluaran bahan komoditas telur dan pakan.</li>
+  <li><strong>Kartu Piutang Aktif:</strong> Saldo tagihan toko/agen yang beredar di pasar.</li>
+  <li><strong>Kartu Hutang Dagang:</strong> Kewajiban yang harus dibayarkan ke peternak dan supplier.</li>
+  <li><strong>Estimasi Laba Kotor Berjalan:</strong> Dihitung langsung dari Penjualan dikurangi HPP FIFO.</li>
+  <li><strong>Peringatan Stok Menipis:</strong> Daftar barang yang kuantitasnya di bawah stok minimum.</li>
+</ul>
+
+<div class="page-break"></div>
+
+<!-- BAB 4 -->
+<h1>BAB 4: PENGELOLAAN MASTER DATA BISNIS</h1>
+<h2>4.1. Master Barang & Komoditas</h2>
+<p>Menu: <strong>Master Data &gt; Master Barang</strong>. Formulir input meliputi:</p>
+<table>
+  <thead>
+    <tr><th style="width:28%">Kolom Input</th><th>Keterangan Pengisian</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>Kode Barang</strong></td><td>Kode unik otomatis sistem (misal: BRG-0001) atau kode barcode.</td></tr>
+    <tr><td><strong>Nama Komoditas</strong></td><td>Nama spesifik (misal: Telur Horn Super, Pakan Sentrat 511, Tray Karton).</td></tr>
+    <tr><td><strong>Jenis Barang</strong></td><td>Kategori fisik: Telur, Pakan, Obat-obatan, atau EggTray.</td></tr>
+    <tr><td><strong>Satuan Dasar</strong></td><td>Satuan ukur: Kg (telur), Sak (pakan), Pcs (tray), Butir, Botol.</td></tr>
+    <tr><td><strong>Stok Minimum</strong></td><td>Batas kuantitas untuk memicu peringatan restock di dashboard.</td></tr>
+  </tbody>
+</table>
+
+<h2>4.2. Master Mitra Bisnis (Client & Vendor)</h2>
+<p>Menu: <strong>Master Data &gt; Master Mitra</strong>. Klasifikasi mitra mencakup:</p>
+<ul>
+  <li><strong>PETERNAK:</strong> Pemasok telur dari kandang (transaksi pembelian menambah saldo hutang).</li>
+  <li><strong>TOKO / AGEN:</strong> Pelanggan pembeli partai/eceran (penjualan bon menambah saldo piutang).</li>
+  <li><strong>SUPPLIER PABRIKAN:</strong> Pemasok pakan pabrik, obat-obatan, dan eggtray.</li>
+  <li><strong>KARYAWAN / TRUK:</strong> Sopir armada distribusi dan penjemput telur kandang.</li>
+</ul>
+
+<!-- BAB 5 -->
+<h1>BAB 5: OPERASIONAL PEMBELIAN KOMODITAS (INFLOW)</h1>
+<p>Setiap penerimaan telur atau pakan dicatat melalui menu <strong>Transaksi &gt; Pembelian</strong>:</p>
+<ol>
+  <li>Klik tombol <strong>+ Tambah Pembelian</strong>.</li>
+  <li>Pilih tanggal transaksi dan pilih nama Peternak / Pemasok.</li>
+  <li>Pilih jenis komoditas (misal: Telur Horn).</li>
+  <li>Masukkan Kuantitas timbangan bersih (Kg) dan Harga Beli Satuan (Rp/Kg).</li>
+  <li>Pilih Cara Bayar: <strong>TUNAI</strong>, <strong>TRANSFER</strong>, atau <strong>KREDIT / BON</strong>.</li>
+  <li>Klik <strong>Simpan Pembelian</strong>.</li>
+</ol>
+<div class="callout">
+  <div class="callout-title">💡 ENGINE FIFO OTOMATIS</div>
+  Saat pembelian disimpan, sistem otomatis membuat ID Batch Stok baru dengan harga modal tersebut. Jurnal akuntansi berpasangan otomatis tercatat seimbang di Buku Besar.
+</div>
+
+<div class="page-break"></div>
+
+<!-- BAB 6 -->
+<h1>BAB 6: OPERASIONAL PENJUALAN KOMODITAS (OUTFLOW)</h1>
+<p>Setiap penjualan telur dan sarana peternakan dicatat pada menu <strong>Transaksi &gt; Penjualan</strong>:</p>
+<ol>
+  <li>Klik tombol <strong>+ Tambah Penjualan</strong>.</li>
+  <li>Pilih Toko / Agen / Pelanggan.</li>
+  <li>Pilih komoditas yang dijual, masukkan kuantitas (Kg) dan harga jual satuan.</li>
+  <li>Tentukan metode pembayaran: Tunai, Transfer Bank, atau Bon Titipan / Kredit.</li>
+  <li>Klik <strong>Simpan Penjualan</strong> dan cetak faktur invoice.</li>
+</ol>
+<p><strong>Perhitungan Laba Kotor Real-Time:</strong> Sistem secara otomatis memotong stok dari batch pembelian tertua (FIFO). HPP dihitung langsung berdasarkan modal batch tersebut, sehingga margin laba bersih yang ditampilkan akurat tanpa distorsi.</p>
+
+<!-- BAB 7 -->
+<h1>BAB 7: MANAJEMEN GUDANG, SORTIR & STOK OPNAME</h1>
+<h2>7.1. Klasifikasi Sortir Telur Fisik</h2>
+<table>
+  <thead>
+    <tr><th style="width:28%">Kategori Sortir</th><th>Karakteristik & Penanganan</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>Telur Utuh Normal</strong></td><td>Kualitas standar siap dipasarkan dengan harga penuh.</td></tr>
+    <tr><td><strong>Telur Bentes</strong></td><td>Retak halus rambut, selaput tidak bocor; dijual diskon eceran.</td></tr>
+    <tr><td><strong>Telur Kotor</strong></td><td>Tercemar kotoran kandang; dicuci atau dipisahkan.</td></tr>
+    <tr><td><strong>Telur Ceplok</strong></td><td>Pecah basah; segera diolah atau dijual langsung ke pedagang kuliner.</td></tr>
+    <tr><td><strong>Telur Jumbo</strong></td><td>Ukuran di atas rata-rata dengan harga jual premium.</td></tr>
+    <tr><td><strong>Telur Prok / Afkir</strong></td><td>Busuk/mati; dimusnahkan dan dibukukan sebagai kerugian susut gudang.</td></tr>
+  </tbody>
+</table>
+
+<!-- BAB 8 -->
+<h1>BAB 8: PENGELOLAAN KAS, BANK, BEBAN & PIUTANG/HUTANG</h1>
+<ul>
+  <li><strong>Pelunasan Piutang Toko:</strong> Menu <em>Transaksi &gt; Penerimaan Kas</em>. Pilih pelanggan &gt; input nominal pembayaran &gt; saldo piutang otomatis berkurang.</li>
+  <li><strong>Pembayaran Hutang Peternak:</strong> Menu <em>Transaksi &gt; Pengeluaran Kas</em>. Pilih peternak &gt; masukkan nominal transfer &gt; saldo hutang otomatis berkurang.</li>
+  <li><strong>Beban Operasional:</strong> Pencatatan biaya solar truk, servis armada, gaji karyawan, konsumsi, listrik, dan kardus paking.</li>
+</ul>
+
+<div class="page-break"></div>
+
+<!-- BAB 9 -->
+<h1>BAB 9: LAPORAN KEUANGAN & AKUNTANSI DOUBLE-ENTRY</h1>
+<p>Seluruh laporan di-generate otomatis dan dapat diekspor ke Microsoft Excel atau PDF:</p>
+<table>
+  <thead>
+    <tr><th style="width:30%">Laporan</th><th>Fungsi Analisis</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>Jurnal Umum</strong></td><td>Audit trail seluruh transaksi berpasangan Debit dan Kredit yang 100% balance.</td></tr>
+    <tr><td><strong>Buku Besar (Ledger)</strong></td><td>Rincian pergerakan saldo kas, bank, persediaan, piutang, dan hutang.</td></tr>
+    <tr><td><strong>Neraca Saldo</strong></td><td>Verifikasi keseimbangan saldo akun sebelum penutupan buku.</td></tr>
+    <tr><td><strong>Laporan Laba Rugi</strong></td><td>Perhitungan Penjualan - HPP FIFO - Beban Operasional = Laba Bersih Usaha.</td></tr>
+    <tr><td><strong>Laba Rugi per Komoditas</strong></td><td>Menganalisis margin keuntungan spesifik Telur vs Pakan vs Obat vs Tray.</td></tr>
+    <tr><td><strong>Neraca Keuangan</strong></td><td>Posisi kesehatan Aset Lancar vs Total Hutang Usaha dan Ekuitas Pemilik.</td></tr>
+  </tbody>
+</table>
+
+<!-- BAB 10 -->
+<h1>BAB 10: SINKRONISASI, BACKUP DATA & TROUBLESHOOTING</h1>
+<h2>10.1. Fitur Upload SQL Backup</h2>
+<p>Melalui menu <strong>Sinkronisasi & Migrasi</strong>, Anda dapat mengunggah file <code>.sql</code> backup sistem lama secara langsung dari browser. Sistem akan mengeksekusi streaming engine in-memory tanpa memerlukan akses root server MySQL.</p>
+
+<h2>10.2. Pertanyaan Umum (FAQ)</h2>
+<p><strong>T: Bagaimana jika salah menginput kuantitas penjualan?</strong><br>
+J: Buka menu Penjualan, cari invoice terkait, lalu klik Edit. Sistem akan mengembalikan dan memotong ulang stok FIFO serta merevisi jurnal otomatis.</p>
+<p><strong>T: Bagaimana cara backup database rutin?</strong><br>
+J: Masuk ke phpMyAdmin di cPanel &gt; klik database <code>bimaprat_v2</code> &gt; klik tab Export &gt; klik Export. Simpan file <code>.sql</code> di komputer Anda sebagai arsip aman.</p>
+
+</body>
+</html>

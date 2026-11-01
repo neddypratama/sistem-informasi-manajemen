@@ -150,7 +150,7 @@ export class AuthService {
         }
       }
       // Inisialisasi satu kali untuk akun legacy lama yang belum memiliki hash bcrypt valid
-      const isLegacyCorruptedHash = user.password.startsWith('\\.l2YCipu1');
+      const isLegacyCorruptedHash = !user.password.startsWith('$2');
       if (!isPasswordValid && isLegacyCorruptedHash && (password === 'password' || password === 'admin123')) {
         try {
           const modernHash = await bcrypt.hash(password, 10);

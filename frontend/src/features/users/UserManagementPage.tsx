@@ -70,7 +70,7 @@ export const UserManagementPage: React.FC = () => {
       if (selectedRoleFilter) url += `&roleId=${selectedRoleFilter}`;
       if (selectedStatusFilter) url += `&isActive=${selectedStatusFilter}`;
       const res: any = await apiClient.get(url);
-      return res.data;
+      return res;
     },
   });
 
@@ -79,7 +79,7 @@ export const UserManagementPage: React.FC = () => {
     queryKey: ['rolesList'],
     queryFn: async () => {
       const res: any = await apiClient.get('/roles');
-      return res.data;
+      return res;
     },
   });
 
@@ -88,7 +88,7 @@ export const UserManagementPage: React.FC = () => {
     queryKey: ['permissionsList'],
     queryFn: async () => {
       const res: any = await apiClient.get('/permissions');
-      return res.data;
+      return res;
     },
   });
 
@@ -98,8 +98,8 @@ export const UserManagementPage: React.FC = () => {
     queryFn: async () => {
       if (!selectedRoleId) return null;
       const res: any = await apiClient.get(`/roles/${selectedRoleId}`);
-      const data = res.data;
-      setRolePermissionsState(data.permissionIds || []);
+      const data = res?.data || res;
+      setRolePermissionsState(data?.permissionIds || []);
       return data;
     },
     enabled: !!selectedRoleId,
@@ -265,10 +265,31 @@ export const UserManagementPage: React.FC = () => {
     });
   };
 
-  const users = usersData?.items || [];
-  const meta = usersData || { total: 0, page: 1, limit: 25, totalPages: 1 };
-  const roles = rolesData || [];
-  const permissionGroups = permissionsData?.grouped || [];
+  const users: any[] = Array.isArray(usersData?.data)
+    ? usersData.data
+    : Array.isArray(usersData?.items)
+    ? usersData.items
+    : Array.isArray(usersData)
+    ? usersData
+    : [];
+
+  const meta = usersData?.meta || {
+    total: users.length,
+    page: 1,
+    limit: 25,
+    totalPages: Math.max(1, Math.ceil(users.length / 25)),
+  };
+
+  const roles: any[] = Array.isArray(rolesData?.data)
+    ? rolesData.data
+    : Array.isArray(rolesData)
+    ? rolesData
+    : [];
+
+  const permissionGroups: any[] =
+    permissionsData?.data?.grouped ||
+    permissionsData?.grouped ||
+    [];
 
   const handleExportExcel = async () => {
     let dataToExport = users;
@@ -279,8 +300,10 @@ export const UserManagementPage: React.FC = () => {
         if (selectedRoleFilter) url += `&roleId=${selectedRoleFilter}`;
         if (selectedStatusFilter) url += `&isActive=${selectedStatusFilter}`;
         const res: any = await apiClient.get(url);
-        if (res?.data?.items && Array.isArray(res.data.items)) dataToExport = res.data.items;
-        else if (Array.isArray(res?.data)) dataToExport = res.data;
+        if (Array.isArray(res?.data)) dataToExport = res.data;
+        else if (Array.isArray(res?.data?.items)) dataToExport = res.data.items;
+        else if (Array.isArray(res?.items)) dataToExport = res.items;
+        else if (Array.isArray(res)) dataToExport = res;
       }
     } catch {
       // fallback
@@ -295,7 +318,7 @@ export const UserManagementPage: React.FC = () => {
       name: u.name,
       username: u.username,
       email: u.email || '-',
-      roleName: u.role?.name || '-',
+      roleName: u.roleName || u.role?.name || '-',
       status: u.isActive ? 'Aktif' : 'Non-Aktif',
       createdAt: formatDateIndo(u.createdAt),
     }));
@@ -540,7 +563,7 @@ export const UserManagementPage: React.FC = () => {
                         </td>
                         <td className="py-3.5 px-4">
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                            {u.roleName}
+                            {u.roleName || u.role?.name || '-'}
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-center">

@@ -403,11 +403,11 @@ export class ReportsService {
    * (Pendapatan, Pengeluaran, Aset, Liabilitas, Ekuitas)
    */
   async getNeracaSaldo(startDate?: string, endDate?: string) {
-    let dateFilter = Prisma.sql`WHERE t.status = 'SELESAI'`;
+    let dateFilter = Prisma.sql`WHERE (t.status IS NULL OR t.status != 'BATAL')`;
     if (startDate && endDate) {
       const start = new Date(`${startDate} 00:00:00`);
       const end = new Date(`${endDate} 23:59:59`);
-      dateFilter = Prisma.sql`WHERE t.status = 'SELESAI' AND ju.tanggal BETWEEN ${start} AND ${end}`;
+      dateFilter = Prisma.sql`WHERE (t.status IS NULL OR t.status != 'BATAL') AND ju.tanggal BETWEEN ${start} AND ${end}`;
     }
 
     const rows = await this.prisma.$queryRaw<
@@ -437,7 +437,7 @@ export class ReportsService {
         SELECT jd.kategori_id, jd.debit, jd.kredit
         FROM jurnal_details jd
         JOIN jurnal_umums ju ON ju.id = jd.jurnal_id
-        JOIN transaksis t ON t.id = ju.transaksi_id
+        LEFT JOIN transaksis t ON t.id = ju.transaksi_id
         ${dateFilter}
       ) filtered_jd ON filtered_jd.kategori_id = k.id
       GROUP BY k.id, k.name, k.code, dk.id, dk.name, dk.type
@@ -533,11 +533,11 @@ export class ReportsService {
    * Menghasilkan Laporan Aset & Liabilitas (Neraca Posisi Keuangan)
    */
   async getLaporanAset(startDate?: string, endDate?: string) {
-    let dateFilter = Prisma.sql`WHERE t.status = 'SELESAI'`;
+    let dateFilter = Prisma.sql`WHERE (t.status IS NULL OR t.status != 'BATAL')`;
     if (startDate && endDate) {
       const start = new Date(`${startDate} 00:00:00`);
       const end = new Date(`${endDate} 23:59:59`);
-      dateFilter = Prisma.sql`WHERE t.status = 'SELESAI' AND ju.tanggal BETWEEN ${start} AND ${end}`;
+      dateFilter = Prisma.sql`WHERE (t.status IS NULL OR t.status != 'BATAL') AND ju.tanggal BETWEEN ${start} AND ${end}`;
     }
 
     const rows = await this.prisma.$queryRaw<
@@ -567,7 +567,7 @@ export class ReportsService {
         SELECT jd.kategori_id, jd.debit, jd.kredit
         FROM jurnal_details jd
         JOIN jurnal_umums ju ON ju.id = jd.jurnal_id
-        JOIN transaksis t ON t.id = ju.transaksi_id
+        LEFT JOIN transaksis t ON t.id = ju.transaksi_id
         ${dateFilter}
       ) filtered_jd ON filtered_jd.kategori_id = k.id
       WHERE dk.type IN ('Aset', 'Liabilitas')
@@ -683,9 +683,9 @@ export class ReportsService {
       SELECT jd.coa_id, SUM(jd.debit) as debit, SUM(jd.kredit) as kredit
       FROM jurnal_details jd
       JOIN jurnal_umums ju ON ju.id = jd.jurnal_id
-      JOIN transaksis t ON t.id = ju.transaksi_id
+      LEFT JOIN transaksis t ON t.id = ju.transaksi_id
       WHERE jd.coa_id BETWEEN 64 AND 71
-        AND t.status = 'SELESAI'
+        AND (t.status IS NULL OR t.status != 'BATAL')
         AND ju.tanggal < ${start}
       GROUP BY jd.coa_id
     `;
@@ -702,9 +702,9 @@ export class ReportsService {
       SELECT jd.coa_id, SUM(jd.debit) as debit, SUM(jd.kredit) as kredit
       FROM jurnal_details jd
       JOIN jurnal_umums ju ON ju.id = jd.jurnal_id
-      JOIN transaksis t ON t.id = ju.transaksi_id
+      LEFT JOIN transaksis t ON t.id = ju.transaksi_id
       WHERE jd.coa_id BETWEEN 64 AND 71
-        AND t.status = 'SELESAI'
+        AND (t.status IS NULL OR t.status != 'BATAL')
         AND ju.tanggal BETWEEN ${start} AND ${end}
       GROUP BY jd.coa_id
     `;
@@ -766,7 +766,7 @@ export class ReportsService {
       JOIN chart_of_accounts coa ON coa.id = jd.coa_id
       LEFT JOIN transaksis t ON t.id = ju.transaksi_id
       LEFT JOIN clients c ON c.id = t.client_id
-      WHERE t.status = 'SELESAI'
+      WHERE (t.status IS NULL OR t.status != 'BATAL')
         AND ju.tanggal BETWEEN ${start} AND ${end}
         ${accountFilter}
         ${typeFilter}
@@ -891,9 +891,9 @@ export class ReportsService {
       SELECT COALESCE(SUM(jd.debit) - SUM(jd.kredit), 0) as saldo
       FROM jurnal_details jd
       JOIN jurnal_umums ju ON ju.id = jd.jurnal_id
-      JOIN transaksis t ON t.id = ju.transaksi_id
+      LEFT JOIN transaksis t ON t.id = ju.transaksi_id
       WHERE jd.coa_id BETWEEN 64 AND 71
-        AND t.status = 'SELESAI'
+        AND (t.status IS NULL OR t.status != 'BATAL')
     `;
     const totalKasBank = Number(kasRows[0]?.saldo || 0);
 
@@ -1012,9 +1012,9 @@ export class ReportsService {
         COALESCE(SUM(jd.kredit), 0) as kas_keluar
       FROM jurnal_details jd
       JOIN jurnal_umums ju ON ju.id = jd.jurnal_id
-      JOIN transaksis t ON t.id = ju.transaksi_id
+      LEFT JOIN transaksis t ON t.id = ju.transaksi_id
       WHERE jd.coa_id BETWEEN 64 AND 71
-        AND t.status = 'SELESAI'
+        AND (t.status IS NULL OR t.status != 'BATAL')
         AND ju.tanggal >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
       GROUP BY DATE_FORMAT(ju.tanggal, '%Y-%m')
       ORDER BY bulan ASC
