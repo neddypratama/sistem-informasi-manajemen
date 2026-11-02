@@ -11,7 +11,18 @@ export class BarangService {
     const limit = Math.min(2000, Math.max(1, Number(query.limit || 25)));
     const skip = (page - 1) * limit;
 
-    const where: any = { isActive: true };
+    const where: any = {};
+
+    if (query.status === 'aktif') {
+      where.isActive = true;
+    } else if (query.status === 'dihapus') {
+      where.isActive = false;
+    } else if (query.status === 'all') {
+      // Show all (both active and soft-deleted)
+    } else {
+      // Default fallback
+      where.isActive = true;
+    }
 
     if (query.jenisId) {
       where.jenisId = BigInt(query.jenisId);

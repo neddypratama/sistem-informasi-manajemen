@@ -20,4 +20,8 @@ export class QueryClientDto {
   @Type(() => Number)
   @IsNumber()
   limit?: number = 25;
+
+  @IsOptional()
+  @IsString()
+  status?: string;
 }

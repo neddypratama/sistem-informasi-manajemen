@@ -30,6 +30,7 @@ import {
   BookOpen,
   History,
   Home,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { useAuthStore, hasPermission, isAdminOrManager } from '../../stores/auth.store';
 import { useQuery } from '@tanstack/react-query';
@@ -121,7 +122,8 @@ export const AppLayout: React.FC = () => {
       title: 'KOMODITAS OPERASIONAL',
       items: [
         { label: 'Menu Telur', path: '/telur', icon: Egg, permission: 'telur:read', badge: 'Telur', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
-        { label: 'Menu Pakan', path: '/pakan', icon: Wheat, permission: 'pakan:read', badge: 'Pakan', badgeColor: 'bg-amber-500/20 text-amber-400' },
+        { label: 'Pakan Pabrikan', path: '/pakan', icon: Wheat, permission: 'pakan:read', badge: 'Sentrat', badgeColor: 'bg-blue-500/20 text-blue-400' },
+        { label: 'Pakan Curah (Pak Pri)', path: '/curah-pak-pri', icon: Wheat, permission: 'pakan:read', badge: 'Pak Pri', badgeColor: 'bg-amber-500/20 text-amber-400' },
         { label: 'Menu Obat', path: '/obat', icon: Pill, permission: 'obat:read', badge: 'Obat', badgeColor: 'bg-indigo-500/20 text-indigo-400' },
         { label: 'Menu Tray', path: '/tray', icon: Layers, permission: 'tray:read', badge: 'Tray', badgeColor: 'bg-teal-500/20 text-teal-400' },
       ],
@@ -131,6 +133,7 @@ export const AppLayout: React.FC = () => {
       items: [
         { label: 'Monitoring Stok Global', path: '/stok', icon: Boxes, permission: 'stok:read', badge: 'Gudang', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
         { label: 'Stok Opname & Penyesuaian', path: '/stok-opname', icon: ClipboardCheck, permission: 'stok:opname', badge: 'Opname', badgeColor: 'bg-amber-500/20 text-amber-400' },
+        { label: 'Konversi & Reproses', path: '/konversi-barang', icon: ArrowRightLeft, permission: 'stok:opname', badge: 'Reproses', badgeColor: 'bg-indigo-500/20 text-indigo-400' },
       ],
     },
     {

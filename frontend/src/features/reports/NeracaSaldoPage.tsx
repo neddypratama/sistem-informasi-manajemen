@@ -6,8 +6,6 @@ import { exportToExcel, exportToPdf } from '../../lib/export-utils';
 import { getCurrentMonthRange, getLastMonthRange, getCurrentYearRange } from '../../lib/date-utils';
 import {
   Scale,
-  Calendar,
-  Printer,
   ChevronDown,
   ChevronRight,
   CheckCircle2,
@@ -224,13 +222,6 @@ export const NeracaSaldoPage: React.FC = () => {
 
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => window.print()}
-            className="flex items-center space-x-1.5 px-3 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold shadow-2xs transition-all cursor-pointer"
-          >
-            <Printer className="w-4 h-4 text-slate-500" />
-            <span>Cetak</span>
-          </button>
 
           <ExportButtonGroup
             onExportExcel={handleExportExcel}
@@ -365,9 +356,9 @@ export const NeracaSaldoPage: React.FC = () => {
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full md:w-auto">
           {/* Quick Presets */}
-          <div className="flex flex-wrap items-center space-x-1 bg-slate-100 p-1 rounded-xl text-xs font-medium">
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-none bg-slate-100 p-1 rounded-xl text-xs font-medium shrink-0">
             <button
               onClick={setPresetAllTime}
               className={`px-2.5 py-1 rounded-lg transition-all ${
@@ -411,20 +402,19 @@ export const NeracaSaldoPage: React.FC = () => {
           </div>
 
           {/* Date Range Inputs */}
-          <div className="flex items-center space-x-1.5 bg-slate-50 px-2.5 py-1 border border-slate-200 rounded-xl text-xs">
-            <Calendar className="w-3.5 h-3.5 text-slate-400" />
+          <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center">
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="bg-white border border-slate-200 rounded px-1.5 py-1 font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 w-32"
+              className="w-full sm:w-auto bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs min-h-[38px]"
             />
-            <span className="text-slate-400">-</span>
+            <span className="hidden sm:inline text-slate-400 text-xs font-bold">s/d</span>
             <input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="bg-white border border-slate-200 rounded px-1.5 py-1 font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 w-32"
+              className="w-full sm:w-auto bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs min-h-[38px]"
             />
           </div>
 

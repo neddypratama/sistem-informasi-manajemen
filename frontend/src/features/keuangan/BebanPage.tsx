@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api-client';
 import { SearchableSelect } from '../../components/SearchableSelect';
+import { CurrencyInput } from '../../components/CurrencyInput';
 import { ExportButtonGroup } from '../../components/ExportButtonGroup';
 import { Pagination } from '../../components/Pagination';
 import { exportToExcel, formatDateIndo } from '../../lib/export-utils';
-import { getTodayDateString, getCurrentMonthRange, getLastMonthRange, getCurrentYearRange } from '../../lib/date-utils';
+import { getTodayDateString, getCurrentMonthRange, getLastMonthRange } from '../../lib/date-utils';
+import { useAuthStore, hasPermission } from '../../stores/auth.store';
 import {
   HandCoins,
   Plus,
@@ -17,14 +19,22 @@ import {
   X,
   AlertTriangle,
   Receipt,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 
 export const BebanPage: React.FC = () => {
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+  const canCreate = hasPermission(user, ['beban:create', 'beban:manage']);
+  const canUpdate = hasPermission(user, ['beban:update', 'beban:manage']);
+  const canDelete = hasPermission(user, ['beban:delete', 'beban:manage']);
+  const canExport = hasPermission(user, ['beban:export', 'beban:read']);
   const [search, setSearch] = useState('');
-  const [startDate, setStartDate] = useState(getTodayDateString());
-  const [endDate, setEndDate] = useState(getTodayDateString());
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [selectedKategoriId, setSelectedKategoriId] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('SELESAI');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
 
@@ -49,6 +59,10 @@ export const BebanPage: React.FC = () => {
   // Edit states
   const [editKeterangan, setEditKeterangan] = useState('');
   const [editTanggal, setEditTanggal] = useState('');
+  const [editKategoriId, setEditKategoriId] = useState('');
+  const [editNominal, setEditNominal] = useState<number>(0);
+  const [editKasBankKategoriId, setEditKasBankKategoriId] = useState<number>(64);
+  const [editType, setEditType] = useState<'Debit' | 'Kredit'>('Debit');
 
   // 1. Fetch Beban Categories
   const { data: kategorisData } = useQuery({
@@ -62,13 +76,14 @@ export const BebanPage: React.FC = () => {
 
   // 2. Fetch Transaksi Beban (module = BEBAN -> PGN / Beban)
   const { data: bebanData, isLoading } = useQuery({
-    queryKey: ['transaksiBeban', search, startDate, endDate, selectedKategoriId, page, limit],
+    queryKey: ['transaksiBeban', search, startDate, endDate, selectedKategoriId, selectedStatus, page, limit],
     queryFn: async () => {
       let url = `/transaksi?module=BEBAN&limit=${limit}&page=${page}`;
       if (search) url += `&search=${encodeURIComponent(search)}`;
       if (startDate) url += `&startDate=${startDate}`;
       if (endDate) url += `&endDate=${endDate}`;
       if (selectedKategoriId) url += `&kategoriId=${selectedKategoriId}`;
+      if (selectedStatus) url += `&status=${selectedStatus}`;
       const res: any = await apiClient.get(url);
       return res;
     },
@@ -130,16 +145,29 @@ export const BebanPage: React.FC = () => {
     setEditTx(tx);
     setEditKeterangan(tx.keterangan || '');
     setEditTanggal(tx.tanggal ? tx.tanggal.slice(0, 10) : '');
+    setEditNominal(Number(tx.total || 0));
+    setEditKategoriId(tx.details?.[0]?.kategoriId ? String(tx.details[0].kategoriId) : '');
+    const kasId = tx.jurnalUmums?.[0]?.details?.find((d: any) => [64, 65, 66, 67, 68, 69, 70, 71].includes(Number(d.kategoriId)))?.kategoriId;
+    setEditKasBankKategoriId(Number(kasId || (tx.paymentMethod === 'TRANSFER' ? 66 : 64)));
+    setEditType(tx.type === 'KAS_MASUK' ? 'Kredit' : 'Debit');
   };
 
   const handleSubmitEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editTx) return;
+    if (editNominal <= 0) {
+      alert('Nominal pengeluaran beban harus lebih dari 0.');
+      return;
+    }
     updateBebanMutation.mutate({
       id: Number(editTx.id),
       data: {
         keterangan: editKeterangan,
         tanggal: editTanggal,
+        nominal: editNominal,
+        kategoriId: Number(editKategoriId),
+        kasBankKategoriId: Number(editKasBankKategoriId),
+        type: editType,
       },
     });
   };
@@ -166,11 +194,15 @@ export const BebanPage: React.FC = () => {
       )
     : rawItems;
 
+  const pageTotal = itemsList
+    .filter((it: any) => it.status !== 'BATAL')
+    .reduce((acc: number, curr: any) => acc + (Number(curr.total) || 0), 0);
+  const activeCount = itemsList.filter((it: any) => it.status !== 'BATAL').length;
+
   const meta = bebanData?.meta || {
     total: itemsList.length,
-    totalKeseluruhan: itemsList.reduce((acc: number, curr: any) => acc + (Number(curr.total) || 0), 0),
+    totalKeseluruhan: pageTotal,
   };
-  const pageTotal = itemsList.reduce((acc: number, curr: any) => acc + (Number(curr.total) || 0), 0);
   const totalBebanKeseluruhan = Number(meta.totalKeseluruhan ?? pageTotal);
 
   const handleExportExcel = () => {
@@ -229,14 +261,16 @@ export const BebanPage: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <ExportButtonGroup onExportExcel={handleExportExcel} />
-          <button
-            onClick={() => setIsAddOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Catat Pengeluaran Beban</span>
-          </button>
+          {canExport && <ExportButtonGroup onExportExcel={handleExportExcel} />}
+          {canCreate && (
+            <button
+              onClick={() => setIsAddOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Catat Pengeluaran Beban</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -282,29 +316,89 @@ export const BebanPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Filter Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="relative flex-1 w-full sm:max-w-xs">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-          <input
-            type="text"
-            placeholder="Cari nomor invoice (misal PGN), keterangan pengeluaran..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:outline-none focus:ring-1 focus:ring-rose-500"
-          />
+      {/* Filter Bar Responsive Mobile & Desktop */}
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+        {/* Baris 1: Search, Kategori, Status */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+          <div className="relative w-full">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
+            <input
+              type="text"
+              placeholder="Cari no. invoice, rincian beban..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:outline-none focus:ring-1 focus:ring-rose-500 min-h-[42px]"
+            />
+          </div>
+
+          <div className="w-full">
+            <SearchableSelect
+              placeholder="Semua Kategori Beban"
+              searchPlaceholder="Cari kategori beban..."
+              value={selectedKategoriId}
+              onChange={(val) => setSelectedKategoriId(val ? String(val) : '')}
+              options={[
+                { value: '', label: 'Semua Kategori Beban' },
+                ...(kategorisData?.map((k: any) => ({
+                  value: String(k.id),
+                  label: k.name,
+                })) || []),
+              ]}
+            />
+          </div>
+
+          {/* Status Filter (Aktif vs Dihapus) */}
+          <div className="w-full">
+            <select
+              value={selectedStatus}
+              onChange={(e) => {
+                setSelectedStatus(e.target.value);
+                setPage(1);
+              }}
+              className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-rose-500 min-h-[42px]"
+            >
+              <option value="SELESAI">Aktif (Tidak Dihapus)</option>
+              <option value="BATAL">Hanya yang Dihapus (Batal)</option>
+              <option value="ALL">Semua Status (Aktif & Dihapus)</option>
+            </select>
+          </div>
+
+          {/* Reset Filter Button */}
+          {(search || selectedKategoriId || (selectedStatus && selectedStatus !== 'SELESAI') || startDate || endDate) && (
+            <div className="flex items-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('');
+                  setSelectedKategoriId('');
+                  setSelectedStatus('SELESAI');
+                  setStartDate('');
+                  setEndDate('');
+                  setPage(1);
+                }}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 font-bold rounded-xl transition-colors border border-rose-200/60 min-h-[42px]"
+                title="Reset semua filter"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Reset Filter</span>
+              </button>
+            </div>
+          )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <div className="flex flex-wrap items-center space-x-1 bg-slate-100 p-0.5 rounded-lg text-[11px] font-semibold">
+        {/* Baris 2: Quick Dates & Date Range */}
+        <div className="pt-2 border-t border-slate-100 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5">
+          {/* Quick Date Presets: Horizontal Scroll di HP */}
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0 scrollbar-none text-[11px] font-semibold bg-slate-100 p-1 rounded-xl shrink-0">
             <button
               type="button"
               onClick={() => {
                 const today = getTodayDateString();
                 setStartDate(today);
                 setEndDate(today);
+                setPage(1);
               }}
-              className={`px-2 py-1 rounded-md transition-all ${
+              className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
                 startDate === getTodayDateString() && endDate === getTodayDateString()
                   ? 'bg-white text-rose-700 shadow-xs font-bold'
                   : 'text-slate-600 hover:text-slate-900'
@@ -318,8 +412,9 @@ export const BebanPage: React.FC = () => {
                 const m = getCurrentMonthRange();
                 setStartDate(m.startDate);
                 setEndDate(m.endDate);
+                setPage(1);
               }}
-              className={`px-2 py-1 rounded-md transition-all ${
+              className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
                 startDate === getCurrentMonthRange().startDate && endDate === getCurrentMonthRange().endDate
                   ? 'bg-white text-rose-700 shadow-xs font-bold'
                   : 'text-slate-600 hover:text-slate-900'
@@ -333,8 +428,9 @@ export const BebanPage: React.FC = () => {
                 const m = getLastMonthRange();
                 setStartDate(m.startDate);
                 setEndDate(m.endDate);
+                setPage(1);
               }}
-              className={`px-2 py-1 rounded-md transition-all ${
+              className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
                 startDate === getLastMonthRange().startDate && endDate === getLastMonthRange().endDate
                   ? 'bg-white text-rose-700 shadow-xs font-bold'
                   : 'text-slate-600 hover:text-slate-900'
@@ -347,47 +443,40 @@ export const BebanPage: React.FC = () => {
               onClick={() => {
                 setStartDate('');
                 setEndDate('');
+                setPage(1);
               }}
-              className={`px-2 py-1 rounded-md transition-all ${
+              className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
                 !startDate && !endDate
                   ? 'bg-white text-rose-700 shadow-xs font-bold'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Semua
+              Semua Waktu
             </button>
           </div>
 
-          <div className="flex items-center space-x-1.5">
-            <Calendar className="w-4 h-4 text-slate-400 ml-1" />
+          {/* Custom Date Range */}
+          <div className="grid grid-cols-2 sm:flex items-center gap-2">
             <input
               type="date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="px-2 py-1 border border-slate-200 rounded-lg text-xs bg-slate-50 font-medium"
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                setPage(1);
+              }}
+              className="w-full sm:w-36 px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-rose-500"
+              title="Dari Tanggal"
             />
-            <span className="text-slate-400">s/d</span>
+            <span className="hidden sm:inline text-slate-400 text-xs font-medium">s/d</span>
             <input
               type="date"
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="px-2 py-1 border border-slate-200 rounded-lg text-xs bg-slate-50 font-medium"
-            />
-          </div>
-
-          <div className="w-56">
-            <SearchableSelect
-              placeholder="Semua Kategori Beban"
-              searchPlaceholder="Cari kategori beban..."
-              value={selectedKategoriId}
-              onChange={(val) => setSelectedKategoriId(val ? String(val) : '')}
-              options={[
-                { value: '', label: 'Semua Kategori Beban' },
-                ...(kategorisData?.map((k: any) => ({
-                  value: String(k.id),
-                  label: k.name,
-                })) || []),
-              ]}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                setPage(1);
+              }}
+              className="w-full sm:w-36 px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-rose-500"
+              title="Sampai Tanggal"
             />
           </div>
         </div>
@@ -483,16 +572,18 @@ export const BebanPage: React.FC = () => {
                     <td className="p-4 text-right font-mono font-bold text-rose-700">
                       {formatRupiah(Number(tx.total))}
                     </td>
-                    <td className="p-4 text-center">
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                          isBatal
-                            ? 'bg-slate-200 text-slate-700'
-                            : 'bg-emerald-100 text-emerald-800'
-                        }`}
-                      >
-                        {tx.status}
-                      </span>
+                    <td className="p-4 text-center whitespace-nowrap">
+                      {isBatal ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                          <XCircle className="w-3 h-3 text-rose-500" />
+                          Dihapus
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                          Aktif
+                        </span>
+                      )}
                     </td>
                     <td className="p-4 text-center">
                       <div className="flex items-center justify-center gap-1.5">
@@ -504,7 +595,7 @@ export const BebanPage: React.FC = () => {
                           <Eye className="w-4 h-4" />
                         </button>
 
-                        {!isBatal && (
+                        {!isBatal && canUpdate && (
                           <button
                             onClick={() => handleOpenEdit(tx)}
                             title="Edit Beban"
@@ -514,7 +605,7 @@ export const BebanPage: React.FC = () => {
                           </button>
                         )}
 
-                        {!isBatal && (
+                        {!isBatal && canDelete && (
                           <button
                             onClick={() => setDeleteTx(tx)}
                             title="Batalkan / Soft Delete"
@@ -533,7 +624,7 @@ export const BebanPage: React.FC = () => {
           <tfoot className="bg-slate-50 border-t-2 border-slate-300 font-bold text-xs">
             <tr className="border-b border-slate-200 text-slate-600">
               <td colSpan={5} className="py-2.5 px-4 text-right">
-                Subtotal Halaman Ini ({itemsList.length} Transaksi):
+                Subtotal Halaman Ini ({activeCount} Transaksi Aktif):
               </td>
               <td className="py-2.5 px-4 text-right font-mono text-slate-800 whitespace-nowrap">
                 {formatRupiah(pageTotal)}
@@ -678,15 +769,18 @@ export const BebanPage: React.FC = () => {
                 <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
                   Nominal Pengeluaran (Rp)
                 </label>
-                <input
-                  type="number"
-                  step="any"
-                  value={formNominal}
-                  onChange={(e) => setFormNominal(Number(e.target.value))}
-                  placeholder="0"
-                  className="w-full border border-slate-200 rounded-xl p-2.5 text-xs font-mono font-bold bg-white"
+                <CurrencyInput
                   required
+                  value={formNominal}
+                  onChange={setFormNominal}
+                  placeholder="Contoh: Rp 1.000.000"
+                  className="w-full border border-slate-200 rounded-xl p-2.5 text-xs font-mono font-bold bg-white focus:ring-2 focus:ring-amber-500 focus:outline-none"
                 />
+                {formNominal > 0 && (
+                  <p className="text-[11px] font-mono text-amber-600 mt-1 font-semibold">
+                    Terbilang: {formatRupiah(formNominal)}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -774,9 +868,12 @@ export const BebanPage: React.FC = () => {
       {/* ================= MODAL EDIT BEBAN ================= */}
       {editTx && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-              <h3 className="font-bold text-slate-900 text-base">Edit Catatan Beban</h3>
+              <div>
+                <h3 className="font-bold text-slate-900 text-base">Edit Pengeluaran Beban</h3>
+                <p className="text-xs text-slate-500 font-mono mt-0.5">{editTx.invoice}</p>
+              </div>
               <button
                 onClick={() => setEditTx(null)}
                 className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200"
@@ -784,18 +881,87 @@ export const BebanPage: React.FC = () => {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <form onSubmit={handleSubmitEdit} className="p-6 space-y-4">
+            <form onSubmit={handleSubmitEdit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
+                    Tanggal Pengeluaran
+                  </label>
+                  <input
+                    type="date"
+                    value={editTanggal}
+                    onChange={(e) => setEditTanggal(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl p-2.5 text-xs font-semibold bg-white"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
+                    Jenis Posisi Buku Besar
+                  </label>
+                  <select
+                    value={editType}
+                    onChange={(e) => setEditType(e.target.value as any)}
+                    className="w-full border border-slate-200 rounded-xl p-2.5 text-xs font-bold bg-white"
+                  >
+                    <option value="Debit">Debit (Pengeluaran Beban Normal)</option>
+                    <option value="Kredit">Kredit (Kembalian Sisa Beban)</option>
+                  </select>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
-                  Tanggal Pengeluaran
+                  Kategori Akun Beban
                 </label>
-                <input
-                  type="date"
-                  value={editTanggal}
-                  onChange={(e) => setEditTanggal(e.target.value)}
-                  className="w-full border border-slate-200 rounded-xl p-2.5 text-xs font-semibold bg-white"
-                  required
+                <SearchableSelect
+                  placeholder="Pilih Kategori Beban..."
+                  searchPlaceholder="Cari nama akun beban..."
+                  value={editKategoriId}
+                  onChange={(val) => setEditKategoriId(val ? String(val) : '')}
+                  options={(kategorisData || []).map((k: any) => ({
+                    value: String(k.id),
+                    label: `[${k.code || k.id}] ${k.name}`,
+                  }))}
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
+                  Kas / Rekening Bank Sumber
+                </label>
+                <select
+                  value={editKasBankKategoriId}
+                  onChange={(e) => setEditKasBankKategoriId(Number(e.target.value))}
+                  className="w-full border border-slate-200 rounded-xl p-2.5 text-xs font-bold bg-white"
+                >
+                  <option value={64}>[1-1001] Kas Pusat (Tunai)</option>
+                  <option value={65}>[1-1002] Bank BCA Bima Pratama</option>
+                  <option value={66}>[1-1004] Bank BCA Masduki</option>
+                  <option value={67}>[1-1005] Bank BRI Binti Wasilah</option>
+                  <option value={68}>[1-1006] Bank BRI Masduki</option>
+                  <option value={70}>[1-1008] Bank BNI Bima Pratama</option>
+                  <option value={69}>[1-1007] Bank BNI Binti Wasilah</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
+                  Nominal Pengeluaran (Rp)
+                </label>
+                <CurrencyInput
+                  required
+                  value={editNominal}
+                  onChange={setEditNominal}
+                  placeholder="Contoh: Rp 1.000.000"
+                  className="w-full border border-slate-200 rounded-xl p-2.5 text-xs font-mono font-bold bg-white focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                />
+                {editNominal > 0 && (
+                  <p className="text-[11px] font-mono text-amber-600 mt-1 font-semibold">
+                    Terbilang: {formatRupiah(editNominal)}
+                  </p>
+                )}
               </div>
 
               <div>
@@ -805,7 +971,7 @@ export const BebanPage: React.FC = () => {
                 <textarea
                   value={editKeterangan}
                   onChange={(e) => setEditKeterangan(e.target.value)}
-                  rows={3}
+                  rows={2}
                   className="w-full border border-slate-200 rounded-xl p-2.5 text-xs bg-white"
                   required
                 />
@@ -824,7 +990,7 @@ export const BebanPage: React.FC = () => {
                   disabled={updateBebanMutation.isPending}
                   className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-md"
                 >
-                  {updateBebanMutation.isPending ? 'Menyimpan...' : 'Perbarui Beban'}
+                  {updateBebanMutation.isPending ? 'Menyimpan...' : 'Perbarui Beban & Jurnal'}
                 </button>
               </div>
             </form>

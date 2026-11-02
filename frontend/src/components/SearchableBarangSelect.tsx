@@ -59,13 +59,19 @@ export const SearchableBarangSelect: React.FC<SearchableBarangSelectProps> = ({
 
   const filteredBarangs = useMemo(() => {
     if (!search.trim()) return barangs;
-    const q = search.toLowerCase();
-    return barangs.filter(
-      (b) =>
-        b.name.toLowerCase().includes(q) ||
-        (b.code && b.code.toLowerCase().includes(q)) ||
-        (b.jenis?.name && b.jenis.name.toLowerCase().includes(q)),
-    );
+    const q = search.toLowerCase().trim();
+    return barangs.filter((b) => {
+      const name = b.name.toLowerCase();
+      const code = (b.code || '').toLowerCase();
+      const jenis = (b.jenis?.name || '').toLowerCase();
+      if (name.includes(q) || code.includes(q) || jenis.includes(q)) return true;
+      // Smart abbreviation match (e.g. "jgil" matches "jagung giling", "kc" matches "katul campuran")
+      const words = name.split(/[\s/()_-]+/).filter(Boolean);
+      const acronym = words.map((w: string) => w[0]).join('');
+      if (acronym.includes(q)) return true;
+      if (q === 'jgil' && (name.includes('jagung') && name.includes('giling'))) return true;
+      return false;
+    });
   }, [barangs, search]);
 
   const handleSelect = (b: BarangItem) => {
@@ -84,7 +90,15 @@ export const SearchableBarangSelect: React.FC<SearchableBarangSelectProps> = ({
     if (!stockItems || stockItems.length === 0) return null;
     const match = stockItems.find((s) => Number(s.id || s.barangId) === Number(bId));
     if (!match) return null;
-    return match.sisaQty !== undefined ? Number(match.sisaQty) : null;
+    return match.sisaQty !== undefined
+      ? Number(match.sisaQty)
+      : match.totalStok !== undefined
+      ? Number(match.totalStok)
+      : match.totalQty !== undefined
+      ? Number(match.totalQty)
+      : match.stok !== undefined
+      ? Number(match.stok)
+      : null;
   };
 
   return (

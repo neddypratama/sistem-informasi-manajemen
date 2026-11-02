@@ -2,15 +2,16 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api-client';
 import { SearchableSelect } from '../../components/SearchableSelect';
+import { CurrencyInput } from '../../components/CurrencyInput';
 import { ExportButtonGroup } from '../../components/ExportButtonGroup';
 import { Pagination } from '../../components/Pagination';
 import { exportToExcel, formatDateIndo } from '../../lib/export-utils';
-import { getTodayDateString, getCurrentMonthRange, getLastMonthRange, getCurrentYearRange } from '../../lib/date-utils';
+import { getTodayDateString, getCurrentMonthRange, getLastMonthRange } from '../../lib/date-utils';
+import { useAuthStore, hasPermission } from '../../stores/auth.store';
 import {
   Coins,
   Plus,
   Search,
-  Calendar,
   Eye,
   Edit2,
   Trash2,
@@ -22,14 +23,22 @@ import {
   Banknote,
   TrendingUp,
   FileCheck2,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 
 export const PendapatanLainPage: React.FC = () => {
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+  const canCreate = hasPermission(user, ['pendapatan_lain:create', 'pendapatan_lain:manage']);
+  const canUpdate = hasPermission(user, ['pendapatan_lain:update', 'pendapatan_lain:manage']);
+  const canDelete = hasPermission(user, ['pendapatan_lain:delete', 'pendapatan_lain:manage']);
+  const canExport = hasPermission(user, ['pendapatan_lain:export', 'pendapatan_lain:read']);
   const [search, setSearch] = useState('');
-  const [startDate, setStartDate] = useState(getTodayDateString());
-  const [endDate, setEndDate] = useState(getTodayDateString());
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [selectedKategoriId, setSelectedKategoriId] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('SELESAI');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
 
@@ -51,6 +60,11 @@ export const PendapatanLainPage: React.FC = () => {
   // Form states (Edit)
   const [editKeterangan, setEditKeterangan] = useState('');
   const [editTanggal, setEditTanggal] = useState('');
+  const [editKategoriId, setEditKategoriId] = useState('');
+  const [editClientId, setEditClientId] = useState('');
+  const [editNominal, setEditNominal] = useState<number>(0);
+  const [editKasBankKategoriId, setEditKasBankKategoriId] = useState<number>(64);
+  const [editPaymentMethod, setEditPaymentMethod] = useState<'TUNAI' | 'TRANSFER'>('TUNAI');
 
   // 1. Fetch Categories for Pendapatan Lain-Lain (Excluding commodity sales 1-10)
   const { data: kategorisData } = useQuery({
@@ -73,13 +87,14 @@ export const PendapatanLainPage: React.FC = () => {
 
   // 2. Fetch Transaksi Pendapatan Lain (module = PENDAPATAN_LAIN)
   const { data: txData, isLoading } = useQuery({
-    queryKey: ['transaksiPendapatanLain', search, startDate, endDate, selectedKategoriId, page, limit],
+    queryKey: ['transaksiPendapatanLain', search, startDate, endDate, selectedKategoriId, selectedStatus, page, limit],
     queryFn: async () => {
       let url = `/transaksi?module=PENDAPATAN_LAIN&limit=${limit}&page=${page}`;
       if (search) url += `&search=${encodeURIComponent(search)}`;
       if (startDate) url += `&startDate=${startDate}`;
       if (endDate) url += `&endDate=${endDate}`;
       if (selectedKategoriId) url += `&kategoriId=${selectedKategoriId}`;
+      if (selectedStatus) url += `&status=${selectedStatus}`;
       const res: any = await apiClient.get(url);
       return res;
     },
@@ -143,16 +158,31 @@ export const PendapatanLainPage: React.FC = () => {
     setEditTx(tx);
     setEditKeterangan(tx.keterangan || '');
     setEditTanggal(tx.tanggal ? tx.tanggal.slice(0, 10) : '');
+    setEditNominal(Number(tx.total || 0));
+    setEditKategoriId(tx.details?.[0]?.kategoriId ? String(tx.details[0].kategoriId) : '');
+    setEditClientId(tx.clientId ? String(tx.clientId) : '');
+    const kasId = tx.jurnalUmums?.[0]?.details?.find((d: any) => [64, 65, 66, 67, 68, 69, 70, 71].includes(Number(d.kategoriId)))?.kategoriId;
+    setEditKasBankKategoriId(Number(kasId || (tx.paymentMethod === 'TRANSFER' ? 66 : 64)));
+    setEditPaymentMethod(tx.paymentMethod === 'TRANSFER' ? 'TRANSFER' : 'TUNAI');
   };
 
   const handleSubmitEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editTx) return;
+    if (editNominal <= 0) {
+      alert('Nominal pendapatan harus lebih dari 0.');
+      return;
+    }
     updateMutation.mutate({
       id: Number(editTx.id),
       data: {
         keterangan: editKeterangan,
         tanggal: editTanggal,
+        nominal: editNominal,
+        kategoriId: Number(editKategoriId),
+        clientId: editClientId ? Number(editClientId) : null,
+        kasBankKategoriId: Number(editKasBankKategoriId),
+        paymentMethod: editPaymentMethod,
       },
     });
   };
@@ -248,14 +278,16 @@ export const PendapatanLainPage: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <ExportButtonGroup onExportExcel={handleExportExcel} />
-          <button
-            onClick={() => setIsAddOpen(true)}
-            className="inline-flex items-center space-x-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md shadow-emerald-500/20 transition-all cursor-pointer self-start sm:self-auto"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Catat Pendapatan Baru</span>
-          </button>
+          {canExport && <ExportButtonGroup onExportExcel={handleExportExcel} />}
+          {canCreate && (
+            <button
+              onClick={() => setIsAddOpen(true)}
+              className="inline-flex items-center space-x-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md shadow-emerald-500/20 transition-all cursor-pointer self-start sm:self-auto"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Catat Pendapatan Baru</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -308,25 +340,25 @@ export const PendapatanLainPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Filter Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-3 items-center justify-between">
-        <div className="relative flex-1 w-full">
-          <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Cari invoice (misal: LNY), keterangan, atau mitra..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          />
-        </div>
+      {/* Filter Bar Responsive Mobile & Desktop */}
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+        {/* Baris 1: Search, Kategori, Status */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+          <div className="relative w-full">
+            <Search className="w-4 h-4 absolute left-3 top-3.5 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Cari invoice (misal: LNY), mitra..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 min-h-[42px]"
+            />
+          </div>
 
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          {/* Category Filter (Searchable) */}
-          <div className="w-full sm:w-56">
+          <div className="w-full">
             <SearchableSelect
               placeholder="Semua Kategori Pendapatan"
               searchPlaceholder="Cari kategori pendapatan..."
@@ -345,8 +377,49 @@ export const PendapatanLainPage: React.FC = () => {
             />
           </div>
 
-          {/* Quick Date Presets */}
-          <div className="flex flex-wrap items-center space-x-1 bg-slate-100 p-0.5 rounded-xl text-[11px] font-semibold">
+          {/* Status Filter (Aktif vs Dihapus) */}
+          <div className="w-full">
+            <select
+              value={selectedStatus}
+              onChange={(e) => {
+                setSelectedStatus(e.target.value);
+                setPage(1);
+              }}
+              className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 min-h-[42px]"
+            >
+              <option value="SELESAI">Aktif (Tidak Dihapus)</option>
+              <option value="BATAL">Hanya yang Dihapus (Batal)</option>
+              <option value="ALL">Semua Status (Aktif & Dihapus)</option>
+            </select>
+          </div>
+
+          {/* Reset Filter Button */}
+          {(search || selectedKategoriId || (selectedStatus && selectedStatus !== 'SELESAI') || startDate || endDate) && (
+            <div className="flex items-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('');
+                  setSelectedKategoriId('');
+                  setSelectedStatus('SELESAI');
+                  setStartDate('');
+                  setEndDate('');
+                  setPage(1);
+                }}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 font-bold rounded-xl transition-colors border border-rose-200/60 min-h-[42px]"
+                title="Reset semua filter"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Reset Filter</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Baris 2: Quick Dates & Custom Date Range */}
+        <div className="pt-2 border-t border-slate-100 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5">
+          {/* Quick Date Presets: Horizontal Scroll di HP */}
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0 scrollbar-none text-[11px] font-semibold bg-slate-100 p-1 rounded-xl shrink-0">
             <button
               type="button"
               onClick={() => {
@@ -355,7 +428,7 @@ export const PendapatanLainPage: React.FC = () => {
                 setEndDate(today);
                 setPage(1);
               }}
-              className={`px-2.5 py-1.5 rounded-lg transition-all ${
+              className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
                 startDate === getTodayDateString() && endDate === getTodayDateString()
                   ? 'bg-white text-emerald-700 shadow-xs font-bold'
                   : 'text-slate-600 hover:text-slate-900'
@@ -371,7 +444,7 @@ export const PendapatanLainPage: React.FC = () => {
                 setEndDate(m.endDate);
                 setPage(1);
               }}
-              className={`px-2.5 py-1.5 rounded-lg transition-all ${
+              className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
                 startDate === getCurrentMonthRange().startDate && endDate === getCurrentMonthRange().endDate
                   ? 'bg-white text-emerald-700 shadow-xs font-bold'
                   : 'text-slate-600 hover:text-slate-900'
@@ -387,7 +460,7 @@ export const PendapatanLainPage: React.FC = () => {
                 setEndDate(m.endDate);
                 setPage(1);
               }}
-              className={`px-2.5 py-1.5 rounded-lg transition-all ${
+              className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
                 startDate === getLastMonthRange().startDate && endDate === getLastMonthRange().endDate
                   ? 'bg-white text-emerald-700 shadow-xs font-bold'
                   : 'text-slate-600 hover:text-slate-900'
@@ -402,19 +475,18 @@ export const PendapatanLainPage: React.FC = () => {
                 setEndDate('');
                 setPage(1);
               }}
-              className={`px-2.5 py-1.5 rounded-lg transition-all ${
+              className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
                 !startDate && !endDate
                   ? 'bg-white text-emerald-700 shadow-xs font-bold'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Semua
+              Semua Waktu
             </button>
           </div>
 
-          {/* Date Range */}
-          <div className="flex items-center space-x-1.5 bg-slate-50 px-2.5 py-1 border border-slate-200 rounded-xl text-xs">
-            <Calendar className="w-3.5 h-3.5 text-slate-400" />
+          {/* Custom Date Range */}
+          <div className="grid grid-cols-2 sm:flex items-center gap-2">
             <input
               type="date"
               value={startDate}
@@ -422,9 +494,10 @@ export const PendapatanLainPage: React.FC = () => {
                 setStartDate(e.target.value);
                 setPage(1);
               }}
-              className="bg-white border border-slate-200 rounded px-1.5 py-1 font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-32"
+              className="w-full sm:w-36 px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              title="Dari Tanggal"
             />
-            <span className="text-slate-400">-</span>
+            <span className="hidden sm:inline text-slate-400 text-xs font-medium">s/d</span>
             <input
               type="date"
               value={endDate}
@@ -432,7 +505,8 @@ export const PendapatanLainPage: React.FC = () => {
                 setEndDate(e.target.value);
                 setPage(1);
               }}
-              className="bg-white border border-slate-200 rounded px-1.5 py-1 font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-32"
+              className="w-full sm:w-36 px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              title="Sampai Tanggal"
             />
           </div>
         </div>
@@ -546,16 +620,18 @@ export const PendapatanLainPage: React.FC = () => {
                       <td className="p-4 text-right font-mono font-bold text-emerald-700 whitespace-nowrap">
                         {formatRupiah(Number(item.total || 0))}
                       </td>
-                      <td className="p-4 text-center">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                            isBatal
-                              ? 'bg-rose-100 text-rose-800'
-                              : 'bg-emerald-100 text-emerald-800'
-                          }`}
-                        >
-                          {item.status}
-                        </span>
+                      <td className="p-4 text-center whitespace-nowrap">
+                        {isBatal ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                            <XCircle className="w-3 h-3 text-rose-500" />
+                            Dihapus
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                            Aktif
+                          </span>
+                        )}
                       </td>
                       <td className="p-4 text-center">
                         <div className="flex items-center justify-center space-x-1">
@@ -568,20 +644,24 @@ export const PendapatanLainPage: React.FC = () => {
                           </button>
                           {!isBatal && (
                             <>
-                              <button
-                                onClick={() => handleOpenEdit(item)}
-                                title="Edit Keterangan / Tanggal"
-                                className="p-1.5 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors cursor-pointer"
-                              >
-                                <Edit2 className="w-4 h-4 text-amber-600" />
-                              </button>
-                              <button
-                                onClick={() => setDeleteTx(item)}
-                                title="Batalkan Transaksi (Soft Delete)"
-                                className="p-1.5 hover:bg-rose-100 text-slate-600 rounded-lg transition-colors cursor-pointer"
-                              >
-                                <Trash2 className="w-4 h-4 text-rose-600" />
-                              </button>
+                              {canUpdate && (
+                                <button
+                                  onClick={() => handleOpenEdit(item)}
+                                  title="Edit Keterangan / Tanggal"
+                                  className="p-1.5 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors cursor-pointer"
+                                >
+                                  <Edit2 className="w-4 h-4 text-amber-600" />
+                                </button>
+                              )}
+                              {canDelete && (
+                                <button
+                                  onClick={() => setDeleteTx(item)}
+                                  title="Batalkan Transaksi (Soft Delete)"
+                                  className="p-1.5 hover:bg-rose-100 text-slate-600 rounded-lg transition-colors cursor-pointer"
+                                >
+                                  <Trash2 className="w-4 h-4 text-rose-600" />
+                                </button>
+                              )}
                             </>
                           )}
                         </div>
@@ -731,18 +811,16 @@ export const PendapatanLainPage: React.FC = () => {
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
                   Nominal Pemasukan (Rp)
                 </label>
-                <input
-                  type="number"
+                <CurrencyInput
                   required
-                  min={1}
-                  value={formNominal || ''}
-                  onChange={(e) => setFormNominal(Number(e.target.value))}
-                  placeholder="Contoh: 500000"
+                  value={formNominal}
+                  onChange={setFormNominal}
+                  placeholder="Contoh: Rp 1.000.000"
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl font-mono text-base font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
                 {formNominal > 0 && (
                   <p className="text-xs font-mono text-emerald-600 font-semibold mt-1">
-                    {formatRupiah(formNominal)}
+                    Terbilang: {formatRupiah(formNominal)}
                   </p>
                 )}
               </div>
@@ -894,14 +972,14 @@ export const PendapatanLainPage: React.FC = () => {
       {/* Modal 3: Edit Transaksi */}
       {editTx && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center space-x-2.5">
                 <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
                   <Edit2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-800 text-base">Edit Pendapatan</h3>
+                  <h3 className="font-bold text-slate-800 text-base">Edit Catatan Pendapatan Lain-Lain</h3>
                   <p className="text-xs font-mono text-slate-500">{editTx.invoice}</p>
                 </div>
               </div>
@@ -913,24 +991,100 @@ export const PendapatanLainPage: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSubmitEdit} className="p-5 space-y-4 text-sm">
+            <form onSubmit={handleSubmitEdit} className="p-5 space-y-4 text-xs max-h-[80vh] overflow-y-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Tanggal Transaksi</label>
+                  <input
+                    type="date"
+                    required
+                    value={editTanggal}
+                    onChange={(e) => setEditTanggal(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Kas / Bank Penerima</label>
+                  <select
+                    value={editKasBankKategoriId}
+                    onChange={(e) => {
+                      const val = Number(e.target.value);
+                      setEditKasBankKategoriId(val);
+                      setEditPaymentMethod(val === 64 ? 'TUNAI' : 'TRANSFER');
+                    }}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-bold bg-white"
+                  >
+                    <option value={64}>[1-1001] Kas Pusat (Tunai)</option>
+                    <option value={65}>[1-1002] Bank BCA Bima Pratama</option>
+                    <option value={66}>[1-1004] Bank BCA Masduki</option>
+                    <option value={67}>[1-1005] Bank BRI Binti Wasilah</option>
+                    <option value={68}>[1-1006] Bank BRI Masduki</option>
+                    <option value={70}>[1-1008] Bank BNI Bima Pratama</option>
+                    <option value={69}>[1-1007] Bank BNI Binti Wasilah</option>
+                  </select>
+                </div>
+              </div>
+
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">Tanggal</label>
-                <input
-                  type="date"
-                  required
-                  value={editTanggal}
-                  onChange={(e) => setEditTanggal(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Kategori Pendapatan
+                </label>
+                <SearchableSelect
+                  placeholder="Pilih Kategori Pendapatan..."
+                  searchPlaceholder="Cari kategori..."
+                  value={editKategoriId}
+                  onChange={(val) => setEditKategoriId(val ? String(val) : '')}
+                  options={(kategorisData || []).map((k: any) => ({
+                    value: String(k.id),
+                    label: `[${k.code || k.id}] ${k.name}`,
+                  }))}
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                  Keterangan
+                  Mitra / Pihak Penyetor (Opsional)
+                </label>
+                <SearchableSelect
+                  placeholder="Tanpa Mitra Khusus (Umum)"
+                  searchPlaceholder="Cari nama mitra..."
+                  value={editClientId}
+                  onChange={(val) => setEditClientId(val ? String(val) : '')}
+                  options={[
+                    { value: '', label: 'Tanpa Mitra Khusus (Pemasukan Bebas)' },
+                    ...(clientsData || []).map((c: any) => ({
+                      value: String(c.id),
+                      label: `${c.name} (${c.type})`,
+                    })),
+                  ]}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Nominal Pemasukan (Rp)
+                </label>
+                <CurrencyInput
+                  required
+                  value={editNominal}
+                  onChange={setEditNominal}
+                  placeholder="Contoh: Rp 1.000.000"
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono font-bold text-xs"
+                />
+                {editNominal > 0 && (
+                  <p className="text-xs font-mono text-emerald-600 font-semibold mt-1">
+                    Terbilang: {formatRupiah(editNominal)}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Keterangan Transaksi
                 </label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={editKeterangan}
                   onChange={(e) => setEditKeterangan(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs"
@@ -941,16 +1095,16 @@ export const PendapatanLainPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setEditTx(null)}
-                  className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 font-semibold"
+                  className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 font-semibold text-xs"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
                   disabled={updateMutation.isPending}
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-md shadow-emerald-500/20 disabled:opacity-50"
+                  className="px-5 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 font-bold shadow-md text-xs cursor-pointer"
                 >
-                  {updateMutation.isPending ? 'Menyimpan...' : 'Perbarui'}
+                  {updateMutation.isPending ? 'Menyimpan...' : 'Perbarui Pendapatan & Jurnal'}
                 </button>
               </div>
             </form>

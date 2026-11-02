@@ -2,7 +2,7 @@ import { KategoriService } from '../services/kategori.service.js';
 export declare class KategoriController {
     private readonly kategoriService;
     constructor(kategoriService: KategoriService);
-    findAll(detailKategoriId?: string, type?: string, search?: string): Promise<({
+    findAll(detailKategoriId?: string, type?: string, search?: string, status?: string): Promise<({
         detailKategori: {
             id: bigint;
             createdAt: Date;

@@ -7,7 +7,6 @@ import { exportToExcel, exportToPdf } from '../../lib/export-utils';
 import { getCurrentMonthRange, getLastMonthRange, getCurrentYearRange } from '../../lib/date-utils';
 import {
   FileSpreadsheet,
-  Calendar,
   TrendingUp,
   TrendingDown,
   DollarSign,
@@ -24,9 +23,8 @@ import {
 } from 'lucide-react';
 
 export const LabaRugiPage: React.FC = () => {
-  const defaultMonth = getCurrentMonthRange();
-  const [startDate, setStartDate] = useState(defaultMonth.startDate);
-  const [endDate, setEndDate] = useState(defaultMonth.endDate);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [expandedCommodities, setExpandedCommodities] = useState<Record<string, boolean>>({});
   const [isBebanCardOpen, setIsBebanCardOpen] = useState(true);
   const [isPendapatanCardOpen, setIsPendapatanCardOpen] = useState(true);
@@ -36,7 +34,12 @@ export const LabaRugiPage: React.FC = () => {
   const { data: reportData, isLoading } = useQuery({
     queryKey: ['labaRugi', startDate, endDate],
     queryFn: async () => {
-      const res: any = await apiClient.get(`/reports/laba-rugi?startDate=${startDate}&endDate=${endDate}`);
+      let url = `/reports/laba-rugi`;
+      const params = [];
+      if (startDate) params.push(`startDate=${startDate}`);
+      if (endDate) params.push(`endDate=${endDate}`);
+      if (params.length > 0) url += `?${params.join('&')}`;
+      const res: any = await apiClient.get(url);
       return res.data;
     },
   });
@@ -129,9 +132,9 @@ export const LabaRugiPage: React.FC = () => {
     }));
 
     exportToExcel({
-      filename: `Laba_Rugi_Komoditas_${startDate}_sd_${endDate}`,
+      filename: `Laba_Rugi_Komoditas_${startDate || 'Semua'}_sd_${endDate || 'Kini'}`,
       sheetName: 'Laba Rugi',
-      title: `LAPORAN LABA RUGI KOMODITAS (${startDate} s/d ${endDate})`,
+      title: `LAPORAN LABA RUGI KOMODITAS (${startDate || 'Awal'} s/d ${endDate || 'Kini'})`,
       columns: [
         { header: 'No', key: '_index', width: 8 },
         { header: 'Komoditas Usaha', key: 'name', width: 30 },
@@ -156,10 +159,10 @@ export const LabaRugiPage: React.FC = () => {
     }));
 
     exportToPdf({
-      filename: `Laba_Rugi_Komoditas_${startDate}_sd_${endDate}`,
+      filename: `Laba_Rugi_Komoditas_${startDate || 'Semua'}_sd_${endDate || 'Kini'}`,
       title: 'Laporan Laba Rugi Komparasi Per Komoditas',
       subtitle: 'Breakdown Penjualan, HPP, Margin Kotor Komoditas, Beban & Laba Bersih',
-      period: `${startDate} s/d ${endDate}`,
+      period: `${startDate || 'Awal'} s/d ${endDate || 'Kini'}`,
       columns: [
         { header: 'No', key: '_index', align: 'center' },
         { header: 'Komoditas Usaha', key: 'name', align: 'left' },
@@ -204,8 +207,8 @@ export const LabaRugiPage: React.FC = () => {
           </Link>
 
           {/* Date Presets & Filter */}
-          <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-center gap-2 text-xs">
-            <div className="flex items-center space-x-1 bg-slate-100 p-0.5 rounded-lg text-[11px] font-semibold">
+          <div className="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center gap-2 text-xs w-full sm:w-auto">
+            <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-none bg-slate-100 p-1 rounded-lg text-[11px] font-semibold shrink-0">
               <button
                 type="button"
                 onClick={() => {
@@ -213,7 +216,7 @@ export const LabaRugiPage: React.FC = () => {
                   setStartDate(m.startDate);
                   setEndDate(m.endDate);
                 }}
-                className={`px-2.5 py-1 rounded-md transition-all ${
+                className={`px-2.5 py-1 rounded-md whitespace-nowrap transition-all ${
                   startDate === getCurrentMonthRange().startDate && endDate === getCurrentMonthRange().endDate
                     ? 'bg-white text-emerald-700 shadow-xs font-bold'
                     : 'text-slate-600 hover:text-slate-900'
@@ -228,7 +231,7 @@ export const LabaRugiPage: React.FC = () => {
                   setStartDate(m.startDate);
                   setEndDate(m.endDate);
                 }}
-                className={`px-2.5 py-1 rounded-md transition-all ${
+                className={`px-2.5 py-1 rounded-md whitespace-nowrap transition-all ${
                   startDate === getLastMonthRange().startDate && endDate === getLastMonthRange().endDate
                     ? 'bg-white text-emerald-700 shadow-xs font-bold'
                     : 'text-slate-600 hover:text-slate-900'
@@ -243,7 +246,7 @@ export const LabaRugiPage: React.FC = () => {
                   setStartDate(y.startDate);
                   setEndDate(y.endDate);
                 }}
-                className={`px-2.5 py-1 rounded-md transition-all ${
+                className={`px-2.5 py-1 rounded-md whitespace-nowrap transition-all ${
                   startDate === getCurrentYearRange().startDate && endDate === getCurrentYearRange().endDate
                     ? 'bg-white text-emerald-700 shadow-xs font-bold'
                     : 'text-slate-600 hover:text-slate-900'
@@ -251,22 +254,35 @@ export const LabaRugiPage: React.FC = () => {
               >
                 Tahun Ini
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setStartDate('');
+                  setEndDate('');
+                }}
+                className={`px-2.5 py-1 rounded-md whitespace-nowrap transition-all ${
+                  !startDate && !endDate
+                    ? 'bg-white text-emerald-700 shadow-xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Semua
+              </button>
             </div>
 
-            <div className="flex items-center space-x-1.5">
-              <Calendar className="w-4 h-4 text-emerald-600 ml-1" />
+            <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center">
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="px-2 py-1 border border-slate-200 rounded-lg font-medium text-slate-700 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="w-full sm:w-auto px-2 py-1.5 border border-slate-200 rounded-lg font-medium text-slate-700 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs"
               />
-              <span className="text-slate-400 font-bold">s/d</span>
+              <span className="hidden sm:inline text-slate-400 font-bold">s/d</span>
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="px-2 py-1 border border-slate-200 rounded-lg font-medium text-slate-700 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                className="w-full sm:w-auto px-2 py-1.5 border border-slate-200 rounded-lg font-medium text-slate-700 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs"
               />
             </div>
           </div>

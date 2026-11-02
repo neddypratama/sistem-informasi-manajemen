@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api-client';
 import { ExportButtonGroup } from '../../components/ExportButtonGroup';
@@ -20,6 +21,9 @@ import {
   X,
   Eye,
   ShieldCheck,
+  Edit2,
+  Trash2,
+  ArrowRightLeft,
 } from 'lucide-react';
 
 interface OpnameRecord {
@@ -90,6 +94,20 @@ export const StokOpnamePage: React.FC = () => {
 
   // Tray Inputs
   const [formPemakaianTray, setFormPemakaianTray] = useState<string>('');
+
+  // Edit Opname State
+  const [editOpname, setEditOpname] = useState<OpnameRecord | null>(null);
+  const [editTanggal, setEditTanggal] = useState<string>('');
+  const [editKeterangan, setEditKeterangan] = useState<string>('');
+  const [editSelisihStok, setEditSelisihStok] = useState<string>('');
+  const [editBentes, setEditBentes] = useState<string>('');
+  const [editCeplok, setEditCeplok] = useState<string>('');
+  const [editProk, setEditProk] = useState<string>('');
+  const [editKotor, setEditKotor] = useState<string>('');
+  const [editJumbo, setEditJumbo] = useState<string>('');
+  const [editBarangPakai, setEditBarangPakai] = useState<string>('');
+  const [editPemakaianTray, setEditPemakaianTray] = useState<string>('');
+  const [deleteOpname, setDeleteOpname] = useState<OpnameRecord | null>(null);
 
   // Toast / Alert Notification
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -400,6 +418,87 @@ export const StokOpnamePage: React.FC = () => {
     createOpnameMutation.mutate(payload);
   };
 
+  const updateOpnameMutation = useMutation({
+    mutationFn: async ({ id, payload }: { id: number; payload: any }) => {
+      const res: any = await apiClient.put(`/inventory/opname/${id}`, payload);
+      return res.data;
+    },
+    onSuccess: (data) => {
+      showNotification(
+        'success',
+        `Stok Opname ${data?.nomorOpname || ''} berhasil diperbarui dan jurnal penyesuaian disinkronkan!`
+      );
+      queryClient.invalidateQueries({ queryKey: ['opnameHistory'] });
+      queryClient.invalidateQueries({ queryKey: ['stockSummaryOpname'] });
+      queryClient.invalidateQueries({ queryKey: ['stockGrid'] });
+      setEditOpname(null);
+    },
+    onError: (err: any) => {
+      showNotification(
+        'error',
+        err?.response?.data?.message || err.message || 'Gagal mengubah stok opname.'
+      );
+    },
+  });
+
+  const deleteOpnameMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res: any = await apiClient.delete(`/inventory/opname/${id}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      showNotification(
+        'success',
+        'Stok Opname berhasil dibatalkan/dihapus dan persediaan/jurnal telah dipulihkan!'
+      );
+      queryClient.invalidateQueries({ queryKey: ['opnameHistory'] });
+      queryClient.invalidateQueries({ queryKey: ['stockSummaryOpname'] });
+      queryClient.invalidateQueries({ queryKey: ['stockGrid'] });
+      setDeleteOpname(null);
+    },
+    onError: (err: any) => {
+      showNotification(
+        'error',
+        err?.response?.data?.message || err.message || 'Gagal menghapus stok opname.'
+      );
+    },
+  });
+
+  const handleOpenEdit = (item: OpnameRecord) => {
+    setEditOpname(item);
+    setEditTanggal(item.tanggal ? item.tanggal.slice(0, 10) : todayStr);
+    setEditKeterangan(item.keterangan || '');
+    setEditSelisihStok(item.selisihStok !== 0 ? String(item.selisihStok) : '');
+    setEditBentes(item.bentes !== 0 ? String(item.bentes) : '');
+    setEditCeplok(item.ceplok !== 0 ? String(item.ceplok) : '');
+    setEditProk(item.prok !== 0 ? String(item.prok) : '');
+    setEditKotor(item.kotor !== 0 ? String(item.kotor) : '');
+    setEditJumbo(item.jumbo !== 0 ? String(item.jumbo) : '');
+    setEditBarangPakai(item.barangPakai !== 0 ? String(item.barangPakai) : '');
+    setEditPemakaianTray(item.pemakaianTray !== 0 ? String(item.pemakaianTray) : '');
+  };
+
+  const handleSubmitEditOpname = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editOpname) return;
+
+    updateOpnameMutation.mutate({
+      id: editOpname.id,
+      payload: {
+        tanggal: editTanggal,
+        keterangan: editKeterangan,
+        selisihStok: Number(editSelisihStok || 0),
+        bentes: Number(editBentes || 0),
+        ceplok: Number(editCeplok || 0),
+        prok: Number(editProk || 0),
+        kotor: Number(editKotor || 0),
+        jumbo: Number(editJumbo || 0),
+        barangPakai: Number(editBarangPakai || 0),
+        pemakaianTray: Number(editPemakaianTray || 0),
+      },
+    });
+  };
+
   const formatRupiah = (val: number) => {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
@@ -526,6 +625,13 @@ export const StokOpnamePage: React.FC = () => {
             <Plus className="w-4 h-4" />
             <span>Input Opname Fisik Baru</span>
           </button>
+          <Link
+            to="/konversi-barang"
+            className="px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center space-x-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition-all"
+          >
+            <ArrowRightLeft className="w-4 h-4 text-indigo-600" />
+            <span>Konversi / Reproses Barang</span>
+          </Link>
         </div>
       </div>
 
@@ -1321,98 +1427,161 @@ export const StokOpnamePage: React.FC = () => {
       {activeTab === 'LIST' && (
         <div className="space-y-4">
           {/* Filters Bar */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => setFilterKomoditas('ALL')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
-                  filterKomoditas === 'ALL'
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                Semua Komoditas
-              </button>
-              <button
-                onClick={() => setFilterKomoditas('TELUR')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
-                  filterKomoditas === 'TELUR'
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                Telur
-              </button>
-              <button
-                onClick={() => setFilterKomoditas('PAKAN')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
-                  filterKomoditas === 'PAKAN'
-                    ? 'bg-amber-600 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                Pakan
-              </button>
-              <button
-                onClick={() => setFilterKomoditas('OBAT')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
-                  filterKomoditas === 'OBAT'
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                Obat
-              </button>
-              <button
-                onClick={() => setFilterKomoditas('TRAY')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
-                  filterKomoditas === 'TRAY'
-                    ? 'bg-teal-600 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                Tray
-              </button>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center space-x-1 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5">
-                <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                <input
-                  type="date"
-                  value={filterStartDate}
-                  onChange={(e) => setFilterStartDate(e.target.value)}
-                  className="bg-transparent text-xs text-slate-700 font-medium focus:outline-none"
-                  title="Dari Tanggal"
-                />
-                <span className="text-slate-400 text-xs">-</span>
-                <input
-                  type="date"
-                  value={filterEndDate}
-                  onChange={(e) => setFilterEndDate(e.target.value)}
-                  className="bg-transparent text-xs text-slate-700 font-medium focus:outline-none"
-                  title="Sampai Tanggal"
-                />
+          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+            {/* Baris 1: Komoditas Tabs Scrollable & Search */}
+            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setFilterKomoditas('ALL')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
+                    filterKomoditas === 'ALL'
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Semua Komoditas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterKomoditas('TELUR')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
+                    filterKomoditas === 'TELUR'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Telur
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterKomoditas('PAKAN')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
+                    filterKomoditas === 'PAKAN'
+                      ? 'bg-amber-600 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Pakan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterKomoditas('OBAT')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
+                    filterKomoditas === 'OBAT'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Obat
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterKomoditas('TRAY')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
+                    filterKomoditas === 'TRAY'
+                      ? 'bg-teal-600 text-white'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Tray
+                </button>
               </div>
 
-              <div className="relative flex-1 md:w-56">
+              <div className="relative flex-1 md:max-w-xs">
                 <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                 <input
                   type="text"
                   placeholder="Cari No. Opname / Barang..."
                   value={filterSearch}
                   onChange={(e) => setFilterSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-emerald-500 bg-white"
+                  className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-1 focus:ring-emerald-500 bg-slate-50 min-h-[38px]"
                 />
               </div>
+            </div>
 
-              <button
-                onClick={() => refetchHistory()}
-                className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
-                title="Segarkan data"
-              >
-                <RefreshCw className="w-4 h-4" />
-              </button>
+            {/* Baris 2: Quick Dates & Custom Date Range */}
+            <div className="pt-2 border-t border-slate-100 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5">
+              <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0 scrollbar-none text-[11px] font-semibold bg-slate-100 p-1 rounded-xl shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const today = new Date().toISOString().slice(0, 10);
+                    setFilterStartDate(today);
+                    setFilterEndDate(today);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
+                    filterStartDate === new Date().toISOString().slice(0, 10) && filterEndDate === new Date().toISOString().slice(0, 10)
+                      ? 'bg-white text-emerald-700 shadow-xs font-bold'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Hari Ini
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const d = new Date();
+                    const firstDay = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+                    const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
+                    setFilterStartDate(firstDay);
+                    setFilterEndDate(lastDay);
+                  }}
+                  className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
+                    filterStartDate.endsWith('-01')
+                      ? 'bg-white text-emerald-700 shadow-xs font-bold'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Bulan Ini
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterStartDate('');
+                    setFilterEndDate('');
+                  }}
+                  className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
+                    !filterStartDate && !filterEndDate
+                      ? 'bg-white text-emerald-700 shadow-xs font-bold'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Semua Waktu
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 w-full md:w-auto">
+                <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center">
+                  <div className="relative">
+                    <input
+                      type="date"
+                      value={filterStartDate}
+                      onChange={(e) => setFilterStartDate(e.target.value)}
+                      className="w-full sm:w-auto px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 min-h-[38px]"
+                      title="Dari Tanggal"
+                    />
+                  </div>
+                  <span className="hidden sm:inline text-slate-400 text-xs font-bold">s/d</span>
+                  <div className="relative">
+                    <input
+                      type="date"
+                      value={filterEndDate}
+                      onChange={(e) => setFilterEndDate(e.target.value)}
+                      className="w-full sm:w-auto px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 min-h-[38px]"
+                      title="Sampai Tanggal"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => refetchHistory()}
+                  className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors shrink-0"
+                  title="Segarkan data"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1430,19 +1599,21 @@ export const StokOpnamePage: React.FC = () => {
                     <th className="px-4 py-3.5 text-right">Nilai Penyesuaian</th>
                     <th className="px-4 py-3.5 text-center">Jurnal Akuntansi</th>
                     <th className="px-4 py-3.5">Petugas</th>
+                    <th className="px-4 py-3.5 text-center">Status</th>
+                    <th className="px-4 py-3.5 text-center">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {isLoadingHistory ? (
                     <tr>
-                      <td colSpan={8} className="px-4 py-12 text-center text-slate-400">
+                      <td colSpan={10} className="px-4 py-12 text-center text-slate-400">
                         <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-slate-400" />
                         Mengambil riwayat stok opname...
                       </td>
                     </tr>
                   ) : opnameHistoryList.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-4 py-12 text-center text-slate-400">
+                      <td colSpan={10} className="px-4 py-12 text-center text-slate-400">
                         <Boxes className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                         Belum ada catatan stok opname yang cocok dengan filter.
                       </td>
@@ -1646,6 +1817,30 @@ export const StokOpnamePage: React.FC = () => {
                           <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
                             {item.userName || 'Admin'}
                           </td>
+                          <td className="px-4 py-3 text-center whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              <span>Aktif</span>
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center whitespace-nowrap">
+                            <div className="flex items-center justify-center space-x-1">
+                              <button
+                                onClick={() => handleOpenEdit(item)}
+                                className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
+                                title="Edit Stok Opname"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setDeleteOpname(item)}
+                                className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                title="Hapus Stok Opname"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
                         </tr>
                       );
                     })
@@ -1764,6 +1959,261 @@ export const StokOpnamePage: React.FC = () => {
                 className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800"
               >
                 Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDIT STOK OPNAME */}
+      {editOpname && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
+                  <Edit2 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-sm">
+                    Edit Stok Opname: {editOpname.nomorOpname}
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {editOpname.barangName} • Komoditas: {editOpname.jenisOpname}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditOpname(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-200/50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitEditOpname} className="p-6 overflow-y-auto space-y-4">
+              <div className="p-3 bg-amber-50/70 border border-amber-200/60 rounded-xl text-xs text-amber-900 leading-relaxed">
+                <p className="font-semibold flex items-center gap-1.5 mb-1">
+                  <ShieldCheck className="w-4 h-4 text-amber-700 flex-shrink-0" />
+                  Jaminan Keamanan & Sinkronisasi Otomatis
+                </p>
+                Perubahan stok opname akan secara otomatis membatalkan alokasi batch fisik sebelumnya,
+                menerapkan penyesuaian batch baru, dan memperbarui rincian jurnal penyesuaian akuntansi
+                terkait secara seimbang (Debit = Kredit).
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Tanggal Opname
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={editTanggal}
+                    onChange={(e) => setEditTanggal(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Selisih Fisik Umum ({editOpname.satuan})
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={editSelisihStok}
+                    onChange={(e) => setEditSelisihStok(e.target.value)}
+                    placeholder="0 (+/-)"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {editOpname.jenisOpname === 'TELUR' && (
+                <div className="space-y-3 pt-2 border-t border-slate-100">
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Rincian Kategori Susut Telur (Kg)
+                  </h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Bentes (Kat. 27)
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={editBentes}
+                        onChange={(e) => setEditBentes(e.target.value)}
+                        placeholder="0"
+                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Ceplok (Kat. 28)
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={editCeplok}
+                        onChange={(e) => setEditCeplok(e.target.value)}
+                        placeholder="0"
+                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Prok (Kat. 29)
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={editProk}
+                        onChange={(e) => setEditProk(e.target.value)}
+                        placeholder="0"
+                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Kotor (Kat. 40)
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={editKotor}
+                        onChange={(e) => setEditKotor(e.target.value)}
+                        placeholder="0"
+                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                        Jumbo (Kat. 45)
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={editJumbo}
+                        onChange={(e) => setEditJumbo(e.target.value)}
+                        placeholder="0"
+                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {(editOpname.jenisOpname === 'PAKAN' || editOpname.jenisOpname === 'OBAT') && (
+                <div className="pt-2 border-t border-slate-100">
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Barang Terpakai / Rusak / Kadaluarsa ({editOpname.satuan})
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={editBarangPakai}
+                    onChange={(e) => setEditBarangPakai(e.target.value)}
+                    placeholder="0"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-amber-500"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Alokasi beban ke akun Beban Rusak / Kadaluarsa (Kat. 30).
+                  </p>
+                </div>
+              )}
+
+              {editOpname.jenisOpname === 'TRAY' && (
+                <div className="pt-2 border-t border-slate-100">
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                    Tray Terpakai / Rusak ({editOpname.satuan})
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={editPemakaianTray}
+                    onChange={(e) => setEditPemakaianTray(e.target.value)}
+                    placeholder="0"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-amber-500"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Alokasi beban ke akun Beban Tray Terpakai (Kat. 42).
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Keterangan / Alasan Koreksi
+                </label>
+                <textarea
+                  rows={2}
+                  value={editKeterangan}
+                  onChange={(e) => setEditKeterangan(e.target.value)}
+                  placeholder="Keterangan penyesuaian..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setEditOpname(null)}
+                  className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={updateOpnameMutation.isPending}
+                  className="px-5 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-200 transition-all cursor-pointer"
+                >
+                  {updateOpnameMutation.isPending ? 'Menyimpan...' : 'Perbarui Stok Opname & Jurnal'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: HAPUS STOK OPNAME */}
+      {deleteOpname && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
+            <div className="flex items-center space-x-3 text-red-600 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Batalkan / Hapus Stok Opname?</h3>
+                <p className="text-xs text-slate-500">Tindakan ini akan memulihkan stok persediaan</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Anda akan membatalkan catatan stok opname{' '}
+              <strong className="font-mono text-slate-800">{deleteOpname.nomorOpname}</strong> untuk barang{' '}
+              <strong>{deleteOpname.barangName}</strong> senilai{' '}
+              <strong className="text-red-700">{formatRupiah(Number(deleteOpname.totalNilai))}</strong>.
+              Stok fisik batch akan dipulihkan secara otomatis dan jurnal akuntansi penyesuaian terkait akan dihapus.
+            </p>
+
+            <div className="mt-6 flex items-center justify-end space-x-2">
+              <button
+                type="button"
+                onClick={() => setDeleteOpname(null)}
+                className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => deleteOpnameMutation.mutate(deleteOpname.id)}
+                disabled={deleteOpnameMutation.isPending}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md shadow-red-200 transition-all cursor-pointer"
+              >
+                {deleteOpnameMutation.isPending ? 'Menghapus...' : 'Ya, Batalkan & Hapus'}
               </button>
             </div>
           </div>

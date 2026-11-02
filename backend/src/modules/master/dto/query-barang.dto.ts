@@ -20,4 +20,8 @@ export class QueryBarangDto {
   @Type(() => Number)
   @IsNumber()
   limit?: number = 25;
+
+  @IsOptional()
+  @IsString()
+  status?: string; // 'aktif' | 'dihapus' | 'all'
 }

@@ -18,17 +18,31 @@ let ClientService = class ClientService {
         const page = Math.max(1, Number(query.page || 1));
         const limit = Math.min(2000, Math.max(1, Number(query.limit || 25)));
         const skip = (page - 1) * limit;
-        const where = {};
+        const andConditions = [];
         if (query.type) {
-            where.type = query.type;
+            andConditions.push({ type: query.type });
         }
         if (query.search) {
-            where.OR = [
-                { name: { contains: query.search } },
-                { code: { contains: query.search } },
-                { alamat: { contains: query.search } },
-            ];
+            andConditions.push({
+                OR: [
+                    { name: { contains: query.search } },
+                    { code: { contains: query.search } },
+                    { alamat: { contains: query.search } },
+                ],
+            });
         }
+        if (query.status === 'nonaktif') {
+            andConditions.push({ keterangan: { contains: '[NONAKTIF]' } });
+        }
+        else if (query.status === 'aktif') {
+            andConditions.push({
+                OR: [
+                    { keterangan: null },
+                    { keterangan: { not: { contains: '[NONAKTIF]' } } },
+                ],
+            });
+        }
+        const where = andConditions.length > 0 ? { AND: andConditions } : {};
         const [items, total] = await Promise.all([
             this.prisma.client.findMany({
                 where,

@@ -19,26 +19,10 @@ let ReportsController = class ReportsController {
         this.reportsService = reportsService;
     }
     async getLabaRugi(startDate, endDate) {
-        const now = new Date();
-        const y = now.getFullYear();
-        const m = String(now.getMonth() + 1).padStart(2, '0');
-        const startOfMonth = `${y}-${m}-01`;
-        const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
-        const endOfMonth = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
-        const start = startDate || startOfMonth;
-        const end = endDate || endOfMonth;
-        return this.reportsService.getLabaRugi(start, end);
+        return this.reportsService.getLabaRugi(startDate, endDate);
     }
     async getLabaRugiCurah(startDate, endDate) {
-        const now = new Date();
-        const y = now.getFullYear();
-        const m = String(now.getMonth() + 1).padStart(2, '0');
-        const startOfMonth = `${y}-${m}-01`;
-        const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
-        const endOfMonth = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
-        const start = startDate || startOfMonth;
-        const end = endDate || endOfMonth;
-        return this.reportsService.getLabaRugiCurah(start, end);
+        return this.reportsService.getLabaRugiCurah(startDate, endDate);
     }
     async getBonTitipan(search, type) {
         return this.reportsService.getBonTitipan(search, type);
@@ -52,11 +36,8 @@ let ReportsController = class ReportsController {
     async getNeraca(startDate, endDate) {
         return this.reportsService.getLaporanAset(startDate, endDate);
     }
-    async getLaporanKas(startDate, endDate, search, kasAccountId, type, limit) {
-        const today = new Date().toISOString().slice(0, 10);
-        const start = startDate || today;
-        const end = endDate || today;
-        return this.reportsService.getLaporanKas(start, end, search, kasAccountId ? Number(kasAccountId) : undefined, type, limit ? Number(limit) : 200);
+    async getLaporanKas(startDate, endDate, search, kasAccountId, type, limit, status) {
+        return this.reportsService.getLaporanKas(startDate, endDate, search, kasAccountId ? Number(kasAccountId) : undefined, type, limit ? Number(limit) : 200, status);
     }
     async getJurnalUmum(page, limit, search, startDate, endDate) {
         return this.reportsService.getJurnalUmum({
@@ -128,8 +109,9 @@ __decorate([
     __param(3, Query('kasAccountId')),
     __param(4, Query('type')),
     __param(5, Query('limit')),
+    __param(6, Query('status')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String, String, String, String, String]),
+    __metadata("design:paramtypes", [String, String, String, String, String, String, String]),
     __metadata("design:returntype", Promise)
 ], ReportsController.prototype, "getLaporanKas", null);
 __decorate([

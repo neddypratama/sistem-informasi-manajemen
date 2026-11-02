@@ -17,6 +17,10 @@ export class QueryTransaksiDto {
 
   @IsOptional()
   @IsString()
+  paymentMethod?: string;
+
+  @IsOptional()
+  @IsString()
   search?: string;
 
   @IsOptional()

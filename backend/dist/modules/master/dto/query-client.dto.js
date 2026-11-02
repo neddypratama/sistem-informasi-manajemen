@@ -15,6 +15,7 @@ export class QueryClientDto {
     type;
     page = 1;
     limit = 25;
+    status;
 }
 __decorate([
     IsOptional(),
@@ -38,4 +39,9 @@ __decorate([
     IsNumber(),
     __metadata("design:type", Number)
 ], QueryClientDto.prototype, "limit", void 0);
+__decorate([
+    IsOptional(),
+    IsString(),
+    __metadata("design:type", String)
+], QueryClientDto.prototype, "status", void 0);
 //# sourceMappingURL=query-client.dto.js.map

@@ -14,6 +14,7 @@ export class QueryTransaksiDto {
     type;
     status;
     module;
+    paymentMethod;
     search;
     clientId;
     jenisId;
@@ -39,6 +40,11 @@ __decorate([
     IsString(),
     __metadata("design:type", String)
 ], QueryTransaksiDto.prototype, "module", void 0);
+__decorate([
+    IsOptional(),
+    IsString(),
+    __metadata("design:type", String)
+], QueryTransaksiDto.prototype, "paymentMethod", void 0);
 __decorate([
     IsOptional(),
     IsString(),

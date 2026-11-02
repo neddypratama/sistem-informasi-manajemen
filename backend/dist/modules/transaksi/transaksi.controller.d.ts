@@ -25,6 +25,7 @@ export declare class TransaksiController {
                     } | null;
                     id: bigint;
                     name: string;
+                    jenisId: bigint;
                     jenis: {
                         id: bigint;
                         createdAt: Date;
@@ -69,6 +70,7 @@ export declare class TransaksiController {
             createdAt: Date;
             userId: bigint;
             updatedAt: Date;
+            status: import("@prisma/client").$Enums.TransaksiStatus;
             total: import("@prisma/client/runtime/library").Decimal;
             type: import("@prisma/client").$Enums.TransaksiType;
             keterangan: string | null;
@@ -76,7 +78,6 @@ export declare class TransaksiController {
             clientId: bigint | null;
             paymentMethod: import("@prisma/client").$Enums.PaymentMethod;
             diskon: import("@prisma/client/runtime/library").Decimal;
-            status: import("@prisma/client").$Enums.TransaksiStatus;
             invoice: string;
             subtotal: import("@prisma/client/runtime/library").Decimal;
         }[];
@@ -101,6 +102,31 @@ export declare class TransaksiController {
         };
         items: any[];
         totalCount: number;
+    }>;
+    getCurahSummary(startDate?: string, endDate?: string): Promise<{
+        penjualanCurah: number;
+        hppCurah: number;
+        labaKotorCurah: number;
+        marginCurah: number;
+        qtyTerjualKg: number;
+        tunaiMasuk: number;
+        transferMasuk: number;
+        bonPiutang: number;
+        pembelianBahan: number;
+        pembelianTunai: number;
+        pembelianTransfer: number;
+        pembelianBon: number;
+        stokFisikTotal: {
+            qtyKg: number;
+            nilaiRupiah: number;
+        };
+        mitraSupriyadi: {
+            id: number;
+            name: string;
+            saldoHutang: number;
+            saldoPiutang: number;
+            saldoNet: number;
+        };
     }>;
     findOne(id: string): Promise<{
         user: {
@@ -230,6 +256,7 @@ export declare class TransaksiController {
         createdAt: Date;
         userId: bigint;
         updatedAt: Date;
+        status: import("@prisma/client").$Enums.TransaksiStatus;
         total: import("@prisma/client/runtime/library").Decimal;
         type: import("@prisma/client").$Enums.TransaksiType;
         keterangan: string | null;
@@ -237,7 +264,6 @@ export declare class TransaksiController {
         clientId: bigint | null;
         paymentMethod: import("@prisma/client").$Enums.PaymentMethod;
         diskon: import("@prisma/client/runtime/library").Decimal;
-        status: import("@prisma/client").$Enums.TransaksiStatus;
         invoice: string;
         subtotal: import("@prisma/client/runtime/library").Decimal;
     }>;
@@ -246,6 +272,7 @@ export declare class TransaksiController {
         createdAt: Date;
         userId: bigint;
         updatedAt: Date;
+        status: import("@prisma/client").$Enums.TransaksiStatus;
         total: import("@prisma/client/runtime/library").Decimal;
         type: import("@prisma/client").$Enums.TransaksiType;
         keterangan: string | null;
@@ -253,7 +280,6 @@ export declare class TransaksiController {
         clientId: bigint | null;
         paymentMethod: import("@prisma/client").$Enums.PaymentMethod;
         diskon: import("@prisma/client/runtime/library").Decimal;
-        status: import("@prisma/client").$Enums.TransaksiStatus;
         invoice: string;
         subtotal: import("@prisma/client/runtime/library").Decimal;
     }>;
@@ -262,6 +288,7 @@ export declare class TransaksiController {
         createdAt: Date;
         userId: bigint;
         updatedAt: Date;
+        status: import("@prisma/client").$Enums.TransaksiStatus;
         total: import("@prisma/client/runtime/library").Decimal;
         type: import("@prisma/client").$Enums.TransaksiType;
         keterangan: string | null;
@@ -269,7 +296,6 @@ export declare class TransaksiController {
         clientId: bigint | null;
         paymentMethod: import("@prisma/client").$Enums.PaymentMethod;
         diskon: import("@prisma/client/runtime/library").Decimal;
-        status: import("@prisma/client").$Enums.TransaksiStatus;
         invoice: string;
         subtotal: import("@prisma/client/runtime/library").Decimal;
     }>;
@@ -278,6 +304,7 @@ export declare class TransaksiController {
         createdAt: Date;
         userId: bigint;
         updatedAt: Date;
+        status: import("@prisma/client").$Enums.TransaksiStatus;
         total: import("@prisma/client/runtime/library").Decimal;
         type: import("@prisma/client").$Enums.TransaksiType;
         keterangan: string | null;
@@ -285,7 +312,6 @@ export declare class TransaksiController {
         clientId: bigint | null;
         paymentMethod: import("@prisma/client").$Enums.PaymentMethod;
         diskon: import("@prisma/client/runtime/library").Decimal;
-        status: import("@prisma/client").$Enums.TransaksiStatus;
         invoice: string;
         subtotal: import("@prisma/client/runtime/library").Decimal;
     }>;
@@ -294,6 +320,7 @@ export declare class TransaksiController {
         createdAt: Date;
         userId: bigint;
         updatedAt: Date;
+        status: import("@prisma/client").$Enums.TransaksiStatus;
         total: import("@prisma/client/runtime/library").Decimal;
         type: import("@prisma/client").$Enums.TransaksiType;
         keterangan: string | null;
@@ -301,7 +328,6 @@ export declare class TransaksiController {
         clientId: bigint | null;
         paymentMethod: import("@prisma/client").$Enums.PaymentMethod;
         diskon: import("@prisma/client/runtime/library").Decimal;
-        status: import("@prisma/client").$Enums.TransaksiStatus;
         invoice: string;
         subtotal: import("@prisma/client/runtime/library").Decimal;
     }>;
@@ -317,6 +343,7 @@ export declare class TransaksiController {
         createdAt: Date;
         userId: bigint;
         updatedAt: Date;
+        status: import("@prisma/client").$Enums.TransaksiStatus;
         total: import("@prisma/client/runtime/library").Decimal;
         type: import("@prisma/client").$Enums.TransaksiType;
         keterangan: string | null;
@@ -324,7 +351,6 @@ export declare class TransaksiController {
         clientId: bigint | null;
         paymentMethod: import("@prisma/client").$Enums.PaymentMethod;
         diskon: import("@prisma/client/runtime/library").Decimal;
-        status: import("@prisma/client").$Enums.TransaksiStatus;
         invoice: string;
         subtotal: import("@prisma/client/runtime/library").Decimal;
     }>;
@@ -341,6 +367,7 @@ export declare class TransaksiController {
         createdAt: Date;
         userId: bigint;
         updatedAt: Date;
+        status: import("@prisma/client").$Enums.TransaksiStatus;
         total: import("@prisma/client/runtime/library").Decimal;
         type: import("@prisma/client").$Enums.TransaksiType;
         keterangan: string | null;
@@ -348,7 +375,6 @@ export declare class TransaksiController {
         clientId: bigint | null;
         paymentMethod: import("@prisma/client").$Enums.PaymentMethod;
         diskon: import("@prisma/client/runtime/library").Decimal;
-        status: import("@prisma/client").$Enums.TransaksiStatus;
         invoice: string;
         subtotal: import("@prisma/client/runtime/library").Decimal;
     }>;
@@ -366,6 +392,7 @@ export declare class TransaksiController {
         createdAt: Date;
         userId: bigint;
         updatedAt: Date;
+        status: import("@prisma/client").$Enums.TransaksiStatus;
         total: import("@prisma/client/runtime/library").Decimal;
         type: import("@prisma/client").$Enums.TransaksiType;
         keterangan: string | null;
@@ -373,7 +400,6 @@ export declare class TransaksiController {
         clientId: bigint | null;
         paymentMethod: import("@prisma/client").$Enums.PaymentMethod;
         diskon: import("@prisma/client/runtime/library").Decimal;
-        status: import("@prisma/client").$Enums.TransaksiStatus;
         invoice: string;
         subtotal: import("@prisma/client/runtime/library").Decimal;
     }>;
@@ -391,6 +417,7 @@ export declare class TransaksiController {
         createdAt: Date;
         userId: bigint;
         updatedAt: Date;
+        status: import("@prisma/client").$Enums.TransaksiStatus;
         total: import("@prisma/client/runtime/library").Decimal;
         type: import("@prisma/client").$Enums.TransaksiType;
         keterangan: string | null;
@@ -398,7 +425,6 @@ export declare class TransaksiController {
         clientId: bigint | null;
         paymentMethod: import("@prisma/client").$Enums.PaymentMethod;
         diskon: import("@prisma/client/runtime/library").Decimal;
-        status: import("@prisma/client").$Enums.TransaksiStatus;
         invoice: string;
         subtotal: import("@prisma/client/runtime/library").Decimal;
     }>;
@@ -423,6 +449,10 @@ export declare class TransaksiController {
         paymentAccountId?: number;
         paymentMethod?: any;
         diskon?: number;
+        nominal?: number;
+        kategoriId?: number;
+        kasBankKategoriId?: number;
+        type?: string;
         items?: Array<{
             detailId?: number;
             barangId: number;
@@ -433,7 +463,63 @@ export declare class TransaksiController {
             telurCeplok?: number;
             telurJumbo?: number;
         }>;
-    }, userId: number): Promise<{
+    }, userId: number): Promise<({
+        client: {
+            id: bigint;
+            createdAt: Date;
+            name: string;
+            updatedAt: Date;
+            code: string | null;
+            type: import("@prisma/client").$Enums.ClientType;
+            alamat: string | null;
+            phone: string | null;
+            keterangan: string | null;
+            saldoPiutang: import("@prisma/client/runtime/library").Decimal;
+            saldoHutang: import("@prisma/client/runtime/library").Decimal;
+        } | null;
+        details: ({
+            kategori: {
+                id: bigint;
+                createdAt: Date;
+                name: string;
+                isActive: boolean;
+                updatedAt: Date;
+                code: string | null;
+                deskripsi: string | null;
+                detailKategoriId: bigint;
+            } | null;
+        } & {
+            id: bigint;
+            createdAt: Date;
+            totalHpp: import("@prisma/client/runtime/library").Decimal;
+            hppSatuan: import("@prisma/client/runtime/library").Decimal;
+            barangId: bigint | null;
+            qty: import("@prisma/client/runtime/library").Decimal;
+            transaksiId: bigint;
+            kategoriId: bigint | null;
+            hargaSatuan: import("@prisma/client/runtime/library").Decimal;
+            telurBentes: import("@prisma/client/runtime/library").Decimal;
+            telurKotor: import("@prisma/client/runtime/library").Decimal;
+            telurCeplok: import("@prisma/client/runtime/library").Decimal;
+            telurJumbo: import("@prisma/client/runtime/library").Decimal;
+            subtotal: import("@prisma/client/runtime/library").Decimal;
+        })[];
+    } & {
+        id: bigint;
+        createdAt: Date;
+        userId: bigint;
+        updatedAt: Date;
+        status: import("@prisma/client").$Enums.TransaksiStatus;
+        total: import("@prisma/client/runtime/library").Decimal;
+        type: import("@prisma/client").$Enums.TransaksiType;
+        keterangan: string | null;
+        tanggal: Date;
+        clientId: bigint | null;
+        paymentMethod: import("@prisma/client").$Enums.PaymentMethod;
+        diskon: import("@prisma/client/runtime/library").Decimal;
+        invoice: string;
+        subtotal: import("@prisma/client/runtime/library").Decimal;
+    }) | ({
         client: {
             id: bigint;
             createdAt: Date;
@@ -491,6 +577,7 @@ export declare class TransaksiController {
         createdAt: Date;
         userId: bigint;
         updatedAt: Date;
+        status: import("@prisma/client").$Enums.TransaksiStatus;
         total: import("@prisma/client/runtime/library").Decimal;
         type: import("@prisma/client").$Enums.TransaksiType;
         keterangan: string | null;
@@ -498,15 +585,15 @@ export declare class TransaksiController {
         clientId: bigint | null;
         paymentMethod: import("@prisma/client").$Enums.PaymentMethod;
         diskon: import("@prisma/client/runtime/library").Decimal;
-        status: import("@prisma/client").$Enums.TransaksiStatus;
         invoice: string;
         subtotal: import("@prisma/client/runtime/library").Decimal;
-    }>;
+    })>;
     remove(id: string): Promise<{
         id: bigint;
         createdAt: Date;
         userId: bigint;
         updatedAt: Date;
+        status: import("@prisma/client").$Enums.TransaksiStatus;
         total: import("@prisma/client/runtime/library").Decimal;
         type: import("@prisma/client").$Enums.TransaksiType;
         keterangan: string | null;
@@ -514,7 +601,6 @@ export declare class TransaksiController {
         clientId: bigint | null;
         paymentMethod: import("@prisma/client").$Enums.PaymentMethod;
         diskon: import("@prisma/client/runtime/library").Decimal;
-        status: import("@prisma/client").$Enums.TransaksiStatus;
         invoice: string;
         subtotal: import("@prisma/client/runtime/library").Decimal;
     }>;

@@ -14,16 +14,14 @@ import {
   FileSpreadsheet,
   Receipt,
   Layers,
-  ChevronLeft,
-  ChevronRight,
   Eye,
   X,
 } from 'lucide-react';
 
 export const JurnalUmumPage: React.FC = () => {
   const [search, setSearch] = useState('');
-  const [startDate, setStartDate] = useState(getTodayDateString());
-  const [endDate, setEndDate] = useState(getTodayDateString());
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -233,8 +231,8 @@ export const JurnalUmumPage: React.FC = () => {
       </div>
 
       {/* Filter Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="relative flex-1 w-full sm:max-w-md">
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="relative flex-1 w-full md:max-w-md">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
           <input
             type="text"
@@ -244,13 +242,13 @@ export const JurnalUmumPage: React.FC = () => {
               setSearch(e.target.value);
               setPage(1);
             }}
-            className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:bg-white"
+            className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:bg-white min-h-[40px]"
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 text-xs w-full sm:w-auto">
-          {/* Quick Date Presets */}
-          <div className="flex flex-wrap items-center space-x-1 bg-slate-100 p-0.5 rounded-lg text-[11px] font-semibold">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 text-xs w-full md:w-auto">
+          {/* Quick Date Presets Scrollable */}
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-none text-[11px] font-semibold bg-slate-100 p-1 rounded-xl shrink-0">
             <button
               type="button"
               onClick={() => {
@@ -259,7 +257,7 @@ export const JurnalUmumPage: React.FC = () => {
                 setEndDate(today);
                 setPage(1);
               }}
-              className={`px-2 py-1 rounded-md transition-all ${
+              className={`px-2.5 py-1.5 rounded-lg whitespace-nowrap transition-all ${
                 startDate === getTodayDateString() && endDate === getTodayDateString()
                   ? 'bg-white text-emerald-700 shadow-xs font-bold'
                   : 'text-slate-600 hover:text-slate-900'
@@ -275,7 +273,7 @@ export const JurnalUmumPage: React.FC = () => {
                 setEndDate(m.endDate);
                 setPage(1);
               }}
-              className={`px-2 py-1 rounded-md transition-all ${
+              className={`px-2.5 py-1.5 rounded-lg whitespace-nowrap transition-all ${
                 startDate === getCurrentMonthRange().startDate && endDate === getCurrentMonthRange().endDate
                   ? 'bg-white text-emerald-700 shadow-xs font-bold'
                   : 'text-slate-600 hover:text-slate-900'
@@ -291,7 +289,7 @@ export const JurnalUmumPage: React.FC = () => {
                 setEndDate(m.endDate);
                 setPage(1);
               }}
-              className={`px-2 py-1 rounded-md transition-all ${
+              className={`px-2.5 py-1.5 rounded-lg whitespace-nowrap transition-all ${
                 startDate === getLastMonthRange().startDate && endDate === getLastMonthRange().endDate
                   ? 'bg-white text-emerald-700 shadow-xs font-bold'
                   : 'text-slate-600 hover:text-slate-900'
@@ -306,7 +304,7 @@ export const JurnalUmumPage: React.FC = () => {
                 setEndDate('');
                 setPage(1);
               }}
-              className={`px-2 py-1 rounded-md transition-all ${
+              className={`px-2.5 py-1.5 rounded-lg whitespace-nowrap transition-all ${
                 !startDate && !endDate
                   ? 'bg-white text-emerald-700 shadow-xs font-bold'
                   : 'text-slate-600 hover:text-slate-900'
@@ -316,8 +314,7 @@ export const JurnalUmumPage: React.FC = () => {
             </button>
           </div>
 
-          <div className="flex items-center space-x-1.5">
-            <Calendar className="w-4 h-4 text-slate-400 ml-1" />
+          <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center">
             <input
               type="date"
               value={startDate}
@@ -325,9 +322,9 @@ export const JurnalUmumPage: React.FC = () => {
                 setStartDate(e.target.value);
                 setPage(1);
               }}
-              className="px-2 py-1 border border-slate-200 rounded-lg text-xs bg-slate-50 font-medium"
+              className="w-full sm:w-auto px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 min-h-[38px]"
             />
-            <span className="text-slate-400">s/d</span>
+            <span className="hidden sm:inline text-slate-400 text-xs font-bold">s/d</span>
             <input
               type="date"
               value={endDate}
@@ -335,7 +332,7 @@ export const JurnalUmumPage: React.FC = () => {
                 setEndDate(e.target.value);
                 setPage(1);
               }}
-              className="px-2 py-1 border border-slate-200 rounded-lg text-xs bg-slate-50 font-medium"
+              className="w-full sm:w-auto px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 min-h-[38px]"
             />
           </div>
         </div>

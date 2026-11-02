@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service.js';
 import { FifoService } from '../inventory/fifo.service.js';
 import { CreateTransaksiDto } from './dto/create-transaksi.dto.js';
@@ -32,7 +33,21 @@ export class TransaksiService {
         where.type = query.type;
       }
     }
-    if (query.status) where.status = query.status;
+    if (query.status) {
+      const qStatus = String(query.status).trim();
+      if (qStatus === 'ALL' || qStatus === 'SEMUA') {
+        // Tampilkan semua status jika eksplisit diminta
+      } else if (qStatus === 'BATAL') {
+        where.status = 'BATAL';
+      } else if (qStatus === 'DRAFT') {
+        where.status = 'DRAFT';
+      } else {
+        where.status = 'SELESAI';
+      }
+    } else {
+      // DEFAULT: Sembunyikan transaksi BATAL / Dihapus di seluruh modul
+      where.status = { not: 'BATAL' };
+    }
     if (query.clientId) where.clientId = BigInt(query.clientId);
     if (query.jenisIds) {
       const ids = String(query.jenisIds)
@@ -56,6 +71,9 @@ export class TransaksiService {
           },
         },
       };
+    }
+    if (query.paymentMethod) {
+      where.paymentMethod = query.paymentMethod;
     }
     if (query.module === 'HUTANG') {
       where.details = {
@@ -181,7 +199,7 @@ export class TransaksiService {
           user: { select: { id: true, name: true } },
           details: {
             include: {
-              barang: { select: { id: true, name: true, jenis: true, satuan: true } },
+              barang: { select: { id: true, name: true, jenisId: true, jenis: true, satuan: true } },
               kategori: {
                 select: {
                   id: true,
@@ -337,10 +355,35 @@ export class TransaksiService {
       for (const item of createDto.items) {
         const itemSubtotal = item.qty * item.hargaSatuan;
 
+        const barang = await tx.barang.findUnique({
+          where: { id: BigInt(item.barangId) },
+          include: { jenis: true },
+        });
+        const jenisName = barang?.jenis?.name?.toLowerCase() || '';
+        const barangName = barang?.name?.toLowerCase() || '';
+        let itemKategoriId = BigInt(1);
+        const isCurah = barang?.jenisId === 9n || jenisName.includes('curah') || barangName.includes('curah');
+        if (isCurah) {
+          itemKategoriId = BigInt(8); // Penjualan Pakan Curah
+        } else if (jenisName.includes('pakan') || jenisName.includes('sentrat')) {
+          itemKategoriId = (barangName.includes('kucing') || barang?.jenisId === 10n) ? BigInt(7) : BigInt(6);
+        } else if (jenisName.includes('obat')) {
+          itemKategoriId = BigInt(9);
+        } else if (jenisName.includes('tray')) {
+          itemKategoriId = BigInt(10);
+        } else {
+          if (barangName.includes('bebek')) itemKategoriId = BigInt(2);
+          else if (barangName.includes('puyuh')) itemKategoriId = BigInt(3);
+          else if (barangName.includes('arab')) itemKategoriId = BigInt(4);
+          else if (barangName.includes('asin')) itemKategoriId = BigInt(5);
+          else itemKategoriId = BigInt(1);
+        }
+
         const detail = await tx.detailTransaksi.create({
           data: {
             transaksiId: transaksi.id,
             barangId: BigInt(item.barangId),
+            kategoriId: itemKategoriId,
             qty: item.qty,
             hargaSatuan: item.hargaSatuan,
             subtotal: itemSubtotal,
@@ -402,13 +445,15 @@ export class TransaksiService {
         });
         const jenisName = barang?.jenis?.name?.toLowerCase() || '';
         const barangName = barang?.name?.toLowerCase() || '';
+        const isCurah = barang?.jenisId === 9n || jenisName.includes('curah') || barangName.includes('curah');
 
-        if (jenisName.includes('pakan') || jenisName.includes('sentrat') || jenisName.includes('curah')) {
-          akunPersediaanId = BigInt(60); // Stok Pakan
-          if (barangName.includes('curah')) {
-            akunPendapatanId = BigInt(8); // Penjualan Pakan Curah
-            akunHppId = BigInt(96);        // HPP Pakan Curah
-          } else if (barangName.includes('kucing')) {
+        if (isCurah) {
+          akunPersediaanId = BigInt(89); // Stok Curah
+          akunPendapatanId = BigInt(8);  // Penjualan Pakan Curah
+          akunHppId = BigInt(96);         // HPP Pakan Curah
+        } else if (jenisName.includes('pakan') || jenisName.includes('sentrat')) {
+          akunPersediaanId = BigInt(60); // Stok Pakan Sentrat
+          if (barangName.includes('kucing') || barang?.jenisId === 10n) {
             akunPendapatanId = BigInt(7); // Penjualan Pakan Kucing
             akunHppId = BigInt(97);        // HPP Pakan Kucing
           } else {
@@ -468,18 +513,22 @@ export class TransaksiService {
     
     // Tentukan prefix pembelian sesuai mapping resmi: TLR (Telur), STR (Pakan), OBT (Obat), TRY (Tray)
     let prefix = 'TLR';
+    let firstItemBarang: any = null;
+    let firstItemJenisName = '';
+    let firstItemName = '';
     const firstItem = createDto.items[0];
     if (firstItem) {
-      const barang = await this.prisma.barang.findUnique({
+      firstItemBarang = await this.prisma.barang.findUnique({
         where: { id: BigInt(firstItem.barangId) },
         include: { jenis: true },
       });
-      const jenisName = barang?.jenis?.name?.toLowerCase() || '';
-      if (jenisName.includes('pakan') || jenisName.includes('sentrat') || jenisName.includes('curah')) {
+      firstItemJenisName = firstItemBarang?.jenis?.name?.toLowerCase() || '';
+      firstItemName = firstItemBarang?.name?.toLowerCase() || '';
+      if (firstItemJenisName.includes('pakan') || firstItemJenisName.includes('sentrat') || firstItemJenisName.includes('curah')) {
         prefix = 'STR';
-      } else if (jenisName.includes('obat')) {
+      } else if (firstItemJenisName.includes('obat')) {
         prefix = 'OBT';
-      } else if (jenisName.includes('tray')) {
+      } else if (firstItemJenisName.includes('tray')) {
         prefix = 'TRY';
       } else {
         prefix = 'TLR';
@@ -495,9 +544,12 @@ export class TransaksiService {
       // Tentukan paymentAccountId & paymentMethod otomatis berdasarkan nama kategori
       // Kas % -> TUNAI, Bank % -> TRANSFER, Hutang % -> KREDIT_BON (Hutang)
       // Default: Akun Kategori Hutang per komoditas:
-      // Telur: 72 (Hutang Peternak), Pakan: 83 (Hutang Sentrat SK), Obat: 80 (Hutang Obat SK), Tray: 77 (Hutang Tray Diamond)
+      // Telur: 72 (Hutang Peternak), Pakan: 83 (Hutang Sentrat SK) / 76 (Hutang Bp. Supriyadi), Obat: 80 (Hutang Obat SK), Tray: 77 (Hutang Tray Diamond)
+      const isFirstItemCurah = firstItemBarang?.jenisId === 9n || firstItemJenisName.includes('curah') || firstItemName.includes('curah');
       let defaultHutangId = 72;
-      if (prefix === 'STR') defaultHutangId = 83;
+      if (prefix === 'STR') {
+        defaultHutangId = ((createDto.clientId && Number(createDto.clientId) === 241) || isFirstItemCurah) ? 76 : 83;
+      }
       else if (prefix === 'OBT') defaultHutangId = 80;
       else if (prefix === 'TRY') defaultHutangId = 77;
 
@@ -513,9 +565,14 @@ export class TransaksiService {
           paymentMethod = 'TUNAI';
         } else if (katName.startsWith('bank') || katName.includes('bank ')) {
           paymentMethod = 'TRANSFER';
-        } else if (katName.includes('hutang')) {
+        } else if (katName.includes('hutang') || katName.includes('saldo') || akunKreditId === 76n) {
           paymentMethod = 'KREDIT_BON';
         }
+      }
+
+      let clientId = createDto.clientId ? BigInt(createDto.clientId) : null;
+      if (!clientId && akunKreditId === 76n) {
+        clientId = 241n; // Auto-assign supplier Bp.Supriyadi
       }
 
       const transaksi = await tx.transaksi.create({
@@ -525,7 +582,7 @@ export class TransaksiService {
           type: 'PEMBELIAN',
           status: 'SELESAI',
           paymentMethod,
-          clientId: createDto.clientId ? BigInt(createDto.clientId) : null,
+          clientId,
           userId: BigInt(userId),
           subtotal,
           diskon,
@@ -537,10 +594,23 @@ export class TransaksiService {
       for (const item of createDto.items) {
         const itemSubtotal = item.qty * item.hargaSatuan;
 
+        const barang = await tx.barang.findUnique({
+          where: { id: BigInt(item.barangId) },
+          include: { jenis: true },
+        });
+        const jenisName = barang?.jenis?.name?.toLowerCase() || '';
+        const isCurah = barang?.jenisId === 9n || jenisName.includes('curah') || (barang?.name || '').toLowerCase().includes('curah');
+        let itemKategoriId = BigInt(59);
+        if (isCurah) itemKategoriId = BigInt(89);
+        else if (jenisName.includes('pakan') || jenisName.includes('sentrat')) itemKategoriId = BigInt(60);
+        else if (jenisName.includes('obat')) itemKategoriId = BigInt(61);
+        else if (jenisName.includes('tray')) itemKategoriId = BigInt(62);
+
         const detail = await tx.detailTransaksi.create({
           data: {
             transaksiId: transaksi.id,
             barangId: BigInt(item.barangId),
+            kategoriId: itemKategoriId,
             qty: item.qty,
             hargaSatuan: item.hargaSatuan,
             subtotal: itemSubtotal,
@@ -568,9 +638,9 @@ export class TransaksiService {
       }
 
       // Update saldo hutang jika pembelian kredit/hutang
-      if (paymentMethod === 'KREDIT_BON' && createDto.clientId) {
+      if (paymentMethod === 'KREDIT_BON' && clientId) {
         await tx.client.update({
-          where: { id: BigInt(createDto.clientId) },
+          where: { id: clientId },
           data: { saldoHutang: { increment: total } },
         });
       }
@@ -586,8 +656,9 @@ export class TransaksiService {
       });
 
       let akunPersediaanId = BigInt(59); // Stok Telur
-      if (prefix === 'STR') akunPersediaanId = BigInt(60); // Stok Pakan
-      else if (prefix === 'OBT') akunPersediaanId = BigInt(61); // Stok Obat
+      if (prefix === 'STR') {
+        akunPersediaanId = isFirstItemCurah ? BigInt(89) : BigInt(60); // 89: Stok Curah, 60: Stok Pakan Sentrat
+      } else if (prefix === 'OBT') akunPersediaanId = BigInt(61); // Stok Obat
       else if (prefix === 'TRY') akunPersediaanId = BigInt(62); // Stok Tray
 
       await tx.jurnalDetail.createMany({
@@ -1235,6 +1306,10 @@ export class TransaksiService {
       paymentAccountId?: number;
       paymentMethod?: any;
       diskon?: number;
+      nominal?: number;
+      kategoriId?: number;
+      kasBankKategoriId?: number;
+      type?: string;
       items?: Array<{
         detailId?: number;
         barangId: number;
@@ -1256,6 +1331,7 @@ export class TransaksiService {
           details: {
             include: {
               barang: { include: { jenis: true } },
+              kategori: { include: { detailKategori: true } },
               stokBatches: { include: { stokKeluarBatches: true } },
             },
           },
@@ -1274,8 +1350,354 @@ export class TransaksiService {
       const oldClientId = existingTx.clientId;
       const oldPaymentMethod = existingTx.paymentMethod;
       const newClientId = body.clientId !== undefined ? (body.clientId ? BigInt(body.clientId) : null) : oldClientId;
-      const newPaymentMethod = body.paymentMethod || oldPaymentMethod;
+      let newPaymentMethod = body.paymentMethod || oldPaymentMethod;
+      if (!body.paymentMethod && body.paymentAccountId) {
+        const pId = Number(body.paymentAccountId);
+        if ([72, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85].includes(pId)) {
+          newPaymentMethod = 'KREDIT_BON';
+        } else if ([64, 71].includes(pId)) {
+          newPaymentMethod = 'TUNAI';
+        } else if ([65, 66, 67, 68, 69, 70].includes(pId)) {
+          newPaymentMethod = 'TRANSFER';
+        }
+      }
 
+      const inv = existingTx.invoice || '';
+      const firstDetail = existingTx.details[0];
+      const dkType = firstDetail?.kategori?.detailKategori?.type || '';
+
+      const isBeban = inv.includes('PGN') || dkType === 'Pengeluaran';
+      const isPendapatanLain = inv.includes('LNY') || (dkType === 'Pendapatan' && Number(firstDetail?.kategoriId) > 10);
+      const isHutang = inv.includes('UTG') || dkType === 'Liabilitas';
+      const isPiutang = inv.includes('BON') || (dkType === 'Aset' && (firstDetail?.kategori?.name || '').toLowerCase().includes('piutang'));
+
+      // ==========================================
+      // A. EDIT BEBAN OPERASIONAL
+      // ==========================================
+      if (isBeban) {
+        const nominal = body.nominal !== undefined ? Number(body.nominal) : (body.items?.[0] ? Number(body.items[0].hargaSatuan) : oldTotal);
+        const kategoriId = body.kategoriId ? BigInt(body.kategoriId) : (firstDetail?.kategoriId || BigInt(22));
+        const kasBankId = BigInt(body.kasBankKategoriId || body.paymentAccountId || (newPaymentMethod === 'TRANSFER' ? 66 : 64));
+        const isKembalian = body.type ? body.type === 'Kredit' : existingTx.type === 'KAS_MASUK';
+        const txType = isKembalian ? 'KAS_MASUK' : 'KAS_KELUAR';
+        const paymentMethod = Number(kasBankId) === 64 ? 'TUNAI' : 'TRANSFER';
+
+        const updatedTx = await tx.transaksi.update({
+          where: { id: existingTx.id },
+          data: {
+            tanggal,
+            type: txType,
+            paymentMethod,
+            subtotal: nominal,
+            total: nominal,
+            keterangan: body.keterangan !== undefined ? body.keterangan : existingTx.keterangan,
+          },
+          include: {
+            client: true,
+            details: { include: { kategori: true } },
+          },
+        });
+
+        if (firstDetail) {
+          await tx.detailTransaksi.update({
+            where: { id: firstDetail.id },
+            data: {
+              kategoriId,
+              qty: 1,
+              hargaSatuan: nominal,
+              subtotal: nominal,
+              totalHpp: 0,
+            },
+          });
+        }
+
+        const existingJurnal = existingTx.jurnalUmums[0];
+        if (existingJurnal) {
+          await tx.jurnalUmum.update({
+            where: { id: existingJurnal.id },
+            data: {
+              tanggal,
+              keterangan: body.keterangan || (isKembalian ? 'Kembalian Beban Operasional' : 'Pengeluaran Beban Operasional'),
+            },
+          });
+          await tx.jurnalDetail.deleteMany({ where: { jurnalId: existingJurnal.id } });
+          await tx.jurnalDetail.createMany({
+            data: isKembalian
+              ? [
+                  { jurnalId: existingJurnal.id, coaId: kasBankId, kategoriId: kasBankId, debit: nominal, kredit: 0 },
+                  { jurnalId: existingJurnal.id, coaId: kategoriId, kategoriId, debit: 0, kredit: nominal },
+                ]
+              : [
+                  { jurnalId: existingJurnal.id, coaId: kategoriId, kategoriId, debit: nominal, kredit: 0 },
+                  { jurnalId: existingJurnal.id, coaId: kasBankId, kategoriId: kasBankId, debit: 0, kredit: nominal },
+                ],
+          });
+        }
+
+        return updatedTx;
+      }
+
+      // ==========================================
+      // B. EDIT PENDAPATAN LAIN-LAIN
+      // ==========================================
+      if (isPendapatanLain) {
+        const nominal = body.nominal !== undefined ? Number(body.nominal) : (body.items?.[0] ? Number(body.items[0].hargaSatuan) : oldTotal);
+        const kategoriId = body.kategoriId ? BigInt(body.kategoriId) : (firstDetail?.kategoriId || BigInt(19));
+        const kasBankId = BigInt(body.kasBankKategoriId || body.paymentAccountId || (newPaymentMethod === 'TRANSFER' ? 66 : 64));
+        const paymentMethod = Number(kasBankId) === 64 ? 'TUNAI' : 'TRANSFER';
+
+        const updatedTx = await tx.transaksi.update({
+          where: { id: existingTx.id },
+          data: {
+            tanggal,
+            clientId: newClientId,
+            paymentMethod,
+            subtotal: nominal,
+            total: nominal,
+            keterangan: body.keterangan !== undefined ? body.keterangan : existingTx.keterangan,
+          },
+          include: {
+            client: true,
+            details: { include: { kategori: true } },
+          },
+        });
+
+        if (firstDetail) {
+          await tx.detailTransaksi.update({
+            where: { id: firstDetail.id },
+            data: {
+              kategoriId,
+              qty: 1,
+              hargaSatuan: nominal,
+              subtotal: nominal,
+              totalHpp: 0,
+            },
+          });
+        }
+
+        const existingJurnal = existingTx.jurnalUmums[0];
+        if (existingJurnal) {
+          await tx.jurnalUmum.update({
+            where: { id: existingJurnal.id },
+            data: {
+              tanggal,
+              clientId: newClientId,
+              keterangan: body.keterangan || 'Pemasukan Pendapatan Lainnya',
+            },
+          });
+          await tx.jurnalDetail.deleteMany({ where: { jurnalId: existingJurnal.id } });
+          await tx.jurnalDetail.createMany({
+            data: [
+              { jurnalId: existingJurnal.id, coaId: kasBankId, kategoriId: kasBankId, debit: nominal, kredit: 0 },
+              { jurnalId: existingJurnal.id, coaId: kategoriId, kategoriId, debit: 0, kredit: nominal },
+            ],
+          });
+        }
+
+        return updatedTx;
+      }
+
+      // ==========================================
+      // C. EDIT MUTASI HUTANG USAHA
+      // ==========================================
+      if (isHutang) {
+        const nominal = body.nominal !== undefined ? Number(body.nominal) : oldTotal;
+        const kategoriId = body.kategoriId ? BigInt(body.kategoriId) : (firstDetail?.kategoriId || BigInt(72));
+        const kasBankId = BigInt(body.kasBankKategoriId || body.paymentAccountId || (newPaymentMethod === 'TRANSFER' ? 65 : 64));
+        const oldIsBayar = existingTx.type === 'KAS_KELUAR';
+        const isBayar = body.type ? body.type === 'BAYAR' : oldIsBayar;
+        const txType = isBayar ? 'KAS_KELUAR' : 'KAS_MASUK';
+        const paymentMethod = Number(kasBankId) === 64 ? 'TUNAI' : 'TRANSFER';
+
+        // Revert efek saldo mitra lama
+        if (oldClientId) {
+          if (oldIsBayar) {
+            await tx.client.update({
+              where: { id: oldClientId },
+              data: { saldoHutang: { increment: oldTotal } },
+            });
+          } else {
+            await tx.client.update({
+              where: { id: oldClientId },
+              data: { saldoHutang: { decrement: oldTotal } },
+            });
+          }
+        }
+
+        // Terapkan efek saldo mitra baru
+        if (newClientId) {
+          if (isBayar) {
+            await tx.client.update({
+              where: { id: newClientId },
+              data: { saldoHutang: { decrement: nominal } },
+            });
+          } else {
+            await tx.client.update({
+              where: { id: newClientId },
+              data: { saldoHutang: { increment: nominal } },
+            });
+          }
+        }
+
+        const updatedTx = await tx.transaksi.update({
+          where: { id: existingTx.id },
+          data: {
+            tanggal,
+            clientId: newClientId,
+            type: txType,
+            paymentMethod,
+            subtotal: nominal,
+            total: nominal,
+            keterangan: body.keterangan !== undefined ? body.keterangan : existingTx.keterangan,
+          },
+          include: {
+            client: true,
+            details: { include: { kategori: true } },
+          },
+        });
+
+        if (firstDetail) {
+          await tx.detailTransaksi.update({
+            where: { id: firstDetail.id },
+            data: {
+              kategoriId,
+              qty: 1,
+              hargaSatuan: nominal,
+              subtotal: nominal,
+              totalHpp: 0,
+            },
+          });
+        }
+
+        const existingJurnal = existingTx.jurnalUmums[0];
+        if (existingJurnal) {
+          await tx.jurnalUmum.update({
+            where: { id: existingJurnal.id },
+            data: {
+              tanggal,
+              clientId: newClientId,
+              keterangan: body.keterangan || (isBayar ? 'Pembayaran / Pelunasan Hutang' : 'Penambahan Hutang Usaha'),
+            },
+          });
+          await tx.jurnalDetail.deleteMany({ where: { jurnalId: existingJurnal.id } });
+          await tx.jurnalDetail.createMany({
+            data: isBayar
+              ? [
+                  { jurnalId: existingJurnal.id, coaId: kategoriId, kategoriId, debit: nominal, kredit: 0 },
+                  { jurnalId: existingJurnal.id, coaId: kasBankId, kategoriId: kasBankId, debit: 0, kredit: nominal },
+                ]
+              : [
+                  { jurnalId: existingJurnal.id, coaId: kasBankId, kategoriId: kasBankId, debit: nominal, kredit: 0 },
+                  { jurnalId: existingJurnal.id, coaId: kategoriId, kategoriId, debit: 0, kredit: nominal },
+                ],
+          });
+        }
+
+        return updatedTx;
+      }
+
+      // ==========================================
+      // D. EDIT MUTASI PIUTANG USAHA
+      // ==========================================
+      if (isPiutang) {
+        const nominal = body.nominal !== undefined ? Number(body.nominal) : oldTotal;
+        const kategoriId = body.kategoriId ? BigInt(body.kategoriId) : (firstDetail?.kategoriId || BigInt(46));
+        const kasBankId = BigInt(body.kasBankKategoriId || body.paymentAccountId || (newPaymentMethod === 'TRANSFER' ? 65 : 64));
+        const oldIsBayar = existingTx.type === 'KAS_MASUK';
+        const isBayar = body.type ? body.type === 'BAYAR' : oldIsBayar;
+        const txType = isBayar ? 'KAS_MASUK' : 'KAS_KELUAR';
+        const paymentMethod = Number(kasBankId) === 64 ? 'TUNAI' : 'TRANSFER';
+
+        // Revert efek saldo mitra lama
+        if (oldClientId) {
+          if (oldIsBayar) {
+            await tx.client.update({
+              where: { id: oldClientId },
+              data: { saldoPiutang: { increment: oldTotal } },
+            });
+          } else {
+            await tx.client.update({
+              where: { id: oldClientId },
+              data: { saldoPiutang: { decrement: oldTotal } },
+            });
+          }
+        }
+
+        // Terapkan efek saldo mitra baru
+        if (newClientId) {
+          if (isBayar) {
+            await tx.client.update({
+              where: { id: newClientId },
+              data: { saldoPiutang: { decrement: nominal } },
+            });
+          } else {
+            await tx.client.update({
+              where: { id: newClientId },
+              data: { saldoPiutang: { increment: nominal } },
+            });
+          }
+        }
+
+        const updatedTx = await tx.transaksi.update({
+          where: { id: existingTx.id },
+          data: {
+            tanggal,
+            clientId: newClientId,
+            type: txType,
+            paymentMethod,
+            subtotal: nominal,
+            total: nominal,
+            keterangan: body.keterangan !== undefined ? body.keterangan : existingTx.keterangan,
+          },
+          include: {
+            client: true,
+            details: { include: { kategori: true } },
+          },
+        });
+
+        if (firstDetail) {
+          await tx.detailTransaksi.update({
+            where: { id: firstDetail.id },
+            data: {
+              kategoriId,
+              qty: 1,
+              hargaSatuan: nominal,
+              subtotal: nominal,
+              totalHpp: 0,
+            },
+          });
+        }
+
+        const existingJurnal = existingTx.jurnalUmums[0];
+        if (existingJurnal) {
+          await tx.jurnalUmum.update({
+            where: { id: existingJurnal.id },
+            data: {
+              tanggal,
+              clientId: newClientId,
+              keterangan: body.keterangan || (isBayar ? 'Penerimaan Pembayaran Piutang' : 'Penambahan Piutang Usaha'),
+            },
+          });
+          await tx.jurnalDetail.deleteMany({ where: { jurnalId: existingJurnal.id } });
+          await tx.jurnalDetail.createMany({
+            data: isBayar
+              ? [
+                  { jurnalId: existingJurnal.id, coaId: kasBankId, kategoriId: kasBankId, debit: nominal, kredit: 0 },
+                  { jurnalId: existingJurnal.id, coaId: kategoriId, kategoriId, debit: 0, kredit: nominal },
+                ]
+              : [
+                  { jurnalId: existingJurnal.id, coaId: kategoriId, kategoriId, debit: nominal, kredit: 0 },
+                  { jurnalId: existingJurnal.id, coaId: kasBankId, kategoriId: kasBankId, debit: 0, kredit: nominal },
+                ],
+          });
+        }
+
+        return updatedTx;
+      }
+
+      // ==========================================
+      // E. EDIT TRANSAKSI KOMODITAS (PEMBELIAN & PENJUALAN)
+      // ==========================================
       let newSubtotal = Number(existingTx.subtotal);
       let newDiskon = body.diskon !== undefined ? Number(body.diskon) : Number(existingTx.diskon);
       let newTotal = oldTotal;
@@ -1292,6 +1714,18 @@ export class TransaksiService {
             const itemHarga = Number(item.hargaSatuan);
             const itemSubtotal = itemQty * itemHarga;
             newSubtotal += itemSubtotal;
+
+            const barang = await tx.barang.findUnique({
+              where: { id: BigInt(item.barangId) },
+              include: { jenis: true },
+            });
+            const jenisName = barang?.jenis?.name?.toLowerCase() || '';
+            const isCurah = barang?.jenisId === 9n || jenisName.includes('curah') || (barang?.name || '').toLowerCase().includes('curah');
+            let itemKategoriId = BigInt(59);
+            if (isCurah) itemKategoriId = BigInt(89);
+            else if (jenisName.includes('pakan') || jenisName.includes('sentrat')) itemKategoriId = BigInt(60);
+            else if (jenisName.includes('obat')) itemKategoriId = BigInt(61);
+            else if (jenisName.includes('tray')) itemKategoriId = BigInt(62);
 
             let oldDetail = item.detailId
               ? oldDetails.find((d) => d.id === BigInt(item.detailId!))
@@ -1316,10 +1750,23 @@ export class TransaksiService {
                 await tx.stokBatch.update({
                   where: { id: batch.id },
                   data: {
+                    barangId: BigInt(item.barangId),
                     qtyMasuk: itemQty,
                     qtySisa: newQtySisa,
                     hargaBeli: itemHarga,
                     tanggal,
+                  },
+                });
+              } else {
+                await tx.stokBatch.create({
+                  data: {
+                    barangId: BigInt(item.barangId),
+                    detailTransaksiId: oldDetail.id,
+                    userId: BigInt(userId),
+                    tanggal,
+                    qtyMasuk: itemQty,
+                    qtySisa: itemQty,
+                    hargaBeli: itemHarga,
                   },
                 });
               }
@@ -1328,6 +1775,7 @@ export class TransaksiService {
                 where: { id: oldDetail.id },
                 data: {
                   barangId: BigInt(item.barangId),
+                  kategoriId: itemKategoriId,
                   qty: itemQty,
                   hargaSatuan: itemHarga,
                   subtotal: itemSubtotal,
@@ -1341,6 +1789,7 @@ export class TransaksiService {
                 data: {
                   transaksiId: existingTx.id,
                   barangId: BigInt(item.barangId),
+                  kategoriId: itemKategoriId,
                   qty: itemQty,
                   hargaSatuan: itemHarga,
                   subtotal: itemSubtotal,
@@ -1385,6 +1834,127 @@ export class TransaksiService {
             }
           }
 
+          newTotal = Math.max(0, newSubtotal - newDiskon);
+        } else if (existingTx.type === 'PENJUALAN') {
+          newSubtotal = 0;
+          const oldDetails = existingTx.details;
+          const oldDetailIds = oldDetails.map((d) => d.id);
+
+          // A. Rollback alokasi stok keluar FIFO yang lama
+          const oldStokKeluars = await tx.stokKeluarBatch.findMany({
+            where: { detailTransaksiId: { in: oldDetailIds } },
+          });
+          for (const sk of oldStokKeluars) {
+            await tx.stokBatch.update({
+              where: { id: sk.stokBatchId },
+              data: { qtySisa: { increment: sk.qty } },
+            });
+          }
+          await tx.stokKeluarBatch.deleteMany({
+            where: { detailTransaksiId: { in: oldDetailIds } },
+          });
+
+          // B. Update / Tambah baris detail transaksi baru & alokasikan FIFO ulang
+          const matchedDetailIds = new Set<string>();
+
+          for (const item of body.items) {
+            const itemQty = Number(item.qty);
+            const itemHarga = Number(item.hargaSatuan);
+            const itemSubtotal = itemQty * itemHarga;
+            newSubtotal += itemSubtotal;
+
+            const barang = await tx.barang.findUnique({
+              where: { id: BigInt(item.barangId) },
+              include: { jenis: true },
+            });
+            const jenisName = barang?.jenis?.name?.toLowerCase() || '';
+            const barangName = barang?.name?.toLowerCase() || '';
+            let itemKategoriId = BigInt(1);
+            const isCurah = barang?.jenisId === 9n || jenisName.includes('curah') || barangName.includes('curah');
+            if (isCurah) {
+              itemKategoriId = BigInt(8); // Penjualan Pakan Curah
+            } else if (jenisName.includes('pakan') || jenisName.includes('sentrat')) {
+              itemKategoriId = (barangName.includes('kucing') || barang?.jenisId === 10n) ? BigInt(7) : BigInt(6);
+            } else if (jenisName.includes('obat')) {
+              itemKategoriId = BigInt(9);
+            } else if (jenisName.includes('tray')) {
+              itemKategoriId = BigInt(10);
+            } else {
+              if (barangName.includes('bebek')) itemKategoriId = BigInt(2);
+              else if (barangName.includes('puyuh')) itemKategoriId = BigInt(3);
+              else if (barangName.includes('arab')) itemKategoriId = BigInt(4);
+              else if (barangName.includes('asin')) itemKategoriId = BigInt(5);
+              else itemKategoriId = BigInt(1);
+            }
+
+            let detailId: bigint;
+            let oldDetail = item.detailId
+              ? oldDetails.find((d) => d.id === BigInt(item.detailId!))
+              : null;
+
+            if (oldDetail) {
+              matchedDetailIds.add(String(oldDetail.id));
+              detailId = oldDetail.id;
+              await tx.detailTransaksi.update({
+                where: { id: oldDetail.id },
+                data: {
+                  barangId: BigInt(item.barangId),
+                  kategoriId: itemKategoriId,
+                  qty: itemQty,
+                  hargaSatuan: itemHarga,
+                  subtotal: itemSubtotal,
+                },
+              });
+            } else {
+              const newDetail = await tx.detailTransaksi.create({
+                data: {
+                  transaksiId: existingTx.id,
+                  barangId: BigInt(item.barangId),
+                  kategoriId: itemKategoriId,
+                  qty: itemQty,
+                  hargaSatuan: itemHarga,
+                  subtotal: itemSubtotal,
+                  telurBentes: 0,
+                  telurKotor: 0,
+                  telurCeplok: 0,
+                  telurJumbo: 0,
+                },
+              });
+              detailId = newDetail.id;
+            }
+
+            // Alokasikan FIFO baru
+            const fifoResult = await this.fifoService.allocateFifoStock(
+              tx,
+              item.barangId,
+              itemQty,
+              detailId,
+            );
+
+            await tx.detailTransaksi.update({
+              where: { id: detailId },
+              data: {
+                hppSatuan: fifoResult.hppSatuan,
+                totalHpp: fifoResult.totalHpp,
+              },
+            });
+          }
+
+          // C. Hapus old details yang dihapus dari modal edit
+          for (const oldDetail of oldDetails) {
+            if (!matchedDetailIds.has(String(oldDetail.id))) {
+              await tx.detailTransaksi.delete({ where: { id: oldDetail.id } });
+            }
+          }
+
+          newTotal = Math.max(0, newSubtotal - newDiskon);
+        } else if (existingTx.type === 'RETUR_PENJUALAN' || existingTx.type === 'RETUR_PEMBELIAN') {
+          newSubtotal = 0;
+          for (const item of body.items) {
+            const itemQty = Number(item.qty);
+            const itemHarga = Number(item.hargaSatuan);
+            newSubtotal += itemQty * itemHarga;
+          }
           newTotal = Math.max(0, newSubtotal - newDiskon);
         }
       } else {
@@ -1444,12 +2014,14 @@ export class TransaksiService {
       });
 
       if (existingJurnal) {
+        const txActionLabel = existingTx.type === 'PENJUALAN' ? 'Penjualan' : 'Pembelian';
         await tx.jurnalUmum.update({
           where: { id: existingJurnal.id },
           data: {
             tanggal,
+            clientId: newClientId,
             keterangan: body.keterangan
-              ? `Pembelian ${existingTx.invoice} - ${body.keterangan}`
+              ? `${txActionLabel} ${existingTx.invoice} - ${body.keterangan}`
               : existingJurnal.keterangan,
           },
         });
@@ -1459,14 +2031,18 @@ export class TransaksiService {
           where: { jurnalId: existingJurnal.id },
         });
 
+        const firstBarang = updatedTx.details[0]?.barang;
+        const jenisName = firstBarang?.jenis?.name?.toLowerCase() || '';
+        const barangName = firstBarang?.name?.toLowerCase() || '';
+        const isCurah = firstBarang?.jenisId === 9n || jenisName.includes('curah') || barangName.includes('curah');
+
         if (existingTx.type === 'PEMBELIAN') {
-          const firstBarang = updatedTx.details[0]?.barang;
-          const jenisName = firstBarang?.jenis?.name?.toLowerCase() || '';
           let akunPersediaanId = BigInt(59); // Telur
           let defaultHutangId = BigInt(72); // Hutang Peternak
-          if (jenisName.includes('pakan') || jenisName.includes('sentrat') || jenisName.includes('curah')) {
-            akunPersediaanId = BigInt(60); // Stok Pakan
-            defaultHutangId = BigInt(83); // Hutang Sentrat SK
+          if (jenisName.includes('pakan') || jenisName.includes('sentrat') || isCurah) {
+            akunPersediaanId = isCurah ? BigInt(89) : BigInt(60); // 89: Stok Curah, 60: Stok Pakan Sentrat
+            const cName = updatedTx.client?.name?.toLowerCase() || '';
+            defaultHutangId = (cName.includes('supriyadi') || isCurah) ? BigInt(76) : BigInt(83); // Hutang Bp. Supriyadi / Hutang Sentrat SK
           } else if (jenisName.includes('obat') || jenisName.includes('vaksin')) {
             akunPersediaanId = BigInt(61); // Stok Obat-Obatan
             defaultHutangId = BigInt(80); // Hutang Obat SK
@@ -1503,22 +2079,20 @@ export class TransaksiService {
             ],
           });
         } else if (existingTx.type === 'PENJUALAN') {
-          const firstBarang = updatedTx.details[0]?.barang;
-          const jenisName = firstBarang?.jenis?.name?.toLowerCase() || '';
-          const barangName = firstBarang?.name?.toLowerCase() || '';
-
           let akunPersediaanId = BigInt(59); // Stok Telur
           let akunPendapatanId = BigInt(1);  // Penjualan Telur Horn
           let akunHppId = BigInt(90);        // HPP Telur Horn
           let defaultPiutangId = BigInt(48); // Piutang Pedagang
 
-          if (jenisName.includes('pakan') || jenisName.includes('sentrat') || jenisName.includes('curah')) {
-            akunPersediaanId = BigInt(60);
+          if (isCurah) {
+            akunPersediaanId = BigInt(89); // Stok Curah
             defaultPiutangId = BigInt(46); // Piutang Peternak
-            if (barangName.includes('curah')) {
-              akunPendapatanId = BigInt(8);
-              akunHppId = BigInt(96);
-            } else if (barangName.includes('kucing')) {
+            akunPendapatanId = BigInt(8);  // Penjualan Pakan Curah
+            akunHppId = BigInt(96);         // HPP Pakan Curah
+          } else if (jenisName.includes('pakan') || jenisName.includes('sentrat')) {
+            akunPersediaanId = BigInt(60);
+            defaultPiutangId = BigInt(46);
+            if (barangName.includes('kucing') || firstBarang?.jenisId === 10n) {
               akunPendapatanId = BigInt(7);
               akunHppId = BigInt(97);
             } else {
@@ -1679,6 +2253,87 @@ export class TransaksiService {
             where: { id: existingTx.clientId },
             data: { saldoPiutang: { decrement: existingTx.total } },
           });
+        }
+      } else if (existingTx.type === 'RETUR_PENJUALAN') {
+        // Rollback stok batch yang dibuat saat retur penjualan
+        for (const detail of existingTx.details) {
+          for (const batch of detail.stokBatches) {
+            const consumed = Number(batch.qtyMasuk) - Number(batch.qtySisa);
+            if (consumed > 0) {
+              const bName = detail.barang?.name || 'Barang';
+              throw new BadRequestException(
+                `Transaksi retur penjualan ini tidak dapat dibatalkan karena ${consumed} stok "${bName}" sudah terjual kembali.`,
+              );
+            }
+          }
+        }
+        const detailIds = existingTx.details.map((d) => d.id);
+        await tx.stokBatch.deleteMany({
+          where: { detailTransaksiId: { in: detailIds } },
+        });
+
+        // Rollback piutang: pembatalan retur mengembalikan piutang (increment)
+        if (existingTx.paymentMethod === 'KREDIT_BON' && existingTx.clientId) {
+          await tx.client.update({
+            where: { id: existingTx.clientId },
+            data: { saldoPiutang: { increment: existingTx.total } },
+          });
+        }
+      } else if (existingTx.type === 'RETUR_PEMBELIAN') {
+        // Rollback alokasi stok keluar FIFO saat retur ke supplier
+        const detailIds = existingTx.details.map((d) => d.id);
+        const stokKeluars = await tx.stokKeluarBatch.findMany({
+          where: { detailTransaksiId: { in: detailIds } },
+        });
+        for (const sk of stokKeluars) {
+          await tx.stokBatch.update({
+            where: { id: sk.stokBatchId },
+            data: { qtySisa: { increment: sk.qty } },
+          });
+        }
+        await tx.stokKeluarBatch.deleteMany({
+          where: { detailTransaksiId: { in: detailIds } },
+        });
+
+        // Rollback hutang: pembatalan retur mengembalikan hutang (increment)
+        if (existingTx.paymentMethod === 'KREDIT_BON' && existingTx.clientId) {
+          await tx.client.update({
+            where: { id: existingTx.clientId },
+            data: { saldoHutang: { increment: existingTx.total } },
+          });
+        }
+      }
+
+      // Rollback mutasi Hutang / Piutang jika transaksi berasal dari modul Keuangan Hutang/Piutang
+      if (existingTx.clientId) {
+        if (existingTx.invoice.includes('UTG')) {
+          if (existingTx.type === 'KAS_KELUAR') {
+            // Pembatalan pembayaran hutang -> saldo hutang bertambah kembali
+            await tx.client.update({
+              where: { id: existingTx.clientId },
+              data: { saldoHutang: { increment: existingTx.total } },
+            });
+          } else if (existingTx.type === 'KAS_MASUK') {
+            // Pembatalan penambahan hutang -> saldo hutang berkurang kembali
+            await tx.client.update({
+              where: { id: existingTx.clientId },
+              data: { saldoHutang: { decrement: existingTx.total } },
+            });
+          }
+        } else if (existingTx.invoice.includes('BON')) {
+          if (existingTx.type === 'KAS_MASUK') {
+            // Pembatalan pelunasan piutang -> saldo piutang bertambah kembali
+            await tx.client.update({
+              where: { id: existingTx.clientId },
+              data: { saldoPiutang: { increment: existingTx.total } },
+            });
+          } else if (existingTx.type === 'KAS_KELUAR') {
+            // Pembatalan penambahan piutang -> saldo piutang berkurang kembali
+            await tx.client.update({
+              where: { id: existingTx.clientId },
+              data: { saldoPiutang: { decrement: existingTx.total } },
+            });
+          }
         }
       }
 
@@ -1958,6 +2613,159 @@ export class TransaksiService {
       },
       items,
       totalCount: items.length,
+    };
+  }
+
+  /**
+   * Ringkasan Finansial, Kas Tunai vs Transfer, dan Monitoring Saldo Khusus Bpk. Supriyadi (Pakan Curah)
+   */
+  async getCurahSummary(startDate?: string, endDate?: string) {
+    let dateFilter = Prisma.sql`WHERE (t.status IS NULL OR t.status != 'BATAL')`;
+    const sStr = startDate && startDate.trim().length > 0 ? startDate.trim() : null;
+    const eStr = endDate && endDate.trim().length > 0 ? endDate.trim() : null;
+
+    if (sStr && eStr) {
+      let dStart = new Date(`${sStr} 00:00:00`);
+      let dEnd = new Date(`${eStr} 23:59:59`);
+      if (dStart > dEnd) {
+        const tmp = dStart;
+        dStart = new Date(`${eStr} 00:00:00`);
+        dEnd = new Date(`${sStr} 23:59:59`);
+      }
+      dateFilter = Prisma.sql`WHERE (t.status IS NULL OR t.status != 'BATAL') AND t.tanggal BETWEEN ${dStart} AND ${dEnd}`;
+    } else if (sStr) {
+      const dStart = new Date(`${sStr} 00:00:00`);
+      dateFilter = Prisma.sql`WHERE (t.status IS NULL OR t.status != 'BATAL') AND t.tanggal >= ${dStart}`;
+    } else if (eStr) {
+      const dEnd = new Date(`${eStr} 23:59:59`);
+      dateFilter = Prisma.sql`WHERE (t.status IS NULL OR t.status != 'BATAL') AND t.tanggal <= ${dEnd}`;
+    }
+
+    // 1. Agregat Penjualan Curah (jenis_id = 9 atau dt.kategori_id = 8)
+    const salesCurah = await this.prisma.$queryRaw<
+      {
+        total_penjualan: string | number;
+        total_hpp: string | number;
+        total_qty_kg: string | number;
+        total_tunai: string | number;
+        total_transfer: string | number;
+        total_bon: string | number;
+      }[]
+    >`
+      SELECT 
+        COALESCE(SUM(dt.subtotal), 0) as total_penjualan,
+        COALESCE(SUM(dt.total_hpp), 0) as total_hpp,
+        COALESCE(SUM(dt.qty), 0) as total_qty_kg,
+        COALESCE(SUM(CASE WHEN t.payment_method = 'TUNAI' THEN dt.subtotal ELSE 0 END), 0) as total_tunai,
+        COALESCE(SUM(CASE WHEN t.payment_method = 'TRANSFER' THEN dt.subtotal ELSE 0 END), 0) as total_transfer,
+        COALESCE(SUM(CASE WHEN t.payment_method = 'KREDIT_BON' THEN dt.subtotal ELSE 0 END), 0) as total_bon
+      FROM transaksis t
+      JOIN detail_transaksis dt ON dt.transaksi_id = t.id
+      JOIN barangs b ON b.id = dt.barang_id
+      ${dateFilter}
+        AND t.type = 'PENJUALAN'
+        AND (b.jenis_id = 9 OR dt.kategori_id = 8)
+    `;
+
+    // 2. Agregat Pembelian Bahan Curah
+    const buyCurah = await this.prisma.$queryRaw<
+      {
+        total_pembelian: string | number;
+        total_tunai: string | number;
+        total_transfer: string | number;
+        total_bon: string | number;
+      }[]
+    >`
+      SELECT 
+        COALESCE(SUM(dt.subtotal), 0) as total_pembelian,
+        COALESCE(SUM(CASE WHEN t.payment_method = 'TUNAI' THEN dt.subtotal ELSE 0 END), 0) as total_tunai,
+        COALESCE(SUM(CASE WHEN t.payment_method = 'TRANSFER' THEN dt.subtotal ELSE 0 END), 0) as total_transfer,
+        COALESCE(SUM(CASE WHEN t.payment_method = 'KREDIT_BON' THEN dt.subtotal ELSE 0 END), 0) as total_bon
+      FROM transaksis t
+      JOIN detail_transaksis dt ON dt.transaksi_id = t.id
+      JOIN barangs b ON b.id = dt.barang_id
+      ${dateFilter}
+        AND t.type = 'PEMBELIAN'
+        AND (b.jenis_id = 9 OR dt.kategori_id = 89)
+    `;
+
+    // 3. Stok Fisik Saat Ini
+    const stokCurah = await this.prisma.$queryRaw<
+      {
+        total_qty_sisa: string | number;
+        total_nilai_stok: string | number;
+      }[]
+    >`
+      SELECT 
+        COALESCE(SUM(sb.qty_sisa), 0) as total_qty_sisa,
+        COALESCE(SUM(sb.qty_sisa * sb.harga_beli), 0) as total_nilai_stok
+      FROM stok_batches sb
+      JOIN barangs b ON b.id = sb.barang_id
+      WHERE (b.jenis_id = 9)
+        AND sb.qty_sisa > 0
+    `;
+
+    // 4. Client Mitra Bpk. Supriyadi (ID 241)
+    const clientSupriyadi = await this.prisma.client.findFirst({
+      where: {
+        OR: [{ id: 241n }, { name: { contains: 'Supriyadi' } }],
+      },
+      select: {
+        id: true,
+        name: true,
+        saldoHutang: true,
+        saldoPiutang: true,
+      },
+    });
+
+    const s = salesCurah[0] || {
+      total_penjualan: 0,
+      total_hpp: 0,
+      total_qty_kg: 0,
+      total_tunai: 0,
+      total_transfer: 0,
+      total_bon: 0,
+    };
+    const b = buyCurah[0] || {
+      total_pembelian: 0,
+      total_tunai: 0,
+      total_transfer: 0,
+      total_bon: 0,
+    };
+    const stk = stokCurah[0] || { total_qty_sisa: 0, total_nilai_stok: 0 };
+
+    const pen = Number(s.total_penjualan || 0);
+    const hp = Number(s.total_hpp || 0);
+    const laba = pen - hp;
+    const margin = pen > 0 ? (laba / pen) * 100 : 0;
+
+    const saldoHutang = Number(clientSupriyadi?.saldoHutang || 0);
+    const saldoPiutang = Number(clientSupriyadi?.saldoPiutang || 0);
+
+    return {
+      penjualanCurah: pen,
+      hppCurah: hp,
+      labaKotorCurah: laba,
+      marginCurah: margin,
+      qtyTerjualKg: Number(s.total_qty_kg || 0),
+      tunaiMasuk: Number(s.total_tunai || 0),
+      transferMasuk: Number(s.total_transfer || 0),
+      bonPiutang: Number(s.total_bon || 0),
+      pembelianBahan: Number(b.total_pembelian || 0),
+      pembelianTunai: Number(b.total_tunai || 0),
+      pembelianTransfer: Number(b.total_transfer || 0),
+      pembelianBon: Number(b.total_bon || 0),
+      stokFisikTotal: {
+        qtyKg: Number(stk.total_qty_sisa || 0),
+        nilaiRupiah: Number(stk.total_nilai_stok || 0),
+      },
+      mitraSupriyadi: {
+        id: clientSupriyadi ? Number(clientSupriyadi.id) : 241,
+        name: clientSupriyadi?.name || 'Bp. Supriyadi',
+        saldoHutang,
+        saldoPiutang,
+        saldoNet: saldoPiutang - saldoHutang,
+      },
     };
   }
 }

@@ -16,12 +16,15 @@ import {
   X,
   AlertTriangle,
   UserCheck,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 
 export const ClientPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [type, setType] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
 
@@ -47,11 +50,12 @@ export const ClientPage: React.FC = () => {
   const [editKeterangan, setEditKeterangan] = useState('');
 
   const { data: clientsData, isLoading } = useQuery({
-    queryKey: ['clientsGrid', search, type, page, limit],
+    queryKey: ['clientsGrid', search, type, selectedStatus, page, limit],
     queryFn: async () => {
       let url = `/master/clients?page=${page}&limit=${limit}`;
       if (search) url += `&search=${encodeURIComponent(search)}`;
       if (type) url += `&type=${type}`;
+      if (selectedStatus) url += `&status=${selectedStatus}`;
       const res: any = await apiClient.get(url);
       return res;
     },
@@ -239,7 +243,7 @@ export const ClientPage: React.FC = () => {
       </div>
 
       {/* Filter & Search Bar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3">
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
         <div className="relative flex-1">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
           <input
@@ -250,7 +254,7 @@ export const ClientPage: React.FC = () => {
               setPage(1);
             }}
             placeholder="Cari nama mitra, alamat, telepon, atau kode..."
-            className="w-full pl-9 pr-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+            className="w-full pl-9 pr-4 py-2.5 text-xs border border-slate-200 rounded-xl focus:ring-1 focus:ring-emerald-500 focus:outline-none bg-slate-50 min-h-[40px]"
           />
         </div>
 
@@ -261,7 +265,7 @@ export const ClientPage: React.FC = () => {
               setType(e.target.value);
               setPage(1);
             }}
-            className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 min-h-[40px]"
           >
             <option value="">Semua Tipe Mitra</option>
             <option value="Peternak">Peternak (Supplier)</option>
@@ -271,93 +275,125 @@ export const ClientPage: React.FC = () => {
             <option value="Truk">Armada Truk</option>
           </select>
         </div>
+
+        <div className="w-full sm:w-52">
+          <select
+            value={selectedStatus}
+            onChange={(e) => {
+              setSelectedStatus(e.target.value);
+              setPage(1);
+            }}
+            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 min-h-[40px]"
+          >
+            <option value="">Semua Status (Aktif & Dihapus)</option>
+            <option value="aktif">Aktif (Bisa Transaksi)</option>
+            <option value="nonaktif">Nonaktif / Dihapus</option>
+          </select>
+        </div>
       </div>
 
       {/* Table Data */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            <tr>
-              <th className="p-4">Kode</th>
-              <th className="p-4">Nama Mitra</th>
-              <th className="p-4">Tipe</th>
-              <th className="p-4">Telepon / Kontak</th>
-              <th className="p-4">Alamat / Lokasi</th>
-              <th className="p-4 text-right">Saldo Piutang</th>
-              <th className="p-4 text-right">Saldo Hutang</th>
-              <th className="p-4 text-center">Aksi</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {isLoading ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
               <tr>
-                <td colSpan={8} className="p-8 text-center text-slate-400">
-                  Memuat data pelanggan & mitra...
-                </td>
+                <th className="p-4">Kode</th>
+                <th className="p-4">Nama Mitra</th>
+                <th className="p-4">Tipe</th>
+                <th className="p-4">Telepon / Kontak</th>
+                <th className="p-4">Alamat / Lokasi</th>
+                <th className="p-4 text-right">Saldo Piutang</th>
+                <th className="p-4 text-right">Saldo Hutang</th>
+                <th className="p-4 text-center">Status</th>
+                <th className="p-4 text-center">Aksi</th>
               </tr>
-            ) : items.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="p-8 text-center text-slate-400">
-                  Tidak ditemukan mitra yang sesuai.
-                </td>
-              </tr>
-            ) : (
-              items.map((c: any) => (
-                <tr key={c.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="p-4 font-mono text-xs font-bold text-slate-600">{c.code || '-'}</td>
-                  <td className="p-4 font-semibold text-slate-800">
-                    <div className="flex items-center space-x-2">
-                      <span>{c.name}</span>
-                      {c.keterangan && c.keterangan.includes('[NONAKTIF]') && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">
-                          Nonaktif
-                        </span>
-                      )}
-                    </div>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {isLoading ? (
+                <tr>
+                  <td colSpan={9} className="p-8 text-center text-slate-400">
+                    Memuat data pelanggan & mitra...
                   </td>
-                  <td className="p-4">
-                    <span
-                      className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                        c.type === 'Pedagang'
-                          ? 'bg-blue-100 text-blue-800'
-                          : c.type === 'Peternak'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : c.type === 'Supplier'
-                          ? 'bg-amber-100 text-amber-800'
-                          : c.type === 'Karyawan'
-                          ? 'bg-purple-100 text-purple-800'
-                          : 'bg-slate-100 text-slate-700'
+                </tr>
+              ) : items.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="p-8 text-center text-slate-400">
+                    Tidak ditemukan mitra yang sesuai.
+                  </td>
+                </tr>
+              ) : (
+                items.map((c: any) => {
+                  const isNonaktif = c.keterangan && c.keterangan.includes('[NONAKTIF]');
+                  return (
+                    <tr
+                      key={c.id}
+                      className={`transition-colors ${
+                        isNonaktif
+                          ? 'bg-rose-50/40 text-slate-400 line-through hover:bg-rose-50/60'
+                          : 'hover:bg-slate-50'
                       }`}
                     >
-                      {c.type}
-                    </span>
-                  </td>
-                  <td className="p-4 text-slate-600 text-xs">
-                    {c.phone ? (
-                      <div className="flex items-center space-x-1.5">
-                        <Phone className="w-3.5 h-3.5 text-slate-400" />
-                        <span>{c.phone}</span>
-                      </div>
-                    ) : (
-                      '-'
-                    )}
-                  </td>
-                  <td className="p-4 text-slate-600">
-                    <div className="flex items-center space-x-1.5 truncate max-w-xs text-xs">
-                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span className="truncate">{c.alamat || '-'}</span>
-                    </div>
-                  </td>
-                  <td className="p-4 text-right font-mono font-bold text-slate-800">
-                    {formatRupiah(Number(c.saldoPiutang || 0))}
-                  </td>
-                  <td className="p-4 text-right font-mono font-bold text-slate-800">
-                    {formatRupiah(Number(c.saldoHutang || 0))}
-                  </td>
-                  <td className="p-4 text-center">
-                    <div className="flex items-center justify-center space-x-1">
-                      <button
-                        onClick={() => setDetailClient(c)}
+                      <td className="p-4 font-mono text-xs font-bold text-slate-600">{c.code || '-'}</td>
+                      <td className="p-4 font-semibold text-slate-800">
+                        <span>{c.name}</span>
+                      </td>
+                      <td className="p-4">
+                        <span
+                          className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                            c.type === 'Pedagang'
+                              ? 'bg-blue-100 text-blue-800'
+                              : c.type === 'Peternak'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : c.type === 'Supplier'
+                              ? 'bg-amber-100 text-amber-800'
+                              : c.type === 'Karyawan'
+                              ? 'bg-purple-100 text-purple-800'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          {c.type}
+                        </span>
+                      </td>
+                      <td className="p-4 text-slate-600 text-xs">
+                        {c.phone ? (
+                          <div className="flex items-center space-x-1.5">
+                            <Phone className="w-3.5 h-3.5 text-slate-400" />
+                            <span>{c.phone}</span>
+                          </div>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
+                      <td className="p-4 text-slate-600">
+                        <div className="flex items-center space-x-1.5 truncate max-w-xs text-xs">
+                          <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="truncate">{c.alamat || '-'}</span>
+                        </div>
+                      </td>
+                      <td className="p-4 text-right font-mono font-bold text-slate-800">
+                        {formatRupiah(Number(c.saldoPiutang || 0))}
+                      </td>
+                      <td className="p-4 text-right font-mono font-bold text-slate-800">
+                        {formatRupiah(Number(c.saldoHutang || 0))}
+                      </td>
+                      <td className="p-4 text-center whitespace-nowrap">
+                        {isNonaktif ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800">
+                            <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                            <span>Nonaktif</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Aktif</span>
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-4 text-center">
+                        <div className="flex items-center justify-center space-x-1">
+                          <button
+                            onClick={() => setDetailClient(c)}
                         title="Lihat Detail"
                         className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
                       >
@@ -380,10 +416,12 @@ export const ClientPage: React.FC = () => {
                     </div>
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              );
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
 
         {/* Pagination Bar */}
         <Pagination

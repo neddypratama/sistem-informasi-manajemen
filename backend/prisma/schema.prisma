@@ -58,6 +58,7 @@ model User {
   stokBatches  StokBatch[]
   stokOpnames  StokOpname[]
   activityLogs ActivityLog[]
+  konversiBarangs KonversiBarang[]
 
   @@map("users")
 }
@@ -98,6 +99,8 @@ model Barang {
   detailTransaksis DetailTransaksi[]
   stokBatches      StokBatch[]
   stokOpnames      StokOpname[]
+  konversiAwal     KonversiBarang[]  @relation("KonversiBarangAwal")
+  konversiAkhir    KonversiBarang[]  @relation("KonversiBarangAkhir")
 
   @@map("barangs")
 }
@@ -225,6 +228,7 @@ model StokBatch {
   detailTransaksi   DetailTransaksi?  @relation(fields: [detailTransaksiId], references: [id], onDelete: SetNull)
   user              User              @relation(fields: [userId], references: [id])
   stokKeluarBatches StokKeluarBatch[]
+  konversiBarangs   KonversiBarang[]
 
   @@index([barangId, qtySisa, tanggal], name: "idx_stok_batches_fifo")
   @@map("stok_batches")
@@ -354,6 +358,7 @@ model JurnalUmum {
   client      Client?        @relation(fields: [clientId], references: [id])
   details     JurnalDetail[]
   stokOpnames StokOpname[]
+  konversiBarangs KonversiBarang[]
 
   @@index([tanggal], name: "idx_jurnal_umums_tanggal")
   @@index([clientId, tanggal], name: "idx_jurnal_umums_client")
@@ -417,4 +422,38 @@ model ActivityLog {
   @@index([module], name: "idx_activity_logs_module")
   @@map("activity_logs")
 }
+
+// ==========================================
+// 8. Konversi & Reproses Barang
+// ==========================================
+model KonversiBarang {
+  id               BigInt      @id @default(autoincrement())
+  nomorKonversi    String      @unique @map("nomor_konversi") @db.VarChar(60)
+  tanggal          DateTime    @db.DateTime(0)
+  userId           BigInt      @map("user_id")
+  barangAwalId     BigInt      @map("barang_awal_id")
+  qtyAwal          Decimal     @map("qty_awal") @db.Decimal(12, 2)
+  hppAwal          Decimal     @map("hpp_awal") @db.Decimal(15, 2)
+  barangAkhirId    BigInt      @map("barang_akhir_id")
+  qtyAkhir         Decimal     @map("qty_akhir") @db.Decimal(12, 2)
+  hppAkhir         Decimal     @map("hpp_akhir") @db.Decimal(15, 2)
+  totalNominal     Decimal     @map("total_nominal") @db.Decimal(15, 2)
+  keterangan       String?     @db.Text
+  jurnalId         BigInt?     @map("jurnal_id")
+  stokBatchId      BigInt?     @map("stok_batch_id")
+  batchAllocations Json?       @map("batch_allocations")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+
+  barangAwal       Barang      @relation("KonversiBarangAwal", fields: [barangAwalId], references: [id])
+  barangAkhir      Barang      @relation("KonversiBarangAkhir", fields: [barangAkhirId], references: [id])
+  user             User        @relation(fields: [userId], references: [id])
+  jurnal           JurnalUmum? @relation(fields: [jurnalId], references: [id], onDelete: SetNull)
+  stokBatch        StokBatch?  @relation(fields: [stokBatchId], references: [id], onDelete: SetNull)
+
+  @@index([barangAwalId, tanggal], name: "idx_konversi_barang_awal")
+  @@index([barangAkhirId, tanggal], name: "idx_konversi_barang_akhir")
+  @@map("konversi_barangs")
+}
+
 

@@ -2,19 +2,21 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api-client';
 import { SearchableSelect, type SelectOption } from '../../components/SearchableSelect';
+import { CurrencyInput } from '../../components/CurrencyInput';
 import { ExportButtonGroup } from '../../components/ExportButtonGroup';
+import { Pagination } from '../../components/Pagination';
 import { exportToExcel, exportToPdf, formatDateIndo } from '../../lib/export-utils';
+import { useAuthStore, hasPermission } from '../../stores/auth.store';
+import { canAccessTab } from '../../lib/tab-permissions';
 import {
   Banknote,
   Search,
-  Calendar,
   ArrowDownLeft,
   ArrowUpRight,
   TrendingUp,
   TrendingDown,
   Building2,
   Wallet,
-  Printer,
   RotateCcw,
   BookOpen,
   FileSpreadsheet,
@@ -22,17 +24,36 @@ import {
   ArrowRightLeft,
   X,
   CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 
 export const LaporanKasPage: React.FC = () => {
   const queryClient = useQueryClient();
   const todayStr = new Date().toISOString().slice(0, 10);
-  const [startDate, setStartDate] = useState(todayStr);
-  const [endDate, setEndDate] = useState(todayStr);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'ALL' | 'MASUK' | 'KELUAR'>('ALL');
   const [filterKasAccountId, setFilterKasAccountId] = useState<string>('');
+  const [selectedStatus, setSelectedStatus] = useState<string>('SELESAI');
+  const user = useAuthStore((s) => s.user);
+  const canMutasi = canAccessTab(user, 'KAS_TAB_TUNAI') || canAccessTab(user, 'KAS_TAB_BANK');
+  const canRekap = canAccessTab(user, 'KAS_TAB_SUMMARY');
+  const canCatat = hasPermission(user, ['kas_transfer:create', 'kas_koreksi:create', 'kas:manage']);
+  const canExport = hasPermission(user, ['kas:export', 'kas:read']);
+
   const [activeTab, setActiveTab] = useState<'MUTASI' | 'REKAP'>('MUTASI');
+
+  // Auto-switch to allowed tab
+  useEffect(() => {
+    if (activeTab === 'MUTASI' && !canMutasi && canRekap) {
+      setActiveTab('REKAP');
+    } else if (activeTab === 'REKAP' && !canRekap && canMutasi) {
+      setActiveTab('MUTASI');
+    }
+  }, [user, activeTab, canMutasi, canRekap]);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -57,12 +78,15 @@ export const LaporanKasPage: React.FC = () => {
 
   // 1. Query Laporan Kas & Mutasi from Backend
   const { data: kasResponse, isLoading } = useQuery({
-    queryKey: ['laporanKas', startDate, endDate, search, filterKasAccountId, filterType],
+    queryKey: ['laporanKas', startDate, endDate, search, filterKasAccountId, filterType, selectedStatus],
     queryFn: async () => {
-      let url = `/reports/laporan-kas?startDate=${startDate}&endDate=${endDate}&limit=500`;
+      let url = `/reports/laporan-kas?limit=500`;
+      if (startDate) url += `&startDate=${startDate}`;
+      if (endDate) url += `&endDate=${endDate}`;
       if (search) url += `&search=${encodeURIComponent(search)}`;
       if (filterKasAccountId) url += `&kasAccountId=${filterKasAccountId}`;
       if (filterType !== 'ALL') url += `&type=${filterType}`;
+      if (selectedStatus) url += `&status=${selectedStatus}`;
       const res: any = await apiClient.get(url);
       return res.data;
     },
@@ -244,6 +268,16 @@ export const LaporanKasPage: React.FC = () => {
   const totalSaldoAkhir = kasResponse?.totalSaldoAkhir || 0;
   const netCashFlow = totalPemasukan - totalPengeluaran;
 
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [startDate, endDate, search, filterKasAccountId, filterType, selectedStatus]);
+
+  // Paginated mutasi list
+  const paginatedMutasi = useMemo(() => {
+    return mutasiRinci.slice((page - 1) * limit, page * limit);
+  }, [mutasiRinci, page, limit]);
+
   // Date Presets
   const setPresetToday = () => {
     setStartDate(todayStr);
@@ -266,11 +300,17 @@ export const LaporanKasPage: React.FC = () => {
     setEndDate(lastDay);
   };
 
+  const setPresetAll = () => {
+    setStartDate('');
+    setEndDate('');
+  };
+
   const handleClear = () => {
-    setPresetToday();
+    setPresetAll();
     setSearch('');
     setFilterType('ALL');
     setFilterKasAccountId('');
+    setSelectedStatus('');
   };
 
   const handleSubmitModal = (e: React.FormEvent) => {
@@ -306,9 +346,9 @@ export const LaporanKasPage: React.FC = () => {
       }));
 
       exportToExcel({
-        filename: `Rekap_Saldo_Kas_Bank_${startDate}_sd_${endDate}`,
+        filename: `Rekap_Saldo_Kas_Bank_${startDate || 'Semua'}_sd_${endDate || 'Kini'}`,
         sheetName: 'Rekap Kas Bank',
-        title: `REKAPITULASI SALDO KAS & BANK (${startDate} s/d ${endDate})`,
+        title: `REKAPITULASI SALDO KAS & BANK (${startDate || 'Awal'} s/d ${endDate || 'Kini'})`,
         columns: [
           { header: 'No', key: '_index', width: 6 },
           { header: 'Akun Kas & Bank', key: 'nama', width: 30 },
@@ -337,9 +377,9 @@ export const LaporanKasPage: React.FC = () => {
       });
 
       exportToExcel({
-        filename: `Mutasi_Kas_Masuk_Keluar_${startDate}_sd_${endDate}`,
+        filename: `Mutasi_Kas_Masuk_Keluar_${startDate || 'Semua'}_sd_${endDate || 'Kini'}`,
         sheetName: 'Mutasi Kas',
-        title: `MUTASI ARUS KAS MASUK & KELUAR (${startDate} s/d ${endDate})`,
+        title: `MUTASI ARUS KAS MASUK & KELUAR (${startDate || 'Awal'} s/d ${endDate || 'Kini'})`,
         columns: [
           { header: 'No', key: '_index', width: 6 },
           { header: 'Tanggal', key: 'tanggal', width: 14 },
@@ -367,9 +407,9 @@ export const LaporanKasPage: React.FC = () => {
       }));
 
       exportToPdf({
-        filename: `Rekap_Saldo_Kas_Bank_${startDate}_sd_${endDate}`,
+        filename: `Rekap_Saldo_Kas_Bank_${startDate || 'Semua'}_sd_${endDate || 'Kini'}`,
         title: 'REKAPITULASI SALDO KAS & BANK',
-        period: `${startDate} s/d ${endDate}`,
+        period: `${startDate || 'Awal'} s/d ${endDate || 'Kini'}`,
         columns: [
           { header: 'No', key: '_index', width: 8, align: 'center' },
           { header: 'Akun Kas & Bank', key: 'nama', width: 55 },
@@ -401,9 +441,9 @@ export const LaporanKasPage: React.FC = () => {
       });
 
       exportToPdf({
-        filename: `Mutasi_Kas_Masuk_Keluar_${startDate}_sd_${endDate}`,
+        filename: `Mutasi_Kas_Masuk_Keluar_${startDate || 'Semua'}_sd_${endDate || 'Kini'}`,
         title: 'LAPORAN MUTASI ARUS KAS & BANK',
-        period: `${startDate} s/d ${endDate}`,
+        period: `${startDate || 'Awal'} s/d ${endDate || 'Kini'}`,
         orientation: 'landscape',
         columns: [
           { header: 'No', key: '_index', width: 8, align: 'center' },
@@ -439,32 +479,27 @@ export const LaporanKasPage: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            onClick={() => {
-              setModalType('MASUK');
-              setModalKasId(64);
-              setModalLawanId(19);
-              setIsModalOpen(true);
-            }}
-            className="flex items-center space-x-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-200 transition-all hover:scale-[1.02]"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Catat Mutasi Kas</span>
-          </button>
+          {canCatat && (
+            <button
+              onClick={() => {
+                setModalType('MASUK');
+                setModalKasId(64);
+                setModalLawanId(19);
+                setIsModalOpen(true);
+              }}
+              className="flex items-center space-x-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-200 transition-all hover:scale-[1.02]"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Catat Mutasi Kas</span>
+            </button>
+          )}
 
-          <ExportButtonGroup
-            onExportExcel={handleExportExcel}
-            onExportPdf={handleExportPdf}
-          />
-
-          <button
-            onClick={() => window.print()}
-            className="flex items-center space-x-1.5 px-3.5 py-2.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-semibold shadow-sm transition-all"
-            title="Cetak Halaman"
-          >
-            <Printer className="w-4 h-4 text-slate-500" />
-            <span className="hidden sm:inline">Cetak</span>
-          </button>
+          {canExport && (
+            <ExportButtonGroup
+              onExportExcel={handleExportExcel}
+              onExportPdf={handleExportPdf}
+            />
+          )}
         </div>
       </div>
 
@@ -532,53 +567,18 @@ export const LaporanKasPage: React.FC = () => {
       </div>
 
       {/* Filter Bar & Controls */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-        <div className="flex flex-col lg:flex-row items-center justify-between gap-3">
-          {/* Tipe Filter Pills */}
-          <div className="flex items-center p-1 bg-slate-100 rounded-xl space-x-1 w-full lg:w-auto">
-            <button
-              onClick={() => setFilterType('ALL')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                filterType === 'ALL'
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              Semua Mutasi
-            </button>
-            <button
-              onClick={() => setFilterType('MASUK')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1 ${
-                filterType === 'MASUK'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'text-slate-500 hover:text-emerald-700'
-              }`}
-            >
-              <ArrowDownLeft className="w-3.5 h-3.5" />
-              <span>Kas Masuk Saja</span>
-            </button>
-            <button
-              onClick={() => setFilterType('KELUAR')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1 ${
-                filterType === 'KELUAR'
-                  ? 'bg-rose-600 text-white shadow-xs'
-                  : 'text-slate-500 hover:text-rose-700'
-              }`}
-            >
-              <ArrowUpRight className="w-3.5 h-3.5" />
-              <span>Kas Keluar Saja</span>
-            </button>
-          </div>
-
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+        {/* Baris 1: Search, Akun Kas, Status, & Tipe Pills */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
           {/* Search Box */}
-          <div className="relative flex-1 w-full">
+          <div className="relative w-full">
             <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
             <input
               type="text"
-              placeholder="Cari keterangan, nomor jurnal, invoice, atau nama mitra..."
+              placeholder="Cari keterangan, jurnal, invoice, mitra..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 min-h-[40px]"
             />
           </div>
 
@@ -586,7 +586,7 @@ export const LaporanKasPage: React.FC = () => {
           <select
             value={filterKasAccountId}
             onChange={(e) => setFilterKasAccountId(e.target.value)}
-            className="w-full lg:w-56 px-3 py-2 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 min-h-[40px]"
           >
             <option value="">Semua Akun Kas & Bank</option>
             {KAS_BANK_OPTIONS.map((acc) => (
@@ -595,87 +595,170 @@ export const LaporanKasPage: React.FC = () => {
               </option>
             ))}
           </select>
+
+          {/* Status Filter (Aktif vs Dihapus) */}
+          <select
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 min-h-[40px]"
+          >
+            <option value="SELESAI">Aktif (Tidak Dihapus)</option>
+            <option value="BATAL">Hanya yang Dihapus / Batal</option>
+            <option value="ALL">Semua Status (Aktif & Dihapus)</option>
+          </select>
+
+          {/* Tipe Filter Pills */}
+          <div className="flex items-center p-1 bg-slate-100 rounded-xl space-x-1 overflow-x-auto scrollbar-none shrink-0 w-full min-h-[40px]">
+            <button
+              onClick={() => setFilterType('ALL')}
+              className={`flex-1 px-2.5 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${
+                filterType === 'ALL'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              Semua
+            </button>
+            <button
+              onClick={() => setFilterType('MASUK')}
+              className={`flex-1 px-2.5 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center justify-center space-x-1 ${
+                filterType === 'MASUK'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-slate-500 hover:text-emerald-700'
+              }`}
+            >
+              <ArrowDownLeft className="w-3.5 h-3.5" />
+              <span>Masuk</span>
+            </button>
+            <button
+              onClick={() => setFilterType('KELUAR')}
+              className={`flex-1 px-2.5 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all flex items-center justify-center space-x-1 ${
+                filterType === 'KELUAR'
+                  ? 'bg-rose-600 text-white shadow-xs'
+                  : 'text-slate-500 hover:text-rose-700'
+              }`}
+            >
+              <ArrowUpRight className="w-3.5 h-3.5" />
+              <span>Keluar</span>
+            </button>
+          </div>
         </div>
 
-        {/* Date Filters & Presets */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold text-slate-500 flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5 text-slate-400" /> Periode:
-            </span>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-mono"
-            />
-            <span className="text-slate-400">s/d</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-mono"
-            />
-
-            <div className="flex items-center space-x-1 pl-2">
-              <button
-                onClick={setPresetToday}
-                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 font-medium"
-              >
-                Hari Ini
-              </button>
-              <button
-                onClick={setPresetMonth}
-                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 font-medium"
-              >
-                Bulan Ini
-              </button>
-              <button
-                onClick={setPresetYear}
-                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 font-medium"
-              >
-                Tahun Ini
-              </button>
-            </div>
+        {/* Baris 2: Quick Dates & Custom Date Range */}
+        <div className="pt-2 border-t border-slate-100 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5">
+          {/* Quick Dates Scrollable */}
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0 scrollbar-none text-[11px] font-semibold bg-slate-100 p-1 rounded-xl shrink-0">
+            <button
+              type="button"
+              onClick={setPresetToday}
+              className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
+                startDate === todayStr && endDate === todayStr
+                  ? 'bg-white text-emerald-700 shadow-xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Hari Ini
+            </button>
+            <button
+              type="button"
+              onClick={setPresetMonth}
+              className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
+                startDate.endsWith('-01') && !endDate.endsWith('-31')
+                  ? 'bg-white text-emerald-700 shadow-xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Bulan Ini
+            </button>
+            <button
+              type="button"
+              onClick={setPresetYear}
+              className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
+                startDate.endsWith('-01-01') && endDate.endsWith('-12-31')
+                  ? 'bg-white text-emerald-700 shadow-xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Tahun Ini
+            </button>
+            <button
+              type="button"
+              onClick={setPresetAll}
+              className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
+                !startDate && !endDate
+                  ? 'bg-white text-emerald-700 shadow-xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Semua
+            </button>
           </div>
 
-          {(search || filterKasAccountId || filterType !== 'ALL' || startDate !== todayStr || endDate !== todayStr) && (
-            <button
-              onClick={handleClear}
-              className="flex items-center space-x-1 text-slate-500 hover:text-emerald-600 font-semibold py-1 px-2 rounded-lg"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Reset Filter</span>
-            </button>
-          )}
+          {/* Date Range Inputs */}
+          <div className="flex items-center gap-2 w-full md:w-auto">
+            <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center">
+              <div className="relative">
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full sm:w-auto px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 min-h-[38px]"
+                />
+              </div>
+              <span className="hidden sm:inline text-slate-400 text-xs font-bold">s/d</span>
+              <div className="relative">
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full sm:w-auto px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 min-h-[38px]"
+                />
+              </div>
+            </div>
+
+            {(search || filterKasAccountId || filterType !== 'ALL' || selectedStatus || startDate || endDate) && (
+              <button
+                onClick={handleClear}
+                className="flex items-center space-x-1 text-slate-500 hover:text-emerald-600 font-semibold py-1.5 px-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs shrink-0 transition-colors"
+                title="Reset semua filter"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Reset</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Main Tab Navigation */}
       <div className="flex items-center space-x-2 border-b border-slate-200 pb-1">
-        <button
-          onClick={() => setActiveTab('MUTASI')}
-          className={`flex items-center space-x-2 px-4 py-2.5 rounded-t-xl text-xs font-bold transition-all border-b-2 ${
-            activeTab === 'MUTASI'
-              ? 'border-emerald-600 text-emerald-700 bg-white shadow-xs'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <BookOpen className="w-4 h-4" />
-          <span>Detail Mutasi Kas Masuk & Keluar ({mutasiRinci.length})</span>
-        </button>
+        {canMutasi && (
+          <button
+            onClick={() => setActiveTab('MUTASI')}
+            className={`flex items-center space-x-2 px-4 py-2.5 rounded-t-xl text-xs font-bold transition-all border-b-2 ${
+              activeTab === 'MUTASI'
+                ? 'border-emerald-600 text-emerald-700 bg-white shadow-xs'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <BookOpen className="w-4 h-4" />
+            <span>Detail Mutasi Kas Masuk & Keluar ({mutasiRinci.length})</span>
+          </button>
+        )}
 
-        <button
-          onClick={() => setActiveTab('REKAP')}
-          className={`flex items-center space-x-2 px-4 py-2.5 rounded-t-xl text-xs font-bold transition-all border-b-2 ${
-            activeTab === 'REKAP'
-              ? 'border-emerald-600 text-emerald-700 bg-white shadow-xs'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <FileSpreadsheet className="w-4 h-4" />
-          <span>Rekapitulasi 8 Akun Kas & Bank ({rekapAkun.length})</span>
-        </button>
+        {canRekap && (
+          <button
+            onClick={() => setActiveTab('REKAP')}
+            className={`flex items-center space-x-2 px-4 py-2.5 rounded-t-xl text-xs font-bold transition-all border-b-2 ${
+              activeTab === 'REKAP'
+                ? 'border-emerald-600 text-emerald-700 bg-white shadow-xs'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Rekapitulasi 8 Akun Kas & Bank ({rekapAkun.length})</span>
+          </button>
+        )}
       </div>
 
       {/* =========================================================================
@@ -696,31 +779,40 @@ export const LaporanKasPage: React.FC = () => {
                   <th className="py-3.5 px-4">Mitra Terkait</th>
                   <th className="py-3.5 px-4 text-right">Kas Masuk (Debit)</th>
                   <th className="py-3.5 px-4 text-right">Kas Keluar (Kredit)</th>
+                  <th className="py-3.5 px-4 text-center">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={9} className="py-12 text-center text-slate-400">
+                    <td colSpan={10} className="py-12 text-center text-slate-400">
                       Memuat rincian mutasi kas...
                     </td>
                   </tr>
                 ) : mutasiRinci.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="py-12 text-center text-slate-400">
+                    <td colSpan={10} className="py-12 text-center text-slate-400">
                       Tidak ada data mutasi kas yang cocok dengan filter yang dipilih.
                     </td>
                   </tr>
                 ) : (
-                  mutasiRinci.map((m: any, idx: number) => {
+                  paginatedMutasi.map((m: any, idx: number) => {
                     const debit = Number(m.debit) || 0;
                     const kredit = Number(m.kredit) || 0;
                     const isMasuk = debit > 0;
+                    const isBatal = m.transaksi_status === 'BATAL';
 
                     return (
-                      <tr key={m.jurnal_id ? `${m.jurnal_id}-${idx}` : idx} className="hover:bg-slate-50/80 transition-colors">
+                      <tr
+                        key={m.jurnal_id ? `${m.jurnal_id}-${idx}` : idx}
+                        className={`transition-colors ${
+                          isBatal
+                            ? 'bg-rose-50/40 text-slate-400 line-through hover:bg-rose-50/60'
+                            : 'hover:bg-slate-50/80'
+                        }`}
+                      >
                         <td className="py-3 px-4 text-center text-slate-400 font-mono">
-                          {idx + 1}
+                          {(page - 1) * limit + idx + 1}
                         </td>
                         <td className="py-3 px-4 font-medium text-slate-700 whitespace-nowrap">
                           {m.tanggal ? m.tanggal.slice(0, 10) : '-'}
@@ -761,6 +853,19 @@ export const LaporanKasPage: React.FC = () => {
                         <td className="py-3 px-4 text-right font-mono font-bold text-red-600 whitespace-nowrap">
                           {!isMasuk ? formatRupiah(kredit) : '-'}
                         </td>
+                        <td className="py-3 px-4 text-center whitespace-nowrap">
+                          {isBatal ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800">
+                              <XCircle className="w-3 h-3 text-rose-600" />
+                              <span>Dihapus</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              <span>Aktif</span>
+                            </span>
+                          )}
+                        </td>
                       </tr>
                     );
                   })
@@ -777,10 +882,24 @@ export const LaporanKasPage: React.FC = () => {
                   <td className="py-3.5 px-4 text-right font-mono text-red-700 text-sm whitespace-nowrap">
                     {formatRupiah(totalPengeluaran)}
                   </td>
+                  <td className="py-3.5 px-4"></td>
                 </tr>
               </tfoot>
             </table>
           </div>
+
+          {/* Pagination Bar */}
+          <Pagination
+            page={page}
+            limit={limit}
+            total={mutasiRinci.length}
+            onPageChange={(p) => setPage(p)}
+            onLimitChange={(l) => {
+              setLimit(l);
+              setPage(1);
+            }}
+            entityName="mutasi kas"
+          />
         </div>
       )}
 
@@ -984,18 +1103,18 @@ export const LaporanKasPage: React.FC = () => {
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
                   Nominal Transaksi (Rp) <span className="text-rose-500">*</span>
                 </label>
-                <input
-                  type="number"
-                  min={1}
+                <CurrencyInput
                   required
-                  value={modalNominal || ''}
-                  onChange={(e) => setModalNominal(Number(e.target.value))}
-                  placeholder="Contoh: 1500000"
+                  value={modalNominal}
+                  onChange={setModalNominal}
+                  placeholder="Contoh: Rp 1.000.000"
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 />
-                <span className="text-[11px] text-slate-400 mt-0.5 block font-mono">
-                  Terbilang: {formatRupiah(modalNominal)}
-                </span>
+                {modalNominal > 0 && (
+                  <span className="text-[11px] text-slate-500 mt-0.5 block font-mono">
+                    Terbilang: {formatRupiah(modalNominal)}
+                  </span>
+                )}
               </div>
 
               <div>

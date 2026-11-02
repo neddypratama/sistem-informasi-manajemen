@@ -18,7 +18,18 @@ let BarangService = class BarangService {
         const page = Math.max(1, Number(query.page || 1));
         const limit = Math.min(2000, Math.max(1, Number(query.limit || 25)));
         const skip = (page - 1) * limit;
-        const where = { isActive: true };
+        const where = {};
+        if (query.status === 'aktif') {
+            where.isActive = true;
+        }
+        else if (query.status === 'dihapus') {
+            where.isActive = false;
+        }
+        else if (query.status === 'all') {
+        }
+        else {
+            where.isActive = true;
+        }
         if (query.jenisId) {
             where.jenisId = BigInt(query.jenisId);
         }

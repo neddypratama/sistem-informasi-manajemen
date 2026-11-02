@@ -20,6 +20,14 @@ export class TransaksiController {
     return this.transaksiService.getClientLedger(Number(clientId));
   }
 
+  @Get('curah/summary')
+  async getCurahSummary(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.transaksiService.getCurahSummary(startDate, endDate);
+  }
+
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.transaksiService.findOne(Number(id));
@@ -153,6 +161,10 @@ export class TransaksiController {
       paymentAccountId?: number;
       paymentMethod?: any;
       diskon?: number;
+      nominal?: number;
+      kategoriId?: number;
+      kasBankKategoriId?: number;
+      type?: string;
       items?: Array<{
         detailId?: number;
         barangId: number;

@@ -7,12 +7,14 @@ import { DashboardPage } from './features/dashboard/DashboardPage';
 import { PenjualanPage } from './features/transaksi/PenjualanPage';
 import { TelurModulePage } from './features/transaksi/TelurModulePage';
 import { PakanModulePage } from './features/transaksi/PakanModulePage';
+import { CurahPakPriPage } from './features/curah/CurahPakPriPage';
 import { BarangPage } from './features/master/BarangPage';
 import { ClientPage } from './features/master/ClientPage';
 import { KategoriPage } from './features/master/KategoriPage';
 import { DetailKategoriPage } from './features/master/DetailKategoriPage';
 import { StokTelurPage } from './features/inventory/StokTelurPage';
 import { StokOpnamePage } from './features/inventory/StokOpnamePage';
+import { KonversiBarangPage } from './features/inventory/KonversiBarangPage';
 import { MenuObatPage } from './features/inventory/MenuObatPage';
 import { MenuTrayPage } from './features/inventory/MenuTrayPage';
 import { BebanPage } from './features/keuangan/BebanPage';
@@ -109,6 +111,14 @@ export const App: React.FC = () => {
               }
             />
             <Route
+              path="curah-pak-pri"
+              element={
+                <PermissionRoute permission="pakan:read">
+                  <CurahPakPriPage />
+                </PermissionRoute>
+              }
+            />
+            <Route
               path="obat"
               element={
                 <PermissionRoute permission="obat:read">
@@ -147,6 +157,14 @@ export const App: React.FC = () => {
               element={
                 <PermissionRoute permission="stok:opname">
                   <StokOpnamePage />
+                </PermissionRoute>
+              }
+            />
+            <Route
+              path="konversi-barang"
+              element={
+                <PermissionRoute permission="stok:opname">
+                  <KonversiBarangPage />
                 </PermissionRoute>
               }
             />

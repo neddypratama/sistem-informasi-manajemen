@@ -12,11 +12,13 @@ export class KategoriController {
     @Query('detailKategoriId') detailKategoriId?: string,
     @Query('type') type?: string,
     @Query('search') search?: string,
+    @Query('status') status?: string,
   ) {
     return this.kategoriService.findAll({
       detailKategoriId: detailKategoriId ? Number(detailKategoriId) : undefined,
       type,
       search,
+      status,
     });
   }
 

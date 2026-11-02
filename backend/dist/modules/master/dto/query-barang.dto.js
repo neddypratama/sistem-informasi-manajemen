@@ -14,6 +14,7 @@ export class QueryBarangDto {
     jenisId;
     page = 1;
     limit = 25;
+    status;
 }
 __decorate([
     IsOptional(),
@@ -38,4 +39,9 @@ __decorate([
     IsNumber(),
     __metadata("design:type", Number)
 ], QueryBarangDto.prototype, "limit", void 0);
+__decorate([
+    IsOptional(),
+    IsString(),
+    __metadata("design:type", String)
+], QueryBarangDto.prototype, "status", void 0);
 //# sourceMappingURL=query-barang.dto.js.map

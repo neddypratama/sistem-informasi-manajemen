@@ -5,8 +5,14 @@ import { PrismaService } from '../../../database/prisma.service.js';
 export class KategoriService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(query?: { detailKategoriId?: number; type?: string; search?: string }) {
+  async findAll(query?: { detailKategoriId?: number; type?: string; search?: string; status?: string }) {
     const where: any = {};
+
+    if (query?.status === 'aktif') {
+      where.isActive = true;
+    } else if (query?.status === 'dihapus') {
+      where.isActive = false;
+    }
 
     if (query?.detailKategoriId) {
       where.detailKategoriId = BigInt(query.detailKategoriId);

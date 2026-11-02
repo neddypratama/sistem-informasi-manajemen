@@ -1,4 +1,14 @@
 import { PrismaService } from '../../database/prisma.service.js';
+export declare class CreateKonversiDto {
+    tanggal?: string;
+    barangAwalId: number;
+    qtyAwal: number;
+    barangAkhirId: number;
+    qtyAkhir?: number;
+    totalNominal?: number;
+    hppAkhir?: number;
+    keterangan?: string;
+}
 export declare class CreateOpnameDto {
     barangId: number;
     tanggal?: string;
@@ -130,5 +140,241 @@ export declare class InventoryService {
         selisihStok: number;
         totalNilai: number;
         jurnalId: number | null;
+    }>;
+    updateOpname(id: number, dto: Partial<CreateOpnameDto>, userId?: number): Promise<{
+        id: number;
+        nomorOpname: string;
+        tanggal: Date;
+        jenisOpname: string;
+        stokSistem: number;
+        stokFisik: number;
+        selisih: number;
+        selisihStok: number;
+        totalNilai: number;
+        jurnalId: number | null;
+    }>;
+    deleteOpname(id: number): Promise<{
+        success: boolean;
+        message: string;
+    }>;
+    findAllKonversi(query: {
+        startDate?: string;
+        endDate?: string;
+        search?: string;
+        page?: number;
+        limit?: number;
+    }): Promise<{
+        items: {
+            id: number;
+            nomorKonversi: string;
+            tanggal: Date;
+            barangAwalId: number;
+            barangAwal: {
+                satuan: {
+                    id: bigint;
+                    createdAt: Date;
+                    name: string;
+                } | null;
+                jenis: {
+                    id: bigint;
+                    createdAt: Date;
+                    name: string;
+                };
+            } & {
+                id: bigint;
+                createdAt: Date;
+                name: string;
+                isActive: boolean;
+                updatedAt: Date;
+                jenisId: bigint;
+                code: string | null;
+                satuanId: bigint | null;
+                stokMinimum: import("@prisma/client/runtime/library").Decimal;
+            };
+            qtyAwal: number;
+            hppAwal: number;
+            barangAkhirId: number;
+            barangAkhir: {
+                satuan: {
+                    id: bigint;
+                    createdAt: Date;
+                    name: string;
+                } | null;
+                jenis: {
+                    id: bigint;
+                    createdAt: Date;
+                    name: string;
+                };
+            } & {
+                id: bigint;
+                createdAt: Date;
+                name: string;
+                isActive: boolean;
+                updatedAt: Date;
+                jenisId: bigint;
+                code: string | null;
+                satuanId: bigint | null;
+                stokMinimum: import("@prisma/client/runtime/library").Decimal;
+            };
+            qtyAkhir: number;
+            hppAkhir: number;
+            totalNominal: number;
+            keterangan: string | null;
+            jurnalId: number | null;
+            stokBatchId: number | null;
+            user: {
+                id: bigint;
+                name: string;
+                username: string;
+            };
+            batchAllocations: import("@prisma/client/runtime/library").JsonValue;
+            createdAt: Date;
+        }[];
+        meta: {
+            page: number;
+            limit: number;
+            total: number;
+            totalPages: number;
+        };
+    }>;
+    createKonversi(dto: CreateKonversiDto, userId?: number): Promise<{
+        id: number;
+        barangAwalId: number;
+        barangAkhirId: number;
+        qtyAwal: number;
+        hppAwal: number;
+        qtyAkhir: number;
+        hppAkhir: number;
+        totalNominal: number;
+        jurnalId: number;
+        stokBatchId: number;
+        user: {
+            id: bigint;
+            name: string;
+            username: string;
+        };
+        barangAkhir: {
+            satuan: {
+                id: bigint;
+                createdAt: Date;
+                name: string;
+            } | null;
+            jenis: {
+                id: bigint;
+                createdAt: Date;
+                name: string;
+            };
+        } & {
+            id: bigint;
+            createdAt: Date;
+            name: string;
+            isActive: boolean;
+            updatedAt: Date;
+            jenisId: bigint;
+            code: string | null;
+            satuanId: bigint | null;
+            stokMinimum: import("@prisma/client/runtime/library").Decimal;
+        };
+        barangAwal: {
+            satuan: {
+                id: bigint;
+                createdAt: Date;
+                name: string;
+            } | null;
+            jenis: {
+                id: bigint;
+                createdAt: Date;
+                name: string;
+            };
+        } & {
+            id: bigint;
+            createdAt: Date;
+            name: string;
+            isActive: boolean;
+            updatedAt: Date;
+            jenisId: bigint;
+            code: string | null;
+            satuanId: bigint | null;
+            stokMinimum: import("@prisma/client/runtime/library").Decimal;
+        };
+        createdAt: Date;
+        userId: bigint;
+        updatedAt: Date;
+        keterangan: string | null;
+        tanggal: Date;
+        nomorKonversi: string;
+        batchAllocations: import("@prisma/client/runtime/library").JsonValue | null;
+    }>;
+    updateKonversi(id: number, dto: Partial<CreateKonversiDto>, userId?: number): Promise<{
+        id: number;
+        barangAwalId: number;
+        barangAkhirId: number;
+        qtyAwal: number;
+        hppAwal: number;
+        qtyAkhir: number;
+        hppAkhir: number;
+        totalNominal: number;
+        jurnalId: number | null;
+        stokBatchId: number | null;
+        user: {
+            id: bigint;
+            name: string;
+            username: string;
+        };
+        barangAkhir: {
+            satuan: {
+                id: bigint;
+                createdAt: Date;
+                name: string;
+            } | null;
+            jenis: {
+                id: bigint;
+                createdAt: Date;
+                name: string;
+            };
+        } & {
+            id: bigint;
+            createdAt: Date;
+            name: string;
+            isActive: boolean;
+            updatedAt: Date;
+            jenisId: bigint;
+            code: string | null;
+            satuanId: bigint | null;
+            stokMinimum: import("@prisma/client/runtime/library").Decimal;
+        };
+        barangAwal: {
+            satuan: {
+                id: bigint;
+                createdAt: Date;
+                name: string;
+            } | null;
+            jenis: {
+                id: bigint;
+                createdAt: Date;
+                name: string;
+            };
+        } & {
+            id: bigint;
+            createdAt: Date;
+            name: string;
+            isActive: boolean;
+            updatedAt: Date;
+            jenisId: bigint;
+            code: string | null;
+            satuanId: bigint | null;
+            stokMinimum: import("@prisma/client/runtime/library").Decimal;
+        };
+        createdAt: Date;
+        userId: bigint;
+        updatedAt: Date;
+        keterangan: string | null;
+        tanggal: Date;
+        nomorKonversi: string;
+        batchAllocations: import("@prisma/client/runtime/library").JsonValue | null;
+    }>;
+    deleteKonversi(id: number, userId?: number): Promise<{
+        success: boolean;
+        message: string;
     }>;
 }

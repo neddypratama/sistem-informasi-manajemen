@@ -4,4 +4,5 @@ export declare class QueryClientDto {
     type?: ClientType;
     page?: number;
     limit?: number;
+    status?: string;
 }

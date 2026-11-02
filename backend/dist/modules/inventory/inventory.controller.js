@@ -10,8 +10,8 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
-import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
-import { InventoryService, CreateOpnameDto } from './inventory.service.js';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { InventoryService, CreateOpnameDto, CreateKonversiDto } from './inventory.service.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 let InventoryController = class InventoryController {
@@ -38,6 +38,30 @@ let InventoryController = class InventoryController {
     }
     async createOpname(dto, userId) {
         return this.inventoryService.createOpname(dto, Number(userId) || 1);
+    }
+    async updateOpname(id, dto, userId) {
+        return this.inventoryService.updateOpname(Number(id), dto, Number(userId) || 1);
+    }
+    async deleteOpname(id) {
+        return this.inventoryService.deleteOpname(Number(id));
+    }
+    async findAllKonversi(startDate, endDate, search, page, limit) {
+        return this.inventoryService.findAllKonversi({
+            startDate,
+            endDate,
+            search,
+            page: page ? Number(page) : undefined,
+            limit: limit ? Number(limit) : undefined,
+        });
+    }
+    async createKonversi(dto, userId) {
+        return this.inventoryService.createKonversi(dto, Number(userId) || 1);
+    }
+    async updateKonversi(id, dto, userId) {
+        return this.inventoryService.updateKonversi(Number(id), dto, Number(userId) || 1);
+    }
+    async deleteKonversi(id, userId) {
+        return this.inventoryService.deleteKonversi(Number(id), Number(userId) || 1);
     }
 };
 __decorate([
@@ -75,6 +99,58 @@ __decorate([
     __metadata("design:paramtypes", [CreateOpnameDto, Number]),
     __metadata("design:returntype", Promise)
 ], InventoryController.prototype, "createOpname", null);
+__decorate([
+    Put('opname/:id'),
+    __param(0, Param('id')),
+    __param(1, Body()),
+    __param(2, CurrentUser('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, Number]),
+    __metadata("design:returntype", Promise)
+], InventoryController.prototype, "updateOpname", null);
+__decorate([
+    Delete('opname/:id'),
+    __param(0, Param('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], InventoryController.prototype, "deleteOpname", null);
+__decorate([
+    Get('konversi'),
+    __param(0, Query('startDate')),
+    __param(1, Query('endDate')),
+    __param(2, Query('search')),
+    __param(3, Query('page')),
+    __param(4, Query('limit')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String, String, String, String]),
+    __metadata("design:returntype", Promise)
+], InventoryController.prototype, "findAllKonversi", null);
+__decorate([
+    Post('konversi'),
+    __param(0, Body()),
+    __param(1, CurrentUser('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [CreateKonversiDto, Number]),
+    __metadata("design:returntype", Promise)
+], InventoryController.prototype, "createKonversi", null);
+__decorate([
+    Put('konversi/:id'),
+    __param(0, Param('id')),
+    __param(1, Body()),
+    __param(2, CurrentUser('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, Number]),
+    __metadata("design:returntype", Promise)
+], InventoryController.prototype, "updateKonversi", null);
+__decorate([
+    Delete('konversi/:id'),
+    __param(0, Param('id')),
+    __param(1, CurrentUser('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Number]),
+    __metadata("design:returntype", Promise)
+], InventoryController.prototype, "deleteKonversi", null);
 InventoryController = __decorate([
     UseGuards(JwtAuthGuard),
     Controller('inventory'),

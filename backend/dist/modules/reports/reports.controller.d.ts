@@ -163,10 +163,10 @@ export declare class ReportsController {
         asetGroups: any[];
         liabilitasGroups: any[];
     }>;
-    getLaporanKas(startDate?: string, endDate?: string, search?: string, kasAccountId?: string, type?: string, limit?: string): Promise<{
+    getLaporanKas(startDate?: string, endDate?: string, search?: string, kasAccountId?: string, type?: string, limit?: string, status?: string): Promise<{
         periode: {
-            startDate: string;
-            endDate: string;
+            startDate: string | undefined;
+            endDate: string | undefined;
         };
         totalSaldoAwal: number;
         totalPemasukan: number;

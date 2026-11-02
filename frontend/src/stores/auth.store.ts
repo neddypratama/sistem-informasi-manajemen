@@ -31,13 +31,34 @@ export const isAdminOrManager = (user: User | null): boolean => {
   );
 };
 
-export const hasPermission = (user: User | null, requiredPermission?: string): boolean => {
+export const hasPermission = (
+  user: User | null,
+  requiredPermission?: string | string[]
+): boolean => {
   if (!user) return false;
   // Role Admin & Manager memiliki hak akses penuh ke seluruh fitur sistem
   if (isAdminOrManager(user)) return true;
   if (!requiredPermission) return true;
   if (!user.permissions || !Array.isArray(user.permissions)) return false;
-  return user.permissions.includes(requiredPermission);
+
+  const requiredList = Array.isArray(requiredPermission)
+    ? requiredPermission
+    : [requiredPermission];
+
+  return requiredList.some((req) => {
+    // 1. Exact match
+    if (user.permissions!.includes(req)) return true;
+
+    // 2. Module wildcard / prefix fallback (e.g. 'telur:read' matches any 'telur_...:read' or 'telur:read')
+    if (req.endsWith(':read')) {
+      const mod = req.split(':')[0];
+      return user.permissions!.some(
+        (p) => p.startsWith(mod + '_') || p.startsWith(mod + ':')
+      );
+    }
+
+    return false;
+  });
 };
 
 export const useAuthStore = create<AuthState>((set) => {

@@ -1,13 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api-client';
 import { SearchableClientSelect } from '../../components/SearchableClientSelect';
 import { SearchableBarangSelect } from '../../components/SearchableBarangSelect';
+import { SearchableTransactionSelect } from '../../components/SearchableTransactionSelect';
+import { CurrencyInput } from '../../components/CurrencyInput';
 import { ExportButtonGroup } from '../../components/ExportButtonGroup';
 import { Pagination } from '../../components/Pagination';
 import { exportToExcel, formatDateIndo } from '../../lib/export-utils';
-import { getTodayDateString, getCurrentMonthRange, getLastMonthRange, getCurrentYearRange } from '../../lib/date-utils';
+import { getTodayDateString, getCurrentMonthRange, getLastMonthRange } from '../../lib/date-utils';
 import { useAuthStore, hasPermission } from '../../stores/auth.store';
+import { canAccessTab } from '../../lib/tab-permissions';
 import {
   Boxes,
   ArrowDownLeft,
@@ -30,6 +34,9 @@ import {
   Coins,
   Wallet,
   Scale,
+  CheckCircle2,
+  XCircle,
+  ArrowRightLeft,
 } from 'lucide-react';
 
 interface CommodityConfig {
@@ -52,7 +59,7 @@ interface CartItem {
   subtotal: number;
 }
 
-export const KAS_BANK_PAYMENT_ACCOUNTS = [
+const KAS_BANK_PAYMENT_ACCOUNTS = [
   { id: 64, code: '1-1001', name: 'Kas Tunai (Pusat)', method: 'TUNAI' as const },
   { id: 71, code: '1-1002', name: 'Kas Deby', method: 'TUNAI' as const },
   { id: 66, code: '1-1004', name: 'Bank BCA Masduki', method: 'TRANSFER' as const },
@@ -69,6 +76,7 @@ export const PEMBELIAN_TELUR_PAYMENT_ACCOUNTS = [
 ];
 
 export const PEMBELIAN_PAKAN_PAYMENT_ACCOUNTS = [
+  { id: 76, code: '2-2003', name: 'Hutang Bp. Supriyadi (Tempo / Hutang)', method: 'KREDIT_BON' as const },
   { id: 83, code: '2-2004', name: 'Hutang Sentrat SK (Tempo / Hutang)', method: 'KREDIT_BON' as const },
   { id: 84, code: '2-2005', name: 'Hutang Sentrat Ponggok (Tempo / Hutang)', method: 'KREDIT_BON' as const },
   { id: 85, code: '2-2006', name: 'Hutang Sentrat Random (Tempo / Hutang)', method: 'KREDIT_BON' as const },
@@ -122,8 +130,12 @@ export const getPembelianPaymentAccounts = (commodityKey: string, isEgg?: boolea
   return PEMBELIAN_TELUR_PAYMENT_ACCOUNTS;
 };
 
-export const getDefaultPembelianAccountId = (commodityKey: string, isEgg?: boolean) => {
-  if (commodityKey === 'pakan') return 83; // Hutang Sentrat SK
+export const getDefaultPembelianAccountId = (commodityKey: string, isEgg?: boolean, client?: any) => {
+  if (commodityKey === 'pakan') {
+    const cName = client?.name?.toLowerCase() || '';
+    if (cName.includes('supriyadi')) return 76;
+    return 83; // Hutang Sentrat SK
+  }
   if (commodityKey === 'obat') return 80;  // Hutang Obat SK
   if (commodityKey === 'tray') return 77;  // Hutang Tray Diamond /DM
   if (commodityKey === 'telur' || isEgg) return 72; // Hutang Peternak
@@ -138,7 +150,7 @@ export const extractPaymentAccountId = (tx: any, isEggParam?: boolean, commodity
     const payDetail = jDetails.find((d: any) => {
       const kId = Number(d.kategoriId);
       const isCredit = Number(d.kredit) > 0;
-      const isPayAcc = [64, 71, 65, 66, 67, 68, 69, 70, 72, 77, 78, 79, 80, 81, 82, 83, 84, 85].includes(kId);
+      const isPayAcc = [64, 71, 65, 66, 67, 68, 69, 70, 72, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85].includes(kId);
       return isCredit && isPayAcc;
     });
     if (payDetail) return Number(payDetail.kategoriId);
@@ -148,6 +160,7 @@ export const extractPaymentAccountId = (tx: any, isEggParam?: boolean, commodity
 
     const cName = tx.client?.name?.toLowerCase() || '';
     if (commodityKeyParam === 'pakan') {
+      if (cName.includes('supriyadi')) return 76;
       if (cName.includes('sk')) return 83;
       if (cName.includes('ponggok')) return 84;
       if (cName.includes('random')) return 85;
@@ -196,15 +209,56 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
 }) => {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
-  const canCreate = hasPermission(user, `${commodityKey}:create`);
-  const canRetur = hasPermission(user, `${commodityKey}:retur`);
-  const canDelete = hasPermission(user, `${commodityKey}:delete`);
+  // Granular CRUD permissions per komoditas
+  const canCreatePenjualan = hasPermission(user, [`${commodityKey}_penjualan:create`, `${commodityKey}:create`]);
+  const canUpdatePenjualan = hasPermission(user, [`${commodityKey}_penjualan:update`, `${commodityKey}:create`]);
+  const canDeletePenjualan = hasPermission(user, [`${commodityKey}_penjualan:delete`, `${commodityKey}:delete`]);
+
+  const canCreatePembelian = hasPermission(user, [`${commodityKey}_pembelian:create`, `${commodityKey}:create`]);
+  const canUpdatePembelian = hasPermission(user, [`${commodityKey}_pembelian:update`, `${commodityKey}:create`]);
+  const canDeletePembelian = hasPermission(user, [`${commodityKey}_pembelian:delete`, `${commodityKey}:delete`]);
+
+  const canReturPenjualan = hasPermission(user, [`${commodityKey}_retur_penjualan:create`, `${commodityKey}_retur:create`, `${commodityKey}:retur`]);
+  const canReturPembelian = hasPermission(user, [`${commodityKey}_retur_pembelian:create`, `${commodityKey}_retur:create`, `${commodityKey}:retur`]);
+
+  const canReadStok = hasPermission(user, [`${commodityKey}_stok:read`, `${commodityKey}:read`]);
+  const canExport = hasPermission(user, [`${commodityKey}_monitoring:export`, `${commodityKey}:read`]);
+
+  // Tab permissions
+  const canTabPenjualan = hasPermission(user, [`${commodityKey}_penjualan:read`, `${commodityKey}_penjualan:create`, `${commodityKey}:read`]) || canAccessTab(user, 'TX_PENJUALAN');
+  const canTabPembelian = hasPermission(user, [`${commodityKey}_pembelian:read`, `${commodityKey}_pembelian:create`, `${commodityKey}:read`]) || canAccessTab(user, 'TX_PEMBELIAN');
+  const canTabReturPenjualan = canReturPenjualan || hasPermission(user, [`${commodityKey}_retur_penjualan:read`, `${commodityKey}:retur`]) || canAccessTab(user, 'TX_RETUR');
+  const canTabReturPembelian = canReturPembelian || hasPermission(user, [`${commodityKey}_retur_pembelian:read`, `${commodityKey}:retur`]) || canAccessTab(user, 'TX_RETUR');
+  const canTabStok = canReadStok || canAccessTab(user, 'TX_STOK');
 
   const [activeTab, setActiveTab] = useState<'PEMBELIAN' | 'PENJUALAN' | 'RETUR_PEMBELIAN' | 'RETUR_PENJUALAN' | 'STOK'>('PENJUALAN');
+
+  // Auto-switch to accessible tab if current activeTab is restricted
+  useEffect(() => {
+    if (activeTab === 'PENJUALAN' && !canTabPenjualan) {
+      if (canTabPembelian) setActiveTab('PEMBELIAN');
+      else if (canTabStok) setActiveTab('STOK');
+    } else if (activeTab === 'PEMBELIAN' && !canTabPembelian) {
+      if (canTabPenjualan) setActiveTab('PENJUALAN');
+      else if (canTabStok) setActiveTab('STOK');
+    } else if (activeTab === 'STOK' && !canTabStok) {
+      if (canTabPenjualan) setActiveTab('PENJUALAN');
+      else if (canTabPembelian) setActiveTab('PEMBELIAN');
+    } else if (activeTab === 'RETUR_PENJUALAN' && !canTabReturPenjualan) {
+      if (canTabPenjualan) setActiveTab('PENJUALAN');
+      else if (canTabPembelian) setActiveTab('PEMBELIAN');
+      else if (canTabStok) setActiveTab('STOK');
+    } else if (activeTab === 'RETUR_PEMBELIAN' && !canTabReturPembelian) {
+      if (canTabPembelian) setActiveTab('PEMBELIAN');
+      else if (canTabPenjualan) setActiveTab('PENJUALAN');
+      else if (canTabStok) setActiveTab('STOK');
+    }
+  }, [user, activeTab, canTabPenjualan, canTabPembelian, canTabReturPenjualan, canTabReturPembelian, canTabStok]);
   const [search, setSearch] = useState('');
   const [filterClientId, setFilterClientId] = useState<string>('');
-  const [startDate, setStartDate] = useState(getTodayDateString());
-  const [endDate, setEndDate] = useState(getTodayDateString());
+  const [filterStatus, setFilterStatus] = useState<string>('SELESAI');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   // Helper dates (Local Indonesia YYYY-MM-DD)
   const getTodayString = () => {
@@ -252,7 +306,6 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
   const [selectedBarangId, setSelectedBarangId] = useState<string>('');
   const [formQty, setFormQty] = useState<number>(1);
   const [formHarga, setFormHarga] = useState<number>(0);
-  const [formHargaDisplay, setFormHargaDisplay] = useState<string>('0');
 
   // Retur transaction selection state
   const [selectedOriginalTxId, setSelectedOriginalTxId] = useState<string>('');
@@ -280,7 +333,6 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
   const [editSelectedBarangId, setEditSelectedBarangId] = useState<string>('');
   const [editFormQty, setEditFormQty] = useState<number>(1);
   const [editFormHarga, setEditFormHarga] = useState<number>(0);
-  const [editFormHargaDisplay, setEditFormHargaDisplay] = useState<string>('0');
   const [editError, setEditError] = useState<string | null>(null);
 
   // Indonesian alert banner state
@@ -296,7 +348,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
       else if (Array.isArray(res?.data)) list = res.data;
       else if (Array.isArray(res?.items)) list = res.items;
       else if (Array.isArray(res?.data?.items)) list = res.data.items;
-      return list.filter((b: any) => jenisIds.includes(Number(b.jenisId)));
+      return list.filter((b: any) => jenisIds.includes(Number(b.jenisId ?? b.jenis?.id ?? 0)));
     },
   });
 
@@ -318,7 +370,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
   const [limit, setLimit] = useState<number>(25);
 
   const { data: txData, isLoading: loadingTx } = useQuery({
-    queryKey: ['txCommodity', activeTab, jenisIds, search, filterClientId, startDate, endDate, page, limit],
+    queryKey: ['txCommodity', activeTab, jenisIds, search, filterClientId, filterStatus, startDate, endDate, page, limit],
     queryFn: async () => {
       if (activeTab === 'STOK') return null;
       let url = `/transaksi?type=${activeTab}&limit=${limit}&page=${page}`;
@@ -327,6 +379,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
       }
       if (search) url += `&search=${encodeURIComponent(search)}`;
       if (filterClientId) url += `&clientId=${filterClientId}`;
+      if (filterStatus) url += `&status=${filterStatus}`;
       if (startDate) url += `&startDate=${startDate}`;
       if (endDate) url += `&endDate=${endDate}`;
       const res: any = await apiClient.get(url);
@@ -341,7 +394,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
     queryFn: async () => {
       const res: any = await apiClient.get(`/inventory/summary`);
       const list = Array.isArray(res) ? res : (res?.data || []);
-      return list.filter((item: any) => jenisIds.includes(Number(item.jenisId || 0)));
+      return list.filter((item: any) => jenisIds.includes(Number(item.jenisId ?? item.jenis?.id ?? 0)));
     },
   });
 
@@ -350,7 +403,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
   const { data: originalTransactions } = useQuery({
     queryKey: ['originalTxForRetur', originalTxType, jenisIds],
     queryFn: async () => {
-      let url = `/transaksi?type=${originalTxType}&limit=100&status=SELESAI`;
+      let url = `/transaksi?type=${originalTxType}&limit=500&status=SELESAI`;
       if (jenisIds && jenisIds.length > 0) {
         url += `&jenisIds=${jenisIds.join(',')}`;
       }
@@ -360,6 +413,20 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
     },
     enabled: isAddModalOpen && (formType === 'RETUR_PENJUALAN' || formType === 'RETUR_PEMBELIAN'),
   });
+
+  // Filter original transactions strictly to match active commodity and type
+  const filteredOriginalTransactions = useMemo(() => {
+    if (!originalTransactions || !Array.isArray(originalTransactions)) return [];
+    return originalTransactions.filter((tx: any) => {
+      if (tx.type !== originalTxType) return false;
+      if (tx.status === 'BATAL') return false;
+      if (!tx.details || !Array.isArray(tx.details) || tx.details.length === 0) return false;
+      return tx.details.some((d: any) => {
+        const bJenisId = Number(d.barang?.jenisId ?? d.barang?.jenis?.id ?? 0);
+        return jenisIds.includes(bJenisId);
+      });
+    });
+  }, [originalTransactions, originalTxType, jenisIds]);
 
   // 6. Fetch Transactions for Monitoring Tab
   const { data: monitoringTxData, isLoading: loadingMonitoring } = useQuery({
@@ -390,9 +457,16 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
       if (commodityKey === 'telur' || isEgg) {
         list = clientsData.filter((c: any) => c.type?.toLowerCase().includes('peternak'));
       } else if (commodityKey === 'pakan') {
-        list = clientsData.filter(
-          (c: any) => c.type?.toLowerCase().includes('supplier') && c.name?.toLowerCase().includes('sentrat'),
-        );
+        list = clientsData.filter((c: any) => {
+          const name = (c.name || '').toLowerCase();
+          const type = (c.type || '').toLowerCase();
+          return (
+            type.includes('supplier') ||
+            name.includes('sentrat') ||
+            name.includes('supriyadi') ||
+            name.includes('pri')
+          );
+        });
       } else if (commodityKey === 'obat') {
         list = clientsData.filter(
           (c: any) => c.type?.toLowerCase().includes('supplier') && c.name?.toLowerCase().includes('obat'),
@@ -414,7 +488,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
       }
     }
     return list.length > 0 ? list : clientsData;
-  }, [clientsData, isBeli, commodityKey, isEgg]);
+  }, [clientsData, isBeli, commodityKey, isEgg, jenisIds]);
 
   // Reset client filter & page when switching tab or monitoring transaction type
   useEffect(() => {
@@ -424,7 +498,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
 
   useEffect(() => {
     setPage(1);
-  }, [search, filterClientId, startDate, endDate]);
+  }, [search, filterClientId, filterStatus, startDate, endDate]);
 
 
   // Filter clients specifically per commodity on Pembelian & Penjualan
@@ -435,10 +509,17 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
         return clientsData.filter((c: any) => c.type?.toLowerCase().includes('peternak'));
       }
       if (commodityKey === 'pakan') {
-        // Tipe supplier yang namanya "Sentrat %"
-        return clientsData.filter(
-          (c: any) => c.type?.toLowerCase().includes('supplier') && c.name?.toLowerCase().includes('sentrat'),
-        );
+        // Tipe supplier pakan: Sentrat (SK, Ponggok, Random) dan Curah (Bp. Supriyadi / Pak Pri)
+        return clientsData.filter((c: any) => {
+          const name = (c.name || '').toLowerCase();
+          const type = (c.type || '').toLowerCase();
+          return (
+            type.includes('supplier') ||
+            name.includes('sentrat') ||
+            name.includes('supriyadi') ||
+            name.includes('pri')
+          );
+        });
       }
       if (commodityKey === 'obat') {
         // Tipe supplier yang namanya "Obat %"
@@ -466,7 +547,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
       }
     }
     return clientsData;
-  }, [clientsData, isEgg, commodityKey, formType]);
+  }, [clientsData, isEgg, commodityKey, formType, jenisIds]);
 
   // Auto-sync Hutang / Piutang Payment Account based on selected Client
   const handleClientSelect = (clientId: string) => {
@@ -478,7 +559,8 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
 
     if (formType === 'PEMBELIAN') {
       if (commodityKey === 'pakan') {
-        if (cName.includes('sk')) setFormPaymentAccountId(83);
+        if (cName.includes('supriyadi')) setFormPaymentAccountId(76);
+        else if (cName.includes('sk')) setFormPaymentAccountId(83);
         else if (cName.includes('ponggok')) setFormPaymentAccountId(84);
         else if (cName.includes('random')) setFormPaymentAccountId(85);
         else setFormPaymentAccountId(83);
@@ -546,7 +628,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
 
   // Default payment method and account setup on formType/formPaymentAccountId change
   useEffect(() => {
-    const hutangIds = [72, 77, 78, 79, 80, 81, 82, 83, 84, 85];
+    const hutangIds = [72, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85];
     const piutangIds = [46, 47, 48, 50, 51, 52, 53, 54, 55, 56, 57, 58];
     const kasIds = [64, 71];
 
@@ -575,26 +657,16 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
     setFormError(null);
     if (!bId) {
       setFormHarga(0);
-      setFormHargaDisplay('0');
       return;
     }
 
     const matchedStock = stockItems?.find((s: any) => Number(s.id || s.barangId) === Number(bId));
     if (matchedStock) {
-      const suggestedPrice = Math.round(Number(matchedStock.hargaRataRata || 0));
+      const suggestedPrice = Number(matchedStock.hargaRataRata || 0);
       if (suggestedPrice > 0 && formType === 'PENJUALAN') {
         setFormHarga(suggestedPrice);
-        setFormHargaDisplay(suggestedPrice.toLocaleString('id-ID'));
       }
     }
-  };
-
-  // Format currency mask input
-  const handleHargaInputChange = (raw: string) => {
-    const numeric = raw.replace(/\D/g, '');
-    const val = Number(numeric);
-    setFormHarga(val);
-    setFormHargaDisplay(val > 0 ? val.toLocaleString('id-ID') : '0');
   };
 
   // Add Item to Multi-Item Cart
@@ -623,7 +695,6 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
     setSelectedBarangId('');
     setFormQty(1);
     setFormHarga(0);
-    setFormHargaDisplay('0');
     setFormError(null);
   };
 
@@ -633,9 +704,9 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
 
   // Selected original transaction object for retur
   const selectedOriginalTx = useMemo(() => {
-    if (!selectedOriginalTxId || !originalTransactions) return null;
-    return originalTransactions.find((t: any) => Number(t.id) === Number(selectedOriginalTxId)) || null;
-  }, [selectedOriginalTxId, originalTransactions]);
+    if (!selectedOriginalTxId || !filteredOriginalTransactions) return null;
+    return filteredOriginalTransactions.find((t: any) => Number(t.id) === Number(selectedOriginalTxId)) || null;
+  }, [selectedOriginalTxId, filteredOriginalTransactions]);
 
   // When original transaction selected in Retur
   const handleOriginalTxSelect = (txId: string) => {
@@ -648,7 +719,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
       return;
     }
 
-    const orig = originalTransactions?.find((t: any) => Number(t.id) === Number(txId));
+    const orig = filteredOriginalTransactions?.find((t: any) => Number(t.id) === Number(txId));
     if (orig) {
       // 1. Klien mengambil dari transaksi yang dipilih
       if (orig.clientId) {
@@ -673,10 +744,15 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
         setFormKeterangan(`Retur penjualan dari penjualan ${orig.invoice}`);
       }
 
-      // 4. Baris barang yang bisa diretur (pastikan detailId terbawa)
+      // 4. Baris barang yang bisa diretur (hanya barang yang sesuai jenisIds komoditas ini)
       if (Array.isArray(orig.details)) {
         const mapped = orig.details
-          .filter((d: any) => d.barangId)
+          .filter((d: any) => {
+            if (!d.barangId) return false;
+            if (!jenisIds || jenisIds.length === 0) return true;
+            const bJenisId = Number(d.barang?.jenisId ?? d.barang?.jenis?.id ?? 0);
+            return jenisIds.includes(bJenisId);
+          })
           .map((d: any) => ({
             detailId: Number(d.id),
             barangId: Number(d.barangId),
@@ -702,8 +778,16 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['txCommodity'] });
       queryClient.invalidateQueries({ queryKey: ['stockCommodity'] });
+      queryClient.invalidateQueries({ queryKey: ['inventoryStockSummaryAll'] });
+      queryClient.invalidateQueries({ queryKey: ['inventoryBatches'] });
       queryClient.invalidateQueries({ queryKey: ['labaRugi'] });
       queryClient.invalidateQueries({ queryKey: ['activityLogs'] });
+      queryClient.invalidateQueries({ queryKey: ['monitoringTx'] });
+      queryClient.invalidateQueries({ queryKey: ['curahSummary'] });
+      queryClient.invalidateQueries({ queryKey: ['transaksiCurahTunai'] });
+      queryClient.invalidateQueries({ queryKey: ['transaksiCurahTransfer'] });
+      queryClient.invalidateQueries({ queryKey: ['transaksiCurahBelanja'] });
+      queryClient.invalidateQueries({ queryKey: ['labaRugiCurah'] });
       setIsAddModalOpen(false);
       resetAddForm();
     },
@@ -720,8 +804,16 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['txCommodity'] });
       queryClient.invalidateQueries({ queryKey: ['stockCommodity'] });
+      queryClient.invalidateQueries({ queryKey: ['inventoryStockSummaryAll'] });
+      queryClient.invalidateQueries({ queryKey: ['inventoryBatches'] });
       queryClient.invalidateQueries({ queryKey: ['labaRugi'] });
       queryClient.invalidateQueries({ queryKey: ['activityLogs'] });
+      queryClient.invalidateQueries({ queryKey: ['monitoringTx'] });
+      queryClient.invalidateQueries({ queryKey: ['curahSummary'] });
+      queryClient.invalidateQueries({ queryKey: ['transaksiCurahTunai'] });
+      queryClient.invalidateQueries({ queryKey: ['transaksiCurahTransfer'] });
+      queryClient.invalidateQueries({ queryKey: ['transaksiCurahBelanja'] });
+      queryClient.invalidateQueries({ queryKey: ['labaRugiCurah'] });
       setEditModalTx(null);
       setEditError(null);
     },
@@ -738,8 +830,16 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['txCommodity'] });
       queryClient.invalidateQueries({ queryKey: ['stockCommodity'] });
+      queryClient.invalidateQueries({ queryKey: ['inventoryStockSummaryAll'] });
+      queryClient.invalidateQueries({ queryKey: ['inventoryBatches'] });
       queryClient.invalidateQueries({ queryKey: ['labaRugi'] });
       queryClient.invalidateQueries({ queryKey: ['activityLogs'] });
+      queryClient.invalidateQueries({ queryKey: ['monitoringTx'] });
+      queryClient.invalidateQueries({ queryKey: ['curahSummary'] });
+      queryClient.invalidateQueries({ queryKey: ['transaksiCurahTunai'] });
+      queryClient.invalidateQueries({ queryKey: ['transaksiCurahTransfer'] });
+      queryClient.invalidateQueries({ queryKey: ['transaksiCurahBelanja'] });
+      queryClient.invalidateQueries({ queryKey: ['labaRugiCurah'] });
       setDeleteModalTx(null);
     },
     onError: (err: any) => {
@@ -752,7 +852,6 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
     setSelectedBarangId('');
     setFormQty(1);
     setFormHarga(0);
-    setFormHargaDisplay('0');
     setFormKeterangan('');
     setFormDiskon(0);
     setCartItems([]);
@@ -872,7 +971,6 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
     setEditSelectedBarangId('');
     setEditFormQty(1);
     setEditFormHarga(0);
-    setEditFormHargaDisplay('0');
 
     if (tx.details && Array.isArray(tx.details)) {
       setEditCartItems(
@@ -926,15 +1024,13 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
     setEditSelectedBarangId(bId);
     if (!bId) {
       setEditFormHarga(0);
-      setEditFormHargaDisplay('0');
       return;
     }
     const matchedStock = stockItems?.find((s: any) => Number(s.id || s.barangId) === Number(bId));
     if (matchedStock) {
-      const suggestedPrice = Math.round(Number(matchedStock.hargaRataRata || 0));
+      const suggestedPrice = Number(matchedStock.hargaRataRata || 0);
       if (suggestedPrice > 0) {
         setEditFormHarga(suggestedPrice);
-        setEditFormHargaDisplay(suggestedPrice.toLocaleString('id-ID'));
       }
     }
   };
@@ -956,7 +1052,6 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
     setEditSelectedBarangId('');
     setEditFormQty(1);
     setEditFormHarga(0);
-    setEditFormHargaDisplay('0');
   };
 
   const handleSubmitEdit = (e: React.FormEvent) => {
@@ -985,10 +1080,12 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
   };
 
   const formatRupiah = (val: number) => {
+    const hasFraction = val % 1 !== 0;
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
       currency: 'IDR',
-      maximumFractionDigits: 0,
+      minimumFractionDigits: hasFraction ? 2 : 0,
+      maximumFractionDigits: 2,
     }).format(val || 0);
   };
 
@@ -1110,26 +1207,46 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
 
   const txList = useMemo(() => {
     if (!txData) return [];
-    if (Array.isArray(txData)) return txData;
-    if (Array.isArray(txData.data)) return txData.data;
-    if (Array.isArray(txData.items)) return txData.items;
-    return [];
-  }, [txData]);
+    let raw: any[] = [];
+    if (Array.isArray(txData)) raw = txData;
+    else if (Array.isArray(txData.data)) raw = txData.data;
+    else if (Array.isArray(txData.items)) raw = txData.items;
+
+    // Filter ketat memastikan hanya transaksi komoditas ini yang tampil
+    if (jenisIds && jenisIds.length > 0) {
+      return raw.filter((tx: any) => {
+        if (!tx.details || !Array.isArray(tx.details) || tx.details.length === 0) return true;
+        return tx.details.some((d: any) => {
+          const bJenisId = Number(d.barang?.jenisId ?? d.barang?.jenis?.id ?? 0);
+          return bJenisId ? jenisIds.includes(bJenisId) : true;
+        });
+      });
+    }
+    return raw;
+  }, [txData, jenisIds]);
 
   const txMeta = txData?.meta || {
     total: txList.length,
-    totalKeseluruhan: txList.reduce((acc: number, curr: any) => acc + (Number(curr.total) || 0), 0),
+    totalKeseluruhan: txList.filter((t: any) => t.status !== 'BATAL').reduce((acc: number, curr: any) => acc + (Number(curr.total) || 0), 0),
   };
 
   const pageTotal = useMemo(() => {
-    return txList.reduce((acc: number, curr: any) => acc + (Number(curr.total) || 0), 0);
+    return txList
+      .filter((t: any) => t.status !== 'BATAL')
+      .reduce((acc: number, curr: any) => acc + (Number(curr.total) || 0), 0);
   }, [txList]);
 
   const pageQtyTotal = useMemo(() => {
-    return txList.reduce((acc: number, curr: any) => {
-      const q = (curr.details || []).reduce((sum: number, d: any) => sum + Number(d.qty || 0), 0);
-      return acc + q;
-    }, 0);
+    return txList
+      .filter((t: any) => t.status !== 'BATAL')
+      .reduce((acc: number, curr: any) => {
+        const q = (curr.details || []).reduce((sum: number, d: any) => sum + Number(d.qty || 0), 0);
+        return acc + q;
+      }, 0);
+  }, [txList]);
+
+  const activePageCount = useMemo(() => {
+    return txList.filter((t: any) => t.status !== 'BATAL').length;
   }, [txList]);
 
   const filteredStock = useMemo(() => {
@@ -1216,8 +1333,8 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <ExportButtonGroup onExportExcel={handleExportExcel} />
-          {canRetur && activeTab === 'RETUR_PENJUALAN' ? (
+          {canExport && <ExportButtonGroup onExportExcel={handleExportExcel} />}
+          {canReturPenjualan && activeTab === 'RETUR_PENJUALAN' ? (
             <button
               onClick={() => handleOpenAddModal('RETUR_PENJUALAN')}
               className="flex items-center gap-1.5 px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95"
@@ -1225,7 +1342,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
               <RotateCcw className="w-4 h-4" />
               <span>+ Catat Retur Penjualan</span>
             </button>
-          ) : canRetur && activeTab === 'RETUR_PEMBELIAN' ? (
+          ) : canReturPembelian && activeTab === 'RETUR_PEMBELIAN' ? (
             <button
               onClick={() => handleOpenAddModal('RETUR_PEMBELIAN')}
               className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95"
@@ -1233,54 +1350,71 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
               <RotateCcw className="w-4 h-4" />
               <span>+ Catat Retur Pembelian</span>
             </button>
-          ) : canCreate ? (
+          ) : (
             <>
-              <button
-                onClick={() => handleOpenAddModal('PEMBELIAN')}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95"
-              >
-                <ArrowDownLeft className="w-4 h-4" />
-                <span>Catat Pembelian</span>
-              </button>
-              <button
-                onClick={() => handleOpenAddModal('PENJUALAN')}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95"
-              >
-                <ArrowUpRight className="w-4 h-4" />
-                <span>Catat Penjualan</span>
-              </button>
+              {canCreatePembelian && (
+                <button
+                  onClick={() => handleOpenAddModal('PEMBELIAN')}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95"
+                >
+                  <ArrowDownLeft className="w-4 h-4" />
+                  <span>Catat Pembelian</span>
+                </button>
+              )}
+              {canCreatePenjualan && (
+                <button
+                  onClick={() => handleOpenAddModal('PENJUALAN')}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95"
+                >
+                  <ArrowUpRight className="w-4 h-4" />
+                  <span>Catat Penjualan</span>
+                </button>
+              )}
+              {commodityKey === 'pakan' && hasPermission(user, ['pakan_penjualan:create', 'curah_konversi:create', 'konversi_global:create', 'stok:opname']) && (
+                <Link
+                  to="/konversi-barang"
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-xl border border-indigo-200 transition-all active:scale-95"
+                >
+                  <ArrowRightLeft className="w-4 h-4 text-indigo-600" />
+                  <span>⚡ Konversi Pakan</span>
+                </Link>
+              )}
             </>
-          ) : null}
+          )}
         </div>
       </div>
 
       {/* Tabs Menu */}
       <div className="flex items-center space-x-1 border-b border-slate-200 overflow-x-auto text-xs font-semibold text-slate-500">
-        <button
-          onClick={() => setActiveTab('PENJUALAN')}
-          className={`px-4 py-3 border-b-2 flex items-center space-x-2 whitespace-nowrap transition-all ${
-            activeTab === 'PENJUALAN'
-              ? 'border-blue-600 text-blue-600 font-bold'
-              : 'border-transparent hover:text-slate-700 hover:border-slate-300'
-          }`}
-        >
-          <ArrowUpRight className="w-4 h-4" />
-          <span>Penjualan</span>
-        </button>
+        {canTabPenjualan && (
+          <button
+            onClick={() => setActiveTab('PENJUALAN')}
+            className={`px-4 py-3 border-b-2 flex items-center space-x-2 whitespace-nowrap transition-all ${
+              activeTab === 'PENJUALAN'
+                ? 'border-blue-600 text-blue-600 font-bold'
+                : 'border-transparent hover:text-slate-700 hover:border-slate-300'
+            }`}
+          >
+            <ArrowUpRight className="w-4 h-4" />
+            <span>Penjualan</span>
+          </button>
+        )}
 
-        <button
-          onClick={() => setActiveTab('PEMBELIAN')}
-          className={`px-4 py-3 border-b-2 flex items-center space-x-2 whitespace-nowrap transition-all ${
-            activeTab === 'PEMBELIAN'
-              ? 'border-emerald-600 text-emerald-600 font-bold'
-              : 'border-transparent hover:text-slate-700 hover:border-slate-300'
-          }`}
-        >
-          <ArrowDownLeft className="w-4 h-4" />
-          <span>Pembelian</span>
-        </button>
+        {canTabPembelian && (
+          <button
+            onClick={() => setActiveTab('PEMBELIAN')}
+            className={`px-4 py-3 border-b-2 flex items-center space-x-2 whitespace-nowrap transition-all ${
+              activeTab === 'PEMBELIAN'
+                ? 'border-emerald-600 text-emerald-600 font-bold'
+                : 'border-transparent hover:text-slate-700 hover:border-slate-300'
+            }`}
+          >
+            <ArrowDownLeft className="w-4 h-4" />
+            <span>Pembelian</span>
+          </button>
+        )}
 
-        {canRetur && (
+        {canTabReturPenjualan && (
           <button
             onClick={() => setActiveTab('RETUR_PENJUALAN')}
             className={`px-4 py-3 border-b-2 flex items-center space-x-2 whitespace-nowrap transition-all ${
@@ -1294,7 +1428,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
           </button>
         )}
 
-        {canRetur && (
+        {canTabReturPembelian && (
           <button
             onClick={() => setActiveTab('RETUR_PEMBELIAN')}
             className={`px-4 py-3 border-b-2 flex items-center space-x-2 whitespace-nowrap transition-all ${
@@ -1308,28 +1442,31 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
           </button>
         )}
 
-        <button
-          onClick={() => setActiveTab('STOK')}
-          className={`px-4 py-3 border-b-2 flex items-center space-x-2 whitespace-nowrap transition-all ${
-            activeTab === 'STOK'
-              ? 'border-indigo-600 text-indigo-600 font-bold'
-              : 'border-transparent hover:text-slate-700 hover:border-slate-300'
-          }`}
-        >
-          <Boxes className="w-4 h-4" />
-          <span>{monitoringTabTitle}</span>
-        </button>
+        {canTabStok && (
+          <button
+            onClick={() => setActiveTab('STOK')}
+            className={`px-4 py-3 border-b-2 flex items-center space-x-2 whitespace-nowrap transition-all ${
+              activeTab === 'STOK'
+                ? 'border-indigo-600 text-indigo-600 font-bold'
+                : 'border-transparent hover:text-slate-700 hover:border-slate-300'
+            }`}
+          >
+            <Boxes className="w-4 h-4" />
+            <span>{monitoringTabTitle}</span>
+          </button>
+        )}
       </div>
 
-      {/* Filter Bar */}
-      <div className="flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1">
+      {/* Filter Bar Responsive Mobile & Desktop */}
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+        {/* Baris 1: Pencarian, Filter Mitra, Filter Status */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
           {/* Search Box: Invoice & Barang */}
-          <div className="relative w-full sm:w-64 lg:w-72 shrink-0">
+          <div className="relative w-full">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
             <input
               type="text"
-              placeholder="Cari no. faktur / invoice, nama barang..."
+              placeholder="Cari no. faktur, nama barang..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full pl-9 pr-8 py-2 min-h-[42px] border border-slate-200 rounded-xl text-xs bg-slate-50 focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
@@ -1347,7 +1484,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
           </div>
 
           {/* Filter Mitra / Klien (Searchable Select) */}
-          <div className="w-full sm:w-64 lg:w-72 shrink-0">
+          <div className="w-full">
             <SearchableClientSelect
               clients={filterClientsList}
               value={filterClientId}
@@ -1358,26 +1495,50 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
             />
           </div>
 
-          {/* Reset button if search or client filter is active */}
-          {(search || filterClientId) && (
-            <button
-              type="button"
-              onClick={() => {
-                setSearch('');
-                setFilterClientId('');
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 font-bold rounded-xl transition-colors border border-rose-200/60 self-start sm:self-auto shrink-0 shadow-sm"
-              title="Reset pencarian dan filter mitra"
-            >
-              <X className="w-3.5 h-3.5" />
-              <span>Reset Filter</span>
-            </button>
+          {/* Filter Status (Aktif vs Dihapus) */}
+          {activeTab !== 'STOK' && (
+            <div className="w-full">
+              <select
+                value={filterStatus}
+                onChange={(e) => {
+                  setFilterStatus(e.target.value);
+                  setPage(1);
+                }}
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[42px]"
+              >
+                <option value="SELESAI">Aktif (Tidak Dihapus)</option>
+                <option value="BATAL">Hanya yang Dihapus / Batal</option>
+                <option value="ALL">Semua Status (Aktif & Dihapus)</option>
+              </select>
+            </div>
+          )}
+
+          {/* Reset button if search, client, or status filter is active */}
+          {(search || filterClientId || (filterStatus && filterStatus !== 'SELESAI')) && (
+            <div className="flex items-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('');
+                  setFilterClientId('');
+                  setFilterStatus('SELESAI');
+                  setPage(1);
+                }}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 font-bold rounded-xl transition-colors border border-rose-200/60 min-h-[42px]"
+                title="Reset pencarian dan filter"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Reset Filter</span>
+              </button>
+            </div>
           )}
         </div>
 
+        {/* Baris 2: Filter Tanggal & Presets (Mobile Friendly) */}
         {activeTab !== 'STOK' ? (
-          <div className="flex flex-wrap items-center gap-2 text-xs shrink-0 self-start xl:self-auto">
-            <div className="flex flex-wrap items-center space-x-1 bg-slate-100 p-0.5 rounded-lg text-[11px] font-semibold">
+          <div className="pt-2 border-t border-slate-100 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5">
+            {/* Quick Date Presets: Horizontal Scroll di HP agar rapi tidak bertumpuk */}
+            <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0 scrollbar-none text-[11px] font-semibold bg-slate-100 p-1 rounded-xl shrink-0">
               <button
                 type="button"
                 onClick={() => {
@@ -1385,7 +1546,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                   setStartDate(today);
                   setEndDate(today);
                 }}
-                className={`px-2 py-1 rounded-md transition-all ${
+                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
                   startDate === getTodayDateString() && endDate === getTodayDateString()
                     ? 'bg-white text-emerald-700 shadow-xs font-bold'
                     : 'text-slate-600 hover:text-slate-900'
@@ -1400,7 +1561,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                   setStartDate(m.startDate);
                   setEndDate(m.endDate);
                 }}
-                className={`px-2 py-1 rounded-md transition-all ${
+                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
                   startDate === getCurrentMonthRange().startDate && endDate === getCurrentMonthRange().endDate
                     ? 'bg-white text-emerald-700 shadow-xs font-bold'
                     : 'text-slate-600 hover:text-slate-900'
@@ -1415,7 +1576,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                   setStartDate(m.startDate);
                   setEndDate(m.endDate);
                 }}
-                className={`px-2 py-1 rounded-md transition-all ${
+                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
                   startDate === getLastMonthRange().startDate && endDate === getLastMonthRange().endDate
                     ? 'bg-white text-emerald-700 shadow-xs font-bold'
                     : 'text-slate-600 hover:text-slate-900'
@@ -1429,31 +1590,37 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                   setStartDate('');
                   setEndDate('');
                 }}
-                className={`px-2 py-1 rounded-md transition-all ${
+                className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
                   !startDate && !endDate
                     ? 'bg-white text-emerald-700 shadow-xs font-bold'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                Semua
+                Semua Waktu
               </button>
             </div>
 
-            <div className="flex items-center space-x-1.5">
-              <Calendar className="w-4 h-4 text-slate-400 ml-1" />
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="px-2 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 font-medium"
-              />
-              <span className="text-slate-400">s/d</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="px-2 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 font-medium"
-              />
+            {/* Custom Date Range: 2 kolom rapi di HP */}
+            <div className="grid grid-cols-2 sm:flex items-center gap-2">
+              <div className="relative">
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full sm:w-36 px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  title="Dari Tanggal"
+                />
+              </div>
+              <span className="hidden sm:inline text-slate-400 text-xs font-medium">s/d</span>
+              <div className="relative">
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full sm:w-36 px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  title="Sampai Tanggal"
+                />
+              </div>
             </div>
           </div>
         ) : (
@@ -1550,7 +1717,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                 {formatRupiah(pageTotal)}
               </p>
               <span className="text-xs text-slate-500 mt-1 block">
-                {txList.length} Transaksi Ditampilkan
+                {activePageCount} Transaksi Aktif Ditampilkan
               </span>
             </div>
 
@@ -1579,19 +1746,20 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                   <th className="p-4">Metode Bayar</th>
                   <th className="p-4">Item & Volume</th>
                   <th className="p-4 text-right">Total Transaksi</th>
+                  <th className="p-4 text-center">Status</th>
                   <th className="p-4 text-center w-28">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {loadingTx ? (
                   <tr>
-                    <td colSpan={7} className="p-10 text-center text-slate-400">
+                    <td colSpan={8} className="p-10 text-center text-slate-400">
                       Memuat daftar transaksi komoditas...
                     </td>
                   </tr>
                 ) : txList.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-10 text-center">
+                    <td colSpan={8} className="p-10 text-center">
                       <p className="text-slate-500 font-medium text-sm">
                         {startDate || endDate
                           ? `Tidak ada transaksi pada filter tanggal (${startDate || 'Awal'} s/d ${endDate || 'Kini'}).`
@@ -1626,21 +1794,34 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                   </tr>
                 ) : (
                   txList.map((tx: any, idx: number) => {
-                    const firstItem = tx.details?.[0];
-                    const itemCount = tx.details?.length || 0;
+                    const commodityDetails = (tx.details || []).filter((d: any) => {
+                      if (!jenisIds || jenisIds.length === 0) return true;
+                      const bJenisId = Number(d.barang?.jenisId ?? d.barang?.jenis?.id ?? 0);
+                      return bJenisId ? jenisIds.includes(bJenisId) : true;
+                    });
+                    const firstItem = commodityDetails[0] || tx.details?.[0];
+                    const itemCount = commodityDetails.length;
+                    const isBatal = tx.status === 'BATAL';
                     return (
-                      <tr key={tx.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                      <tr
+                        key={tx.id || idx}
+                        className={`hover:bg-slate-50/80 transition-colors ${
+                          isBatal ? 'opacity-55 bg-slate-50/60' : ''
+                        }`}
+                      >
                         <td className="p-4 text-center font-mono text-slate-400 text-xs">
                           {(page - 1) * limit + idx + 1}
                         </td>
                         <td className="p-4">
-                          <p className="font-bold text-slate-900 font-mono text-xs">{tx.invoice}</p>
+                          <p className={`font-bold font-mono text-xs ${isBatal ? 'line-through text-slate-500' : 'text-slate-900'}`}>
+                            {tx.invoice}
+                          </p>
                           <span className="text-[11px] text-slate-400">
                             {tx.tanggal ? tx.tanggal.slice(0, 10) : '-'}
                           </span>
                         </td>
                         <td className="p-4">
-                          <div className="font-bold text-slate-800 text-xs">
+                          <div className={`font-bold text-xs ${isBatal ? 'text-slate-500' : 'text-slate-800'}`}>
                             {tx.client?.name || 'Pelanggan Umum'}
                           </div>
                           <span className="text-[10px] text-slate-400 uppercase">
@@ -1673,8 +1854,21 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                             )}
                           </span>
                         </td>
-                        <td className="p-4 text-right font-mono font-bold text-slate-900 text-xs">
+                        <td className={`p-4 text-right font-mono font-bold text-xs ${isBatal ? 'line-through text-slate-400' : 'text-slate-900'}`}>
                           {formatRupiah(tx.total)}
+                        </td>
+                        <td className="p-4 text-center whitespace-nowrap">
+                          {isBatal ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                              <XCircle className="w-3 h-3 text-rose-500" />
+                              Dihapus
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                              Aktif
+                            </span>
+                          )}
                         </td>
                         <td className="p-4 text-center">
                           <div className="flex items-center justify-center space-x-1">
@@ -1685,24 +1879,32 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                             >
                               <Eye className="w-4 h-4" />
                             </button>
-                            {canCreate && (
-                              <button
-                                onClick={() => handleOpenEdit(tx)}
-                                className="p-1 text-slate-400 hover:text-emerald-600 rounded"
-                                title="Edit Keterangan"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </button>
-                            )}
-                            {canDelete && (
-                              <button
-                                onClick={() => setDeleteModalTx(tx)}
-                                className="p-1 text-slate-400 hover:text-rose-600 rounded"
-                                title="Hapus Transaksi"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            )}
+                            {(() => {
+                              const canEditThis = tx.type === 'PEMBELIAN' ? canUpdatePembelian : canUpdatePenjualan;
+                              const canDeleteThis = tx.type === 'PEMBELIAN' ? canDeletePembelian : canDeletePenjualan;
+                              return (
+                                <>
+                                  {!isBatal && canEditThis && (
+                                    <button
+                                      onClick={() => handleOpenEdit(tx)}
+                                      className="p-1 text-slate-400 hover:text-emerald-600 rounded"
+                                      title="Edit Transaksi"
+                                    >
+                                      <Edit2 className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                  {!isBatal && canDeleteThis && (
+                                    <button
+                                      onClick={() => setDeleteModalTx(tx)}
+                                      className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                                      title="Batalkan / Hapus Transaksi"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </div>
                         </td>
                       </tr>
@@ -1713,12 +1915,12 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
               <tfoot className="bg-slate-50 border-t-2 border-slate-300 font-bold text-xs">
                 <tr className="border-b border-slate-200 text-slate-600">
                   <td colSpan={5} className="py-2.5 px-4 text-right">
-                    Subtotal Halaman Ini ({txList.length} Transaksi):
+                    Subtotal Halaman Ini ({activePageCount} Transaksi Aktif):
                   </td>
                   <td className="py-2.5 px-4 text-right font-mono text-slate-800 whitespace-nowrap">
                     {formatRupiah(pageTotal)}
                   </td>
-                  <td></td>
+                  <td colSpan={2}></td>
                 </tr>
                 <tr className="bg-blue-50/70 text-slate-900 font-extrabold text-[13px]">
                   <td colSpan={5} className="py-3.5 px-4 text-right uppercase tracking-wider text-blue-900">
@@ -1727,7 +1929,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                   <td className="py-3.5 px-4 text-right font-mono text-blue-700 whitespace-nowrap">
                     {formatRupiah(txMeta.totalKeseluruhan ?? pageTotal)}
                   </td>
-                  <td></td>
+                  <td colSpan={2}></td>
                 </tr>
               </tfoot>
             </table>
@@ -2164,19 +2366,13 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                       </p>
                     </div>
 
-                    <select
+                    <SearchableTransactionSelect
+                      transactions={filteredOriginalTransactions}
                       value={selectedOriginalTxId}
-                      onChange={(e) => handleOriginalTxSelect(e.target.value)}
-                      className="w-full border border-amber-300 rounded-xl p-2.5 text-xs font-semibold bg-white focus:ring-2 focus:ring-amber-500"
+                      onChange={(txId) => handleOriginalTxSelect(txId)}
+                      placeholder="🔍 Cari faktur transaksi asal (ketik no. nota, nama mitra, atau produk)..."
                       required
-                    >
-                      <option value="">-- Pilih Faktur Transaksi Selesai --</option>
-                      {originalTransactions?.map((t: any) => (
-                        <option key={t.id} value={t.id}>
-                          {t.invoice} ({t.tanggal?.slice(0, 10)}) - {t.client?.name || 'Umum'} [Total: {formatRupiah(t.total)}]
-                        </option>
-                      ))}
-                    </select>
+                    />
 
                     {selectedOriginalTx && (
                       <div className="p-2.5 bg-white/90 rounded-lg border border-amber-200 text-xs text-amber-900 grid grid-cols-1 sm:grid-cols-3 gap-2 font-medium">
@@ -2221,39 +2417,6 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                           </option>
                         ))}
                       </select>
-
-                      <div className="mt-1 text-[11px]">
-                        {formType === 'RETUR_PEMBELIAN' && (
-                          [72, 77, 78, 79, 80, 81, 82, 83, 84, 85].includes(formPaymentAccountId) ? (
-                            <span className="text-amber-700 font-semibold">
-                              🏷️ <strong>Metode: HUTANG (Tempo)</strong> — Mengurangi saldo hutang ke supplier secara otomatis.
-                            </span>
-                          ) : [64, 71].includes(formPaymentAccountId) ? (
-                            <span className="text-emerald-700 font-semibold">
-                              💵 <strong>Metode: TUNAI</strong> — Pengembalian dana tunai dari supplier masuk ke kas.
-                            </span>
-                          ) : (
-                            <span className="text-blue-700 font-semibold">
-                              🏦 <strong>Metode: TRANSFER</strong> — Pengembalian dana ditransfer balik ke rekening bank.
-                            </span>
-                          )
-                        )}
-                        {formType === 'RETUR_PENJUALAN' && (
-                          [46, 47, 48, 50, 51, 52, 53, 54, 55, 56, 57, 58].includes(formPaymentAccountId) ? (
-                            <span className="text-amber-700 font-semibold">
-                              🏷️ <strong>Metode: PIUTANG (Tempo / Bon)</strong> — Mengurangi saldo piutang pelanggan secara otomatis.
-                            </span>
-                          ) : [64, 71].includes(formPaymentAccountId) ? (
-                            <span className="text-emerald-700 font-semibold">
-                              💵 <strong>Metode: TUNAI</strong> — Mengembalikan uang kas tunai ke pelanggan.
-                            </span>
-                          ) : (
-                            <span className="text-blue-700 font-semibold">
-                              🏦 <strong>Metode: TRANSFER</strong> — Transfer balik pengembalian dana ke rekening pelanggan.
-                            </span>
-                          )
-                        )}
-                      </div>
                     </div>
                   </div>
 
@@ -2392,6 +2555,10 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                           if (acc) {
                             setFormPaymentMethod(acc.method);
                           }
+                          if (selectedId === 76 && (!formClientId || formClientId === '')) {
+                            const supriyadi = clientsData?.find((c: any) => c.name.toLowerCase().includes('supriyadi'));
+                            if (supriyadi) setFormClientId(String(supriyadi.id));
+                          }
                         }}
                         className="w-full border border-slate-200 rounded-xl p-2.5 text-xs font-bold bg-white"
                       >
@@ -2401,39 +2568,6 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                           </option>
                         ))}
                       </select>
-
-                      <div className="mt-1 text-[11px]">
-                        {formType === 'PEMBELIAN' && (
-                          [72, 77, 78, 79, 80, 81, 82, 83, 84, 85].includes(formPaymentAccountId) ? (
-                            <span className="text-amber-700 font-semibold">
-                              🏷️ <strong>Metode: HUTANG (Tempo)</strong> — Menambah saldo hutang ke {isEgg || commodityKey === 'telur' ? 'peternak' : 'supplier'} secara otomatis.
-                            </span>
-                          ) : [64, 71].includes(formPaymentAccountId) ? (
-                            <span className="text-emerald-700 font-semibold">
-                              💵 <strong>Metode: TUNAI</strong> — Pembayaran lunas via kas tunai fisik.
-                            </span>
-                          ) : (
-                            <span className="text-blue-700 font-semibold">
-                              🏦 <strong>Metode: TRANSFER</strong> — Pembayaran lunas via transfer rekening bank.
-                            </span>
-                          )
-                        )}
-                        {formType === 'PENJUALAN' && (
-                          [46, 47, 48, 50, 51, 52, 53, 54, 55, 56, 57, 58].includes(formPaymentAccountId) ? (
-                            <span className="text-amber-700 font-semibold">
-                              🏷️ <strong>Metode: PIUTANG (Tempo / Bon)</strong> — Menambah saldo piutang mitra secara otomatis.
-                            </span>
-                          ) : [64, 71].includes(formPaymentAccountId) ? (
-                            <span className="text-emerald-700 font-semibold">
-                              💵 <strong>Metode: TUNAI</strong> — Penerimaan kas tunai.
-                            </span>
-                          ) : (
-                            <span className="text-blue-700 font-semibold">
-                              🏦 <strong>Metode: TRANSFER</strong> — Penerimaan via transfer bank.
-                            </span>
-                          )
-                        )}
-                      </div>
                     </div>
                   </div>
 
@@ -2511,16 +2645,15 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                       <label className="block text-xs font-semibold text-slate-600 mb-1">
                         Harga Satuan ({formatRupiah(formHarga)})
                       </label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-2 text-xs font-bold text-slate-400">Rp</span>
-                        <input
-                          type="text"
-                          value={formHargaDisplay}
-                          onChange={(e) => handleHargaInputChange(e.target.value)}
-                          placeholder="1.000"
-                          className="w-full border border-slate-200 rounded-xl p-2 pl-9 text-xs font-mono font-bold bg-white"
-                        />
-                      </div>
+                      <CurrencyInput
+                        value={formHarga}
+                        onChange={(val) => {
+                          setFormHarga(val);
+                        }}
+                        allowDecimal={false}
+                        placeholder="Contoh: Rp 20.000"
+                        className="w-full border border-slate-200 rounded-xl p-2 text-xs font-mono font-bold bg-white"
+                      />
                     </div>
                   </div>
 
@@ -2855,15 +2988,13 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                       </div>
                       <div className="sm:col-span-3">
                         <label className="block text-[11px] font-semibold text-slate-600 mb-1">Harga Satuan</label>
-                        <input
-                          type="text"
-                          value={editFormHargaDisplay}
-                          onChange={(e) => {
-                            const rawVal = e.target.value.replace(/[^0-9]/g, '');
-                            const num = Number(rawVal);
-                            setEditFormHarga(num);
-                            setEditFormHargaDisplay(num ? num.toLocaleString('id-ID') : '0');
+                        <CurrencyInput
+                          value={editFormHarga}
+                          onChange={(val) => {
+                            setEditFormHarga(val);
                           }}
+                          allowDecimal={false}
+                          placeholder="Contoh: Rp 20.000"
                           className="w-full border border-slate-200 rounded-xl p-2 text-xs font-mono font-bold bg-white"
                         />
                       </div>
@@ -2911,14 +3042,12 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                               />
                             </td>
                             <td className="p-2.5 text-right">
-                              <input
-                                type="number"
-                                step="any"
-                                min="0"
+                              <CurrencyInput
                                 value={it.hargaSatuan}
-                                onChange={(e) => handleEditItemHargaChange(idx, Number(e.target.value))}
+                                onChange={(val) => handleEditItemHargaChange(idx, val)}
+                                allowDecimal={false}
+                                placeholder="0"
                                 className="w-36 border border-slate-300 rounded-lg p-1.5 text-right font-mono font-bold text-slate-800 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-blue-500"
-                                required
                               />
                             </td>
                             <td className="p-2.5 text-right font-mono font-bold text-blue-700">
@@ -2955,13 +3084,12 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                       </div>
                       <div className="flex items-center justify-end gap-2 text-xs">
                         <span className="text-slate-500">Diskon (Rp):</span>
-                        <input
-                          type="number"
-                          min="0"
-                          value={editDiskon || ''}
-                          onChange={(e) => setEditDiskon(Number(e.target.value))}
-                          className="w-24 border border-slate-200 rounded-lg p-1 text-right font-mono text-xs"
+                        <CurrencyInput
+                          value={editDiskon}
+                          onChange={(val) => setEditDiskon(val)}
+                          allowDecimal={false}
                           placeholder="0"
+                          className="w-28 border border-slate-200 rounded-lg p-1 text-right font-mono text-xs bg-white"
                         />
                       </div>
                       <div className="text-sm font-extrabold text-blue-700">

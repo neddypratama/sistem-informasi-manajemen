@@ -6,6 +6,7 @@ export declare class KategoriService {
         detailKategoriId?: number;
         type?: string;
         search?: string;
+        status?: string;
     }): Promise<({
         detailKategori: {
             id: bigint;

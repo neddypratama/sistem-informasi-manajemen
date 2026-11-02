@@ -5,6 +5,22 @@ Dokumen ini mencatat seluruh riwayat perubahan arsitektur, fitur, dan evolusi te
 
 ---
 
+## [2.1.0] - Pembaruan Fitur Operasional & Hak Akses Granular (November 2026)
+
+### 🚀 Ditambahkan (Added)
+* **Matriks Hak Akses Granular (CRUD per Sub-Fitur):** Pembagian izin Create, Read, Update, Delete secara terpisah untuk setiap sub-fitur komoditas (Telur, Pakan Pabrikan, Pakan Curah, Obat, Tray, Stok, Keuangan, Laporan, Master).
+* **Search Select Retur Transaksi Pintar:** Komponen `SearchableTransactionSelect` yang memungkinkan pencarian nota asal saat retur berdasarkan nomor invoice, nama mitra, tanggal, maupun nama produk dalam nota.
+* **Modul Terpadu Pakan Curah (Pak Pri):** Portal khusus `/curah-pak-pri` yang mengintegrasikan 4 kartu KPI modal talangan dan stok, 3 tab fungsional (Operasional Mbak Pakan, Audit Kas & Belanja Bahan Pak Pri, dan Konversi Racik Pakan).
+* **Konversi Barang & Reproses Persediaan:** Fitur peracikan dan transformasi produk lintas komoditas dengan kalkulasi rendemen dan susut otomatis.
+* **Filter Periode Tanggal Terpadu:** Quick date filter (Hari Ini, Bulan Ini, Bulan Lalu, Semua, Custom Date) di seluruh modul transaksi dan audit.
+
+### 🔄 Diubah (Changed)
+* **Penyelarasan Menu Komoditas di Sidebar:** Pemisahan navigasi menjadi `Menu Telur`, `Pakan Pabrikan`, `Pakan Curah (Pak Pri)`, `Menu Obat`, dan `Menu Tray`.
+* **Clean UI & Form Refinement:** Menghilangkan teks petunjuk manual metode akuntansi yang membebani tampilan modal transaksi dan retur.
+* **Pembaruan Buku Panduan Penggunaan:** Dokumen resmi User Manual diperbarui dalam 3 format (Word .docx, HTML, dan PDF) yang otomatis disinkronkan ke root dan folder `/docs`.
+
+---
+
 ## [2.0.0] - Modernisasi Arsitektur Skala 5–10 Tahun (Masa Sekarang)
 
 ### 🚀 Ditambahkan (Added)

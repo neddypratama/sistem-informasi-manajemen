@@ -14,12 +14,15 @@ import {
   Trash2,
   X,
   AlertTriangle,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 
 export const BarangPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [jenisId, setJenisId] = useState<number | ''>('');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
 
@@ -62,11 +65,12 @@ export const BarangPage: React.FC = () => {
 
   // 3. Fetch Barangs
   const { data: barangsData, isLoading } = useQuery({
-    queryKey: ['barangsGrid', search, jenisId, page, limit],
+    queryKey: ['barangsGrid', search, jenisId, selectedStatus, page, limit],
     queryFn: async () => {
       let url = `/master/barangs?page=${page}&limit=${limit}`;
       if (search) url += `&search=${encodeURIComponent(search)}`;
       if (jenisId) url += `&jenisId=${jenisId}`;
+      if (selectedStatus) url += `&status=${selectedStatus}`;
       const res: any = await apiClient.get(url);
       return res;
     },
@@ -216,9 +220,9 @@ export const BarangPage: React.FC = () => {
       </div>
 
       {/* Filter & Search */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3">
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
         <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
           <input
             type="text"
             value={search}
@@ -227,7 +231,7 @@ export const BarangPage: React.FC = () => {
               setPage(1);
             }}
             placeholder="Cari nama barang atau kode..."
-            className="w-full pl-9 pr-4 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+            className="w-full pl-9 pr-4 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50 focus:ring-1 focus:ring-emerald-500 focus:outline-none min-h-[40px]"
           />
         </div>
 
@@ -249,90 +253,130 @@ export const BarangPage: React.FC = () => {
             ]}
           />
         </div>
+
+        {/* Status Filter */}
+        <div className="w-full sm:w-52">
+          <select
+            value={selectedStatus}
+            onChange={(e) => {
+              setSelectedStatus(e.target.value);
+              setPage(1);
+            }}
+            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 min-h-[40px]"
+          >
+            <option value="all">Semua Status (Aktif & Dihapus)</option>
+            <option value="aktif">Aktif (Tidak Dihapus)</option>
+            <option value="dihapus">Dihapus (Nonaktif)</option>
+          </select>
+        </div>
       </div>
 
       {/* Table Data */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase">
-            <tr>
-              <th className="p-4 w-12 text-center">No</th>
-              <th className="p-4 w-32">Kode Barang</th>
-              <th className="p-4">Nama Produk</th>
-              <th className="p-4">Jenis Komoditas</th>
-              <th className="p-4">Satuan</th>
-              <th className="p-4 text-center">Stok Minimum</th>
-              <th className="p-4 text-center">Status</th>
-              <th className="p-4 text-center w-28">Aksi</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {isLoading ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase">
               <tr>
-                <td colSpan={8} className="p-10 text-center text-slate-400">
-                  Memuat master data barang...
-                </td>
+                <th className="p-4 w-12 text-center">No</th>
+                <th className="p-4 w-32">Kode Barang</th>
+                <th className="p-4">Nama Produk</th>
+                <th className="p-4">Jenis Komoditas</th>
+                <th className="p-4">Satuan</th>
+                <th className="p-4 text-center">Stok Minimum</th>
+                <th className="p-4 text-center">Status</th>
+                <th className="p-4 text-center w-28">Aksi</th>
               </tr>
-            ) : items.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="p-10 text-center text-slate-400">
-                  Tidak ada barang yang cocok dengan kriteria pencarian.
-                </td>
-              </tr>
-            ) : (
-              items.map((b: any, idx: number) => (
-                <tr key={b.id || idx} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="p-4 text-center font-mono text-slate-400 text-xs">
-                    {(page - 1) * limit + idx + 1}
-                  </td>
-                  <td className="p-4 font-mono font-bold text-xs text-emerald-700">
-                    {b.code || `BRG-${String(b.id).padStart(4, '0')}`}
-                  </td>
-                  <td className="p-4 font-bold text-slate-800">{b.name}</td>
-                  <td className="p-4 text-xs font-medium text-slate-600">
-                    {b.jenis?.name || '-'}
-                  </td>
-                  <td className="p-4 text-xs text-slate-500 font-medium">
-                    {b.satuan?.name || 'Kg'}
-                  </td>
-                  <td className="p-4 text-center font-mono text-xs text-slate-700">
-                    {b.stokMinimum || 0}
-                  </td>
-                  <td className="p-4 text-center">
-                    <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">
-                      Aktif
-                    </span>
-                  </td>
-                  <td className="p-4 text-center">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <button
-                        onClick={() => setDetailItem(b)}
-                        title="Lihat Detail"
-                        className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleOpenEdit(b)}
-                        title="Edit Barang"
-                        className="p-1.5 rounded-lg text-slate-500 hover:text-amber-700 hover:bg-amber-50 transition-colors"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setDeleteItem(b)}
-                        title="Hapus Barang (Soft Delete)"
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {isLoading ? (
+                <tr>
+                  <td colSpan={8} className="p-10 text-center text-slate-400">
+                    Memuat master data barang...
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : items.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="p-10 text-center text-slate-400">
+                    Tidak ada barang yang cocok dengan kriteria pencarian.
+                  </td>
+                </tr>
+              ) : (
+                items.map((b: any, idx: number) => {
+                  const isActive = b.isActive !== false;
+                  return (
+                    <tr
+                      key={b.id || idx}
+                      className={`transition-colors ${
+                        !isActive
+                          ? 'bg-rose-50/40 text-slate-400 line-through hover:bg-rose-50/60'
+                          : 'hover:bg-slate-50/80'
+                      }`}
+                    >
+                      <td className="p-4 text-center font-mono text-slate-400 text-xs">
+                        {(page - 1) * limit + idx + 1}
+                      </td>
+                      <td className="p-4 font-mono font-bold text-xs text-emerald-700">
+                        {b.code || `BRG-${String(b.id).padStart(4, '0')}`}
+                      </td>
+                      <td className="p-4 font-bold text-slate-800">{b.name}</td>
+                      <td className="p-4 text-xs font-medium text-slate-600">
+                        {b.jenis?.name || '-'}
+                      </td>
+                      <td className="p-4 text-xs text-slate-500 font-medium">
+                        {b.satuan?.name || 'Kg'}
+                      </td>
+                      <td className="p-4 text-center font-mono text-xs text-slate-700">
+                        {b.stokMinimum || 0}
+                      </td>
+                      <td className="p-4 text-center whitespace-nowrap">
+                        {isActive ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Aktif</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800">
+                            <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                            <span>Dihapus</span>
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-4 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => setDetailItem(b)}
+                            title="Lihat Detail"
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          {isActive && (
+                            <>
+                              <button
+                                onClick={() => handleOpenEdit(b)}
+                                title="Edit Barang"
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-amber-700 hover:bg-amber-50 transition-colors"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => setDeleteItem(b)}
+                                title="Hapus Barang (Soft Delete)"
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
 
         {/* Pagination Bar */}
         <Pagination

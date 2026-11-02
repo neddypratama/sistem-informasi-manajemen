@@ -7,7 +7,6 @@ import { exportToExcel } from '../../lib/export-utils';
 import {
   Tag,
   Search,
-  Filter,
   FolderTree,
   CheckCircle,
   Plus,
@@ -23,6 +22,7 @@ export const KategoriPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [selectedDk, setSelectedDk] = useState<string>('');
+  const [selectedStatus, setSelectedStatus] = useState<string>('');
 
   // Modals state
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -45,11 +45,12 @@ export const KategoriPage: React.FC = () => {
 
   // 1. Fetch Kategoris
   const { data: kategoriData, isLoading } = useQuery({
-    queryKey: ['kategoris', search, selectedDk],
+    queryKey: ['kategoris', search, selectedDk, selectedStatus],
     queryFn: async () => {
       let url = `/master/kategoris?limit=150`;
       if (search) url += `&search=${encodeURIComponent(search)}`;
       if (selectedDk) url += `&detailKategoriId=${selectedDk}`;
+      if (selectedStatus) url += `&status=${selectedStatus}`;
       const res: any = await apiClient.get(url);
       return res.data;
     },
@@ -227,22 +228,22 @@ export const KategoriPage: React.FC = () => {
       </div>
 
       {/* Filters & Search */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div className="flex flex-1 items-center gap-3 w-full sm:w-auto">
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 flex-1">
           {/* Search Box */}
-          <div className="relative flex-1 max-w-sm">
+          <div className="relative flex-1">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
             <input
               type="text"
               placeholder="Cari kode atau nama kategori..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 min-h-[40px]"
             />
           </div>
 
           {/* Filter by Detail Kategori (Searchable) */}
-          <div className="w-56">
+          <div className="w-full sm:w-60">
             <SearchableSelect
               placeholder="Semua Detail Kategori"
               searchPlaceholder="Cari detail kategori..."
@@ -258,49 +259,70 @@ export const KategoriPage: React.FC = () => {
               ]}
             />
           </div>
+
+          {/* Status Filter */}
+          <div className="w-full sm:w-52">
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 min-h-[40px]"
+            >
+              <option value="">Semua Status (Aktif & Dihapus)</option>
+              <option value="aktif">Aktif (Tidak Dihapus)</option>
+              <option value="dihapus">Dihapus (Nonaktif)</option>
+            </select>
+          </div>
         </div>
 
-        <span className="text-xs text-slate-500 font-medium">
+        <span className="text-xs text-slate-500 font-medium shrink-0 text-right sm:text-left">
           Menampilkan {items.length} dari {total} kategori
         </span>
       </div>
 
       {/* Kategori Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase">
-            <tr>
-              <th className="p-4 w-12 text-center">ID</th>
-              <th className="p-4 w-28">Kode</th>
-              <th className="p-4">Nama Kategori</th>
-              <th className="p-4">Detail Kategori (Header)</th>
-              <th className="p-4">Tipe / Klasifikasi</th>
-              <th className="p-4 text-center w-24">Status</th>
-              <th className="p-4 text-center w-28">Aksi</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {isLoading ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase">
               <tr>
-                <td colSpan={7} className="p-10 text-center text-slate-400">
-                  Memuat daftar master kategori...
-                </td>
+                <th className="p-4 w-12 text-center">ID</th>
+                <th className="p-4 w-28">Kode</th>
+                <th className="p-4">Nama Kategori</th>
+                <th className="p-4">Detail Kategori (Header)</th>
+                <th className="p-4">Tipe / Klasifikasi</th>
+                <th className="p-4 text-center w-24">Status</th>
+                <th className="p-4 text-center w-28">Aksi</th>
               </tr>
-            ) : items.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="p-10 text-center text-slate-400">
-                  Tidak ada kategori yang sesuai dengan filter.
-                </td>
-              </tr>
-            ) : (
-              items.map((kat: any) => {
-                const isHpp = kat.id >= 90 && kat.id <= 100;
-                const isCurah = kat.id === 89 || kat.id === 96 || kat.name.toLowerCase().includes('curah');
-                const isSales = kat.id >= 1 && kat.id <= 10;
-                const isActive = kat.isActive !== false;
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {isLoading ? (
+                <tr>
+                  <td colSpan={7} className="p-10 text-center text-slate-400">
+                    Memuat daftar master kategori...
+                  </td>
+                </tr>
+              ) : items.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-10 text-center text-slate-400">
+                    Tidak ada kategori yang sesuai dengan filter.
+                  </td>
+                </tr>
+              ) : (
+                items.map((kat: any) => {
+                  const isHpp = kat.id >= 90 && kat.id <= 100;
+                  const isCurah = kat.id === 89 || kat.id === 96 || kat.name.toLowerCase().includes('curah');
+                  const isSales = kat.id >= 1 && kat.id <= 10;
+                  const isActive = kat.isActive !== false;
 
-                return (
-                  <tr key={kat.id} className="hover:bg-slate-50/80 transition-colors">
+                  return (
+                    <tr
+                      key={kat.id}
+                      className={`transition-colors ${
+                        !isActive
+                          ? 'bg-rose-50/40 text-slate-400 line-through hover:bg-rose-50/60'
+                          : 'hover:bg-slate-50/80'
+                      }`}
+                    >
                     <td className="p-4 text-center font-mono text-slate-400 text-xs">{kat.id}</td>
                     <td className="p-4 font-mono font-bold text-emerald-700 text-xs">{kat.code || '-'}</td>
                     <td className="p-4 font-bold text-slate-800">
@@ -382,6 +404,7 @@ export const KategoriPage: React.FC = () => {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* ========================================================= */}

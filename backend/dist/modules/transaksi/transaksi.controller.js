@@ -27,6 +27,9 @@ let TransaksiController = class TransaksiController {
     async getClientLedger(clientId) {
         return this.transaksiService.getClientLedger(Number(clientId));
     }
+    async getCurahSummary(startDate, endDate) {
+        return this.transaksiService.getCurahSummary(startDate, endDate);
+    }
     async findOne(id) {
         return this.transaksiService.findOne(Number(id));
     }
@@ -78,6 +81,14 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], TransaksiController.prototype, "getClientLedger", null);
+__decorate([
+    Get('curah/summary'),
+    __param(0, Query('startDate')),
+    __param(1, Query('endDate')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", Promise)
+], TransaksiController.prototype, "getCurahSummary", null);
 __decorate([
     Get(':id'),
     __param(0, Param('id')),

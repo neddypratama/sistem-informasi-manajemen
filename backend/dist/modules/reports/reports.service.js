@@ -45,8 +45,10 @@ let ReportsService = class ReportsService {
       SELECT jd.kategori_id, k.name, SUM(jd.kredit - jd.debit) as total_penjualan
       FROM jurnal_details jd
       JOIN jurnal_umums ju ON ju.id = jd.jurnal_id
+      LEFT JOIN transaksis t ON t.id = ju.transaksi_id
       JOIN kategoris k ON k.id = jd.kategori_id
       WHERE jd.kategori_id BETWEEN 1 AND 10 AND jd.kategori_id != 8
+        AND (t.id IS NULL OR t.status IS NULL OR t.status != 'BATAL')
         AND ju.tanggal BETWEEN ${start} AND ${end}
       GROUP BY jd.kategori_id, k.name
     `;
@@ -54,8 +56,10 @@ let ReportsService = class ReportsService {
       SELECT jd.kategori_id, k.name, SUM(jd.debit - jd.kredit) as total_hpp
       FROM jurnal_details jd
       JOIN jurnal_umums ju ON ju.id = jd.jurnal_id
+      LEFT JOIN transaksis t ON t.id = ju.transaksi_id
       JOIN kategoris k ON k.id = jd.kategori_id
       WHERE jd.kategori_id BETWEEN 90 AND 99 AND jd.kategori_id != 96
+        AND (t.id IS NULL OR t.status IS NULL OR t.status != 'BATAL')
         AND ju.tanggal BETWEEN ${start} AND ${end}
       GROUP BY jd.kategori_id, k.name
     `;
@@ -63,9 +67,11 @@ let ReportsService = class ReportsService {
       SELECT jd.kategori_id, k.name, dk.name as group_name, SUM(jd.debit - jd.kredit) as total_beban
       FROM jurnal_details jd
       JOIN jurnal_umums ju ON ju.id = jd.jurnal_id
+      LEFT JOIN transaksis t ON t.id = ju.transaksi_id
       JOIN kategoris k ON k.id = jd.kategori_id
       JOIN detail_kategoris dk ON dk.id = k.detail_kategori_id
       WHERE ((dk.name LIKE '%Beban%' OR dk.name LIKE '%Biaya%' OR (jd.kategori_id BETWEEN 22 AND 45)) AND jd.kategori_id != 38)
+        AND (t.id IS NULL OR t.status IS NULL OR t.status != 'BATAL')
         AND ju.tanggal BETWEEN ${start} AND ${end}
       GROUP BY jd.kategori_id, k.name, dk.name
       ORDER BY total_beban DESC
@@ -74,9 +80,11 @@ let ReportsService = class ReportsService {
       SELECT jd.kategori_id, k.name, dk.name as group_name, SUM(jd.kredit - jd.debit) as total_pendapatan
       FROM jurnal_details jd
       JOIN jurnal_umums ju ON ju.id = jd.jurnal_id
+      LEFT JOIN transaksis t ON t.id = ju.transaksi_id
       JOIN kategoris k ON k.id = jd.kategori_id
       JOIN detail_kategoris dk ON dk.id = k.detail_kategori_id
       WHERE jd.kategori_id BETWEEN 11 AND 21
+        AND (t.id IS NULL OR t.status IS NULL OR t.status != 'BATAL')
         AND ju.tanggal BETWEEN ${start} AND ${end}
       GROUP BY jd.kategori_id, k.name, dk.name
       ORDER BY total_pendapatan DESC
@@ -244,7 +252,9 @@ let ReportsService = class ReportsService {
       SELECT COALESCE(SUM(jd.debit - jd.kredit), 0) as total_hpp
       FROM jurnal_details jd
       JOIN jurnal_umums ju ON ju.id = jd.jurnal_id
+      LEFT JOIN transaksis t ON t.id = ju.transaksi_id
       WHERE jd.coa_id = 96
+        AND (t.id IS NULL OR t.status IS NULL OR t.status != 'BATAL')
         AND ju.tanggal BETWEEN ${start} AND ${end}
     `;
         const stokCurah = await this.prisma.$queryRaw `
@@ -722,9 +732,13 @@ let ReportsService = class ReportsService {
     async getNeraca(startDate, endDate) {
         return this.getLaporanAset(startDate, endDate);
     }
-    async getLaporanKas(startDate, endDate, search, kasAccountId, type, limit = 200) {
-        const start = new Date(`${startDate} 00:00:00`);
-        const end = new Date(`${endDate} 23:59:59`);
+    async getLaporanKas(startDate, endDate, search, kasAccountId, type, limit = 200, status) {
+        const defaultStart = '2020-01-01';
+        const defaultEnd = new Date().toISOString().slice(0, 10);
+        const sStr = startDate && startDate.trim().length > 0 ? startDate.trim() : defaultStart;
+        const eStr = endDate && endDate.trim().length > 0 ? endDate.trim() : defaultEnd;
+        const start = new Date(`${sStr} 00:00:00`);
+        const end = new Date(`${eStr} 23:59:59`);
         const KAS_BANK_ACCOUNTS = [
             { id: 64, name: 'Kas Tunai' },
             { id: 71, name: 'Kas Deby' },
@@ -792,6 +806,11 @@ let ReportsService = class ReportsService {
             : type === 'KELUAR'
                 ? Prisma.sql `AND jd.kredit > 0`
                 : Prisma.empty;
+        const statusFilter = status === 'BATAL'
+            ? Prisma.sql `AND t.status = 'BATAL'`
+            : status === 'ALL' || status === 'SEMUA'
+                ? Prisma.empty
+                : Prisma.sql `AND (t.status IS NULL OR t.status != 'BATAL')`;
         const mutasiRinci = await this.prisma.$queryRaw `
       SELECT 
         ju.id as jurnal_id,
@@ -804,14 +823,15 @@ let ReportsService = class ReportsService {
         jd.kredit,
         t.invoice,
         t.payment_method,
+        t.status as transaksi_status,
         c.name as client_name
       FROM jurnal_details jd
       JOIN jurnal_umums ju ON ju.id = jd.jurnal_id
       JOIN chart_of_accounts coa ON coa.id = jd.coa_id
       LEFT JOIN transaksis t ON t.id = ju.transaksi_id
       LEFT JOIN clients c ON c.id = t.client_id
-      WHERE (t.status IS NULL OR t.status != 'BATAL')
-        AND ju.tanggal BETWEEN ${start} AND ${end}
+      WHERE ju.tanggal BETWEEN ${start} AND ${end}
+        ${statusFilter}
         ${accountFilter}
         ${typeFilter}
         ${searchQuery ? Prisma.sql `AND (ju.keterangan LIKE ${searchQuery} OR ju.nomor_jurnal LIKE ${searchQuery} OR t.invoice LIKE ${searchQuery} OR c.name LIKE ${searchQuery})` : Prisma.empty}
@@ -851,12 +871,26 @@ let ReportsService = class ReportsService {
         else if (eStr) {
             where.tanggal = { lte: new Date(`${eStr} 23:59:59`) };
         }
+        const notBatalCondition = {
+            OR: [
+                { transaksiId: null },
+                { transaksi: { status: { not: 'BATAL' } } },
+            ],
+        };
         if (query?.search) {
-            where.OR = [
-                { nomorJurnal: { contains: query.search } },
-                { keterangan: { contains: query.search } },
-                { transaksi: { invoice: { contains: query.search } } },
+            where.AND = [
+                notBatalCondition,
+                {
+                    OR: [
+                        { nomorJurnal: { contains: query.search } },
+                        { keterangan: { contains: query.search } },
+                        { transaksi: { invoice: { contains: query.search } } },
+                    ],
+                },
             ];
+        }
+        else {
+            where.AND = [notBatalCondition];
         }
         const [jurnals, total] = await Promise.all([
             this.prisma.jurnalUmum.findMany({

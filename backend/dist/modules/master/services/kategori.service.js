@@ -16,6 +16,12 @@ let KategoriService = class KategoriService {
     }
     async findAll(query) {
         const where = {};
+        if (query?.status === 'aktif') {
+            where.isActive = true;
+        }
+        else if (query?.status === 'dihapus') {
+            where.isActive = false;
+        }
         if (query?.detailKategoriId) {
             where.detailKategoriId = BigInt(query.detailKategoriId);
         }

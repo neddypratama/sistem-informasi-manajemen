@@ -12,15 +12,7 @@ export class ReportsController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const startOfMonth = `${y}-${m}-01`;
-    const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
-    const endOfMonth = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
-    const start = startDate || startOfMonth;
-    const end = endDate || endOfMonth;
-    return this.reportsService.getLabaRugi(start, end);
+    return this.reportsService.getLabaRugi(startDate, endDate);
   }
 
   @Get('laba-rugi/curah')
@@ -28,15 +20,7 @@ export class ReportsController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const startOfMonth = `${y}-${m}-01`;
-    const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
-    const endOfMonth = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
-    const start = startDate || startOfMonth;
-    const end = endDate || endOfMonth;
-    return this.reportsService.getLabaRugiCurah(start, end);
+    return this.reportsService.getLabaRugiCurah(startDate, endDate);
   }
 
   @Get('bon-titipan')
@@ -80,17 +64,16 @@ export class ReportsController {
     @Query('kasAccountId') kasAccountId?: string,
     @Query('type') type?: string,
     @Query('limit') limit?: string,
+    @Query('status') status?: string,
   ) {
-    const today = new Date().toISOString().slice(0, 10);
-    const start = startDate || today;
-    const end = endDate || today;
     return this.reportsService.getLaporanKas(
-      start,
-      end,
+      startDate,
+      endDate,
       search,
       kasAccountId ? Number(kasAccountId) : undefined,
       type,
       limit ? Number(limit) : 200,
+      status,
     );
   }
 

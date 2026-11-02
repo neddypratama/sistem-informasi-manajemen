@@ -3,6 +3,7 @@ export declare class QueryTransaksiDto {
     type?: string;
     status?: TransaksiStatus;
     module?: string;
+    paymentMethod?: string;
     search?: string;
     clientId?: number;
     jenisId?: number;

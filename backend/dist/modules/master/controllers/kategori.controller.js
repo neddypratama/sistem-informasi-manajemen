@@ -18,11 +18,12 @@ let KategoriController = class KategoriController {
     constructor(kategoriService) {
         this.kategoriService = kategoriService;
     }
-    async findAll(detailKategoriId, type, search) {
+    async findAll(detailKategoriId, type, search, status) {
         return this.kategoriService.findAll({
             detailKategoriId: detailKategoriId ? Number(detailKategoriId) : undefined,
             type,
             search,
+            status,
         });
     }
     async findOne(id) {
@@ -43,8 +44,9 @@ __decorate([
     __param(0, Query('detailKategoriId')),
     __param(1, Query('type')),
     __param(2, Query('search')),
+    __param(3, Query('status')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String, String]),
+    __metadata("design:paramtypes", [String, String, String, String]),
     __metadata("design:returntype", Promise)
 ], KategoriController.prototype, "findAll", null);
 __decorate([

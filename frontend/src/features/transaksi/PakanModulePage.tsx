@@ -15,4 +15,5 @@ export const PakanModulePage: React.FC = () => {
     />
   );
 };
+
 export default PakanModulePage;

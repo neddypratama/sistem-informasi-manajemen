@@ -3,4 +3,5 @@ export declare class QueryBarangDto {
     jenisId?: number;
     page?: number;
     limit?: number;
+    status?: string;
 }

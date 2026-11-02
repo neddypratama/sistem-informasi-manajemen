@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api-client';
 import { ExportButtonGroup } from '../../components/ExportButtonGroup';
@@ -41,6 +41,7 @@ export const UserManagementPage: React.FC = () => {
   const [editUser, setEditUser] = useState<any | null>(null);
   const [isAddRoleOpen, setIsAddRoleOpen] = useState(false);
   const [editRole, setEditRole] = useState<any | null>(null);
+  const [permissionSearch, setPermissionSearch] = useState('');
 
   // User Form State (Add)
   const [formName, setFormName] = useState('');
@@ -98,12 +99,17 @@ export const UserManagementPage: React.FC = () => {
     queryFn: async () => {
       if (!selectedRoleId) return null;
       const res: any = await apiClient.get(`/roles/${selectedRoleId}`);
-      const data = res?.data || res;
-      setRolePermissionsState(data?.permissionIds || []);
-      return data;
+      return res?.data || res;
     },
     enabled: !!selectedRoleId,
   });
+
+  // Sync role permissions state when selected role detail changes
+  useEffect(() => {
+    if (selectedRoleDetail?.permissionIds) {
+      setRolePermissionsState(selectedRoleDetail.permissionIds);
+    }
+  }, [selectedRoleDetail]);
 
   // Mutations
   const createUserMutation = useMutation({
@@ -181,6 +187,7 @@ export const UserManagementPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['roleDetail', selectedRoleId] });
       queryClient.invalidateQueries({ queryKey: ['rolesList'] });
+      queryClient.invalidateQueries({ queryKey: ['myProfileSync'] });
       alert('Hak akses permission per role berhasil disimpan!');
     },
     onError: (err: any) => {
@@ -248,8 +255,9 @@ export const UserManagementPage: React.FC = () => {
   };
 
   const handleGrantAll = () => {
-    if (!permissionsData?.all) return;
-    const allIds = permissionsData.all.map((p: any) => p.id);
+    const allList = permissionsData?.data?.all || permissionsData?.all || [];
+    if (!allList.length) return;
+    const allIds = allList.map((p: any) => p.id);
     setRolePermissionsState(allIds);
   };
 
@@ -286,10 +294,33 @@ export const UserManagementPage: React.FC = () => {
     ? rolesData
     : [];
 
-  const permissionGroups: any[] =
-    permissionsData?.data?.grouped ||
-    permissionsData?.grouped ||
-    [];
+  const permissionGroups: any[] = useMemo(() => {
+    if (!permissionsData) return [];
+    const grps = permissionsData?.data?.grouped || permissionsData?.grouped || [];
+    return Array.isArray(grps) ? grps : [];
+  }, [permissionsData]);
+
+  const filteredPermissionGroups = useMemo(() => {
+    if (!permissionSearch.trim()) return permissionGroups;
+    const q = permissionSearch.toLowerCase();
+    return permissionGroups
+      .map((grp: any) => {
+        const groupName = grp?.group || '';
+        const matchesGroup = groupName.toLowerCase().includes(q);
+        const perms = Array.isArray(grp?.permissions) ? grp.permissions : [];
+        const filteredPerms = perms.filter(
+          (p: any) =>
+            matchesGroup ||
+            (p?.name || '').toLowerCase().includes(q) ||
+            (p?.description || '').toLowerCase().includes(q)
+        );
+        return {
+          ...grp,
+          permissions: filteredPerms,
+        };
+      })
+      .filter((grp: any) => grp.permissions && grp.permissions.length > 0);
+  }, [permissionGroups, permissionSearch]);
 
   const handleExportExcel = async () => {
     let dataToExport = users;
@@ -407,9 +438,9 @@ export const UserManagementPage: React.FC = () => {
             <Key className="w-4 h-4 text-amber-500" />
           </div>
           <p className="text-2xl font-extrabold text-amber-800 font-mono mt-2">
-            {permissionsData?.total || 37} <span className="text-sm font-normal text-slate-400">Izin</span>
+            {permissionsData?.data?.total || permissionsData?.total || 170} <span className="text-sm font-normal text-slate-400">Izin</span>
           </p>
-          <span className="text-xs text-slate-500 mt-1 block">10 Modul Terstruktur</span>
+          <span className="text-xs text-slate-500 mt-1 block">17 Modul CRUD Terstruktur</span>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
@@ -726,17 +757,39 @@ export const UserManagementPage: React.FC = () => {
               </div>
             </div>
 
+            {/* Quick Search Permissions */}
+            <div className="relative mb-3">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+              <input
+                type="text"
+                placeholder="Cari hak akses... (misal: telur, pakan, delete, create, kas, jurnal)"
+                value={permissionSearch}
+                onChange={(e) => setPermissionSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl text-xs bg-white font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-2xs"
+              />
+              {permissionSearch && (
+                <button
+                  type="button"
+                  onClick={() => setPermissionSearch('')}
+                  className="absolute right-3 top-2.5 text-xs text-slate-400 hover:text-slate-600 font-bold"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
             {/* Permission Groups */}
             <div className="space-y-4">
-              {permissionGroups.map((grp: any) => {
-                const groupPermIds = grp.permissions.map((p: any) => p.id);
-                const allSelected = groupPermIds.every((id: number) =>
-                  rolePermissionsState.includes(id)
-                );
+              {filteredPermissionGroups.map((grp: any) => {
+                const perms: any[] = Array.isArray(grp?.permissions) ? grp.permissions : [];
+                const groupPermIds = perms.map((p: any) => p.id);
+                const allSelected =
+                  groupPermIds.length > 0 &&
+                  groupPermIds.every((id: number) => rolePermissionsState.includes(id));
 
                 return (
                   <div
-                    key={grp.group}
+                    key={grp.group || Math.random()}
                     className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 hover:bg-slate-50 transition-all"
                   >
                     <div className="flex items-center justify-between pb-2 mb-3 border-b border-slate-200/60">
@@ -746,7 +799,7 @@ export const UserManagementPage: React.FC = () => {
                           {grp.group}
                         </h4>
                         <span className="text-[10px] text-slate-400">
-                          ({grp.permissions.length} fungsi)
+                          ({perms.length} fungsi)
                         </span>
                       </div>
 
@@ -770,7 +823,7 @@ export const UserManagementPage: React.FC = () => {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                      {grp.permissions.map((p: any) => {
+                      {perms.map((p: any) => {
                         const checked = rolePermissionsState.includes(p.id);
                         return (
                           <label
