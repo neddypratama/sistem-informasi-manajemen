@@ -4,8 +4,8 @@ export declare class ReportsController {
     constructor(reportsService: ReportsService);
     getLabaRugi(startDate?: string, endDate?: string): Promise<{
         periode: {
-            startDate: string;
-            endDate: string;
+            startDate: string | undefined;
+            endDate: string | undefined;
         };
         totalPendapatan: number;
         totalHpp: number;
@@ -49,8 +49,8 @@ export declare class ReportsController {
     }>;
     getLabaRugiCurah(startDate?: string, endDate?: string): Promise<{
         periode: {
-            startDate: string;
-            endDate: string;
+            startDate: string | undefined;
+            endDate: string | undefined;
         };
         penjualanCurah: number;
         hppCurah: number;

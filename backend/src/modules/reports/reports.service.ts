@@ -21,9 +21,21 @@ export class ReportsService {
   /**
    * Menghasilkan Laporan Laba Rugi dengan per-komoditas: Penjualan - HPP = Laba Kotor
    */
-  async getLabaRugi(startDate: string, endDate: string) {
-    const start = new Date(`${startDate} 00:00:00`);
-    const end = new Date(`${endDate} 23:59:59`);
+  async getLabaRugi(startDate?: string, endDate?: string) {
+    const now = new Date();
+    const defaultStart = '2020-01-01';
+    const defaultEnd = now.toISOString().slice(0, 10);
+    const sStr = startDate && startDate.trim().length > 0 ? startDate.trim() : defaultStart;
+    const eStr = endDate && endDate.trim().length > 0 ? endDate.trim() : defaultEnd;
+    let dStart = new Date(`${sStr} 00:00:00`);
+    let dEnd = new Date(`${eStr} 23:59:59`);
+    if (dStart > dEnd) {
+      const tmp = dStart;
+      dStart = new Date(`${eStr} 00:00:00`);
+      dEnd = new Date(`${sStr} 23:59:59`);
+    }
+    const start = dStart;
+    const end = dEnd;
 
     // 1. Total Penjualan per Kategori Penjualan Komoditas (1 s/d 10, kecuali 8 Pakan Curah) dari Jurnal Umum (Net: Kredit - Debit)
     const salesResult = await this.prisma.$queryRaw<
@@ -245,9 +257,21 @@ export class ReportsService {
   /**
    * Laporan Laba Rugi Curah Khusus & Stok Total Curah
    */
-  async getLabaRugiCurah(startDate: string, endDate: string) {
-    const start = new Date(`${startDate} 00:00:00`);
-    const end = new Date(`${endDate} 23:59:59`);
+  async getLabaRugiCurah(startDate?: string, endDate?: string) {
+    const now = new Date();
+    const defaultStart = '2020-01-01';
+    const defaultEnd = now.toISOString().slice(0, 10);
+    const sStr = startDate && startDate.trim().length > 0 ? startDate.trim() : defaultStart;
+    const eStr = endDate && endDate.trim().length > 0 ? endDate.trim() : defaultEnd;
+    let dStart = new Date(`${sStr} 00:00:00`);
+    let dEnd = new Date(`${eStr} 23:59:59`);
+    if (dStart > dEnd) {
+      const tmp = dStart;
+      dStart = new Date(`${eStr} 00:00:00`);
+      dEnd = new Date(`${sStr} 23:59:59`);
+    }
+    const start = dStart;
+    const end = dEnd;
 
     // 1. Ringkasan Penjualan Pakan Curah (Kategori ID 8)
     const salesCurah = await this.prisma.$queryRaw<
@@ -409,10 +433,24 @@ export class ReportsService {
     const reportMode = mode === 'net' ? 'net' : 'gross';
 
     let dateFilter = Prisma.sql`WHERE (t.status IS NULL OR t.status != 'BATAL')`;
-    if (startDate && endDate) {
-      const start = new Date(`${startDate} 00:00:00`);
-      const end = new Date(`${endDate} 23:59:59`);
-      dateFilter = Prisma.sql`WHERE (t.status IS NULL OR t.status != 'BATAL') AND ju.tanggal BETWEEN ${start} AND ${end}`;
+    const sStr = startDate && startDate.trim().length > 0 ? startDate.trim() : null;
+    const eStr = endDate && endDate.trim().length > 0 ? endDate.trim() : null;
+
+    if (sStr && eStr) {
+      let dStart = new Date(`${sStr} 00:00:00`);
+      let dEnd = new Date(`${eStr} 23:59:59`);
+      if (dStart > dEnd) {
+        const tmp = dStart;
+        dStart = new Date(`${eStr} 00:00:00`);
+        dEnd = new Date(`${sStr} 23:59:59`);
+      }
+      dateFilter = Prisma.sql`WHERE (t.status IS NULL OR t.status != 'BATAL') AND ju.tanggal BETWEEN ${dStart} AND ${dEnd}`;
+    } else if (sStr) {
+      const dStart = new Date(`${sStr} 00:00:00`);
+      dateFilter = Prisma.sql`WHERE (t.status IS NULL OR t.status != 'BATAL') AND ju.tanggal >= ${dStart}`;
+    } else if (eStr) {
+      const dEnd = new Date(`${eStr} 23:59:59`);
+      dateFilter = Prisma.sql`WHERE (t.status IS NULL OR t.status != 'BATAL') AND ju.tanggal <= ${dEnd}`;
     }
 
     const rows = await this.prisma.$queryRaw<
@@ -575,12 +613,32 @@ export class ReportsService {
    */
   async getLaporanAset(startDate?: string, endDate?: string) {
     let dateCondition = Prisma.empty;
+    let clientDateCondition = Prisma.empty;
     let start: Date | null = null;
     let end: Date | null = null;
-    if (startDate && endDate) {
-      start = new Date(`${startDate} 00:00:00`);
-      end = new Date(`${endDate} 23:59:59`);
+    const sStr = startDate && startDate.trim().length > 0 ? startDate.trim() : null;
+    const eStr = endDate && endDate.trim().length > 0 ? endDate.trim() : null;
+
+    if (sStr && eStr) {
+      let dStart = new Date(`${sStr} 00:00:00`);
+      let dEnd = new Date(`${eStr} 23:59:59`);
+      if (dStart > dEnd) {
+        const tmp = dStart;
+        dStart = new Date(`${eStr} 00:00:00`);
+        dEnd = new Date(`${sStr} 23:59:59`);
+      }
+      start = dStart;
+      end = dEnd;
       dateCondition = Prisma.sql`AND ju.tanggal BETWEEN ${start} AND ${end}`;
+      clientDateCondition = Prisma.sql`AND t.tanggal BETWEEN ${start} AND ${end}`;
+    } else if (sStr) {
+      start = new Date(`${sStr} 00:00:00`);
+      dateCondition = Prisma.sql`AND ju.tanggal >= ${start}`;
+      clientDateCondition = Prisma.sql`AND t.tanggal >= ${start}`;
+    } else if (eStr) {
+      end = new Date(`${eStr} 23:59:59`);
+      dateCondition = Prisma.sql`AND ju.tanggal <= ${end}`;
+      clientDateCondition = Prisma.sql`AND t.tanggal <= ${end}`;
     }
 
     // 1. Ambil saldo akun non-piutang/non-hutang (Kas, Bank, Stok, dsb.) dari jurnal_details
@@ -640,7 +698,7 @@ export class ReportsService {
 
     // 2. Ambil saldo tiap client dan NETTING per mitra (persis logika AssetReportService SIM Lama)
     let clientRows: { id: bigint; name: string; type: string; saldo_piutang: string | number; saldo_hutang: string | number }[];
-    if (!startDate && !endDate) {
+    if (!sStr && !eStr) {
       clientRows = await this.prisma.$queryRaw<
         { id: bigint; name: string; type: string; saldo_piutang: string | number; saldo_hutang: string | number }[]
       >`
@@ -657,13 +715,13 @@ export class ReportsService {
             SELECT SUM(t.total) FROM transaksis t
             WHERE t.client_id = c.id AND t.type = 'PENJUALAN' AND t.status = 'SELESAI'
               AND t.payment_method = 'KREDIT_BON'
-              AND t.tanggal BETWEEN ${start} AND ${end}
+              ${clientDateCondition}
           ), 0) as saldo_piutang,
           COALESCE((
             SELECT SUM(t.total) FROM transaksis t
             WHERE t.client_id = c.id AND t.type = 'PEMBELIAN' AND t.status = 'SELESAI'
               AND t.payment_method = 'KREDIT_BON'
-              AND t.tanggal BETWEEN ${start} AND ${end}
+              ${clientDateCondition}
           ), 0) as saldo_hutang
         FROM clients c
       `;
@@ -948,15 +1006,22 @@ export class ReportsService {
     const skip = (page - 1) * limit;
 
     const where: any = {};
-    if (query?.startDate && query?.endDate) {
-      where.tanggal = {
-        gte: new Date(query.startDate),
-        lte: new Date(`${query.endDate} 23:59:59`),
-      };
-    } else if (query?.startDate) {
-      where.tanggal = { gte: new Date(query.startDate) };
-    } else if (query?.endDate) {
-      where.tanggal = { lte: new Date(`${query.endDate} 23:59:59`) };
+    const sStr = query?.startDate && query.startDate.trim().length > 0 ? query.startDate.trim() : null;
+    const eStr = query?.endDate && query.endDate.trim().length > 0 ? query.endDate.trim() : null;
+
+    if (sStr && eStr) {
+      let dStart = new Date(`${sStr} 00:00:00`);
+      let dEnd = new Date(`${eStr} 23:59:59`);
+      if (dStart > dEnd) {
+        const tmp = dStart;
+        dStart = new Date(`${eStr} 00:00:00`);
+        dEnd = new Date(`${sStr} 23:59:59`);
+      }
+      where.tanggal = { gte: dStart, lte: dEnd };
+    } else if (sStr) {
+      where.tanggal = { gte: new Date(`${sStr} 00:00:00`) };
+    } else if (eStr) {
+      where.tanggal = { lte: new Date(`${eStr} 23:59:59`) };
     }
 
     if (query?.search) {

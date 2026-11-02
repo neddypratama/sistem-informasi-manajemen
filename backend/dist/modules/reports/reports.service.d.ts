@@ -8,10 +8,10 @@ export declare const COMMODITY_MAP: {
 export declare class ReportsService {
     private prisma;
     constructor(prisma: PrismaService);
-    getLabaRugi(startDate: string, endDate: string): Promise<{
+    getLabaRugi(startDate?: string, endDate?: string): Promise<{
         periode: {
-            startDate: string;
-            endDate: string;
+            startDate: string | undefined;
+            endDate: string | undefined;
         };
         totalPendapatan: number;
         totalHpp: number;
@@ -53,10 +53,10 @@ export declare class ReportsService {
             details: any[];
         }[];
     }>;
-    getLabaRugiCurah(startDate: string, endDate: string): Promise<{
+    getLabaRugiCurah(startDate?: string, endDate?: string): Promise<{
         periode: {
-            startDate: string;
-            endDate: string;
+            startDate: string | undefined;
+            endDate: string | undefined;
         };
         penjualanCurah: number;
         hppCurah: number;

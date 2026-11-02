@@ -129,15 +129,22 @@ export class TransaksiService {
       };
     }
 
-    if (query.startDate && query.endDate) {
-      where.tanggal = {
-        gte: new Date(query.startDate),
-        lte: new Date(`${query.endDate} 23:59:59`),
-      };
-    } else if (query.startDate) {
-      where.tanggal = { gte: new Date(query.startDate) };
-    } else if (query.endDate) {
-      where.tanggal = { lte: new Date(`${query.endDate} 23:59:59`) };
+    const sStr = query.startDate && query.startDate.trim().length > 0 ? query.startDate.trim() : null;
+    const eStr = query.endDate && query.endDate.trim().length > 0 ? query.endDate.trim() : null;
+
+    if (sStr && eStr) {
+      let dStart = new Date(`${sStr} 00:00:00`);
+      let dEnd = new Date(`${eStr} 23:59:59`);
+      if (dStart > dEnd) {
+        const tmp = dStart;
+        dStart = new Date(`${eStr} 00:00:00`);
+        dEnd = new Date(`${sStr} 23:59:59`);
+      }
+      where.tanggal = { gte: dStart, lte: dEnd };
+    } else if (sStr) {
+      where.tanggal = { gte: new Date(`${sStr} 00:00:00`) };
+    } else if (eStr) {
+      where.tanggal = { lte: new Date(`${eStr} 23:59:59`) };
     }
 
     if (query.search) {

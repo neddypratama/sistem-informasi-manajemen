@@ -4,7 +4,7 @@ import { apiClient } from '../../lib/api-client';
 import { ExportButtonGroup } from '../../components/ExportButtonGroup';
 import { exportToExcel, exportToPdf, formatDateIndo } from '../../lib/export-utils';
 import { Pagination } from '../../components/Pagination';
-import { getTodayDateString } from '../../lib/date-utils';
+import { getTodayDateString, getCurrentMonthRange, getLastMonthRange } from '../../lib/date-utils';
 import {
   BookOpen,
   Search,
@@ -250,7 +250,7 @@ export const JurnalUmumPage: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-2 text-xs w-full sm:w-auto">
           {/* Quick Date Presets */}
-          <div className="flex items-center space-x-1 bg-slate-100 p-0.5 rounded-lg text-[11px] font-semibold">
+          <div className="flex flex-wrap items-center space-x-1 bg-slate-100 p-0.5 rounded-lg text-[11px] font-semibold">
             <button
               type="button"
               onClick={() => {
@@ -259,7 +259,7 @@ export const JurnalUmumPage: React.FC = () => {
                 setEndDate(today);
                 setPage(1);
               }}
-              className={`px-2.5 py-1 rounded-md transition-all ${
+              className={`px-2 py-1 rounded-md transition-all ${
                 startDate === getTodayDateString() && endDate === getTodayDateString()
                   ? 'bg-white text-emerald-700 shadow-xs font-bold'
                   : 'text-slate-600 hover:text-slate-900'
@@ -270,11 +270,43 @@ export const JurnalUmumPage: React.FC = () => {
             <button
               type="button"
               onClick={() => {
+                const m = getCurrentMonthRange();
+                setStartDate(m.startDate);
+                setEndDate(m.endDate);
+                setPage(1);
+              }}
+              className={`px-2 py-1 rounded-md transition-all ${
+                startDate === getCurrentMonthRange().startDate && endDate === getCurrentMonthRange().endDate
+                  ? 'bg-white text-emerald-700 shadow-xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Bulan Ini
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const m = getLastMonthRange();
+                setStartDate(m.startDate);
+                setEndDate(m.endDate);
+                setPage(1);
+              }}
+              className={`px-2 py-1 rounded-md transition-all ${
+                startDate === getLastMonthRange().startDate && endDate === getLastMonthRange().endDate
+                  ? 'bg-white text-emerald-700 shadow-xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Bulan Lalu
+            </button>
+            <button
+              type="button"
+              onClick={() => {
                 setStartDate('');
                 setEndDate('');
                 setPage(1);
               }}
-              className={`px-2.5 py-1 rounded-md transition-all ${
+              className={`px-2 py-1 rounded-md transition-all ${
                 !startDate && !endDate
                   ? 'bg-white text-emerald-700 shadow-xs font-bold'
                   : 'text-slate-600 hover:text-slate-900'
@@ -286,7 +318,6 @@ export const JurnalUmumPage: React.FC = () => {
 
           <div className="flex items-center space-x-1.5">
             <Calendar className="w-4 h-4 text-slate-400 ml-1" />
-            <span className="text-slate-500 font-semibold">Tgl:</span>
             <input
               type="date"
               value={startDate}
@@ -294,7 +325,7 @@ export const JurnalUmumPage: React.FC = () => {
                 setStartDate(e.target.value);
                 setPage(1);
               }}
-              className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 font-medium"
+              className="px-2 py-1 border border-slate-200 rounded-lg text-xs bg-slate-50 font-medium"
             />
             <span className="text-slate-400">s/d</span>
             <input
@@ -304,7 +335,7 @@ export const JurnalUmumPage: React.FC = () => {
                 setEndDate(e.target.value);
                 setPage(1);
               }}
-              className="px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-slate-50 font-medium"
+              className="px-2 py-1 border border-slate-200 rounded-lg text-xs bg-slate-50 font-medium"
             />
           </div>
         </div>
@@ -336,7 +367,35 @@ export const JurnalUmumPage: React.FC = () => {
               ) : jurnals.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="p-12 text-center text-slate-400">
-                    Tidak ditemukan data jurnal yang sesuai filter pencarian.
+                    <p className="font-semibold text-slate-600">Tidak ada data jurnal untuk filter yang dipilih.</p>
+                    {(startDate || endDate) && (
+                      <div className="mt-3 flex flex-col sm:flex-row items-center justify-center gap-2">
+                        <span className="text-xs text-slate-400">Ingin melihat data historis?</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const m = getLastMonthRange();
+                            setStartDate(m.startDate);
+                            setEndDate(m.endDate);
+                            setPage(1);
+                          }}
+                          className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-lg transition-all cursor-pointer"
+                        >
+                          Lihat Bulan Lalu (Oktober 2026)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setStartDate('');
+                            setEndDate('');
+                            setPage(1);
+                          }}
+                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition-all cursor-pointer"
+                        >
+                          Tampilkan Semua Waktu
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ) : (

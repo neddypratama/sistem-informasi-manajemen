@@ -6,7 +6,7 @@ import { SearchableBarangSelect } from '../../components/SearchableBarangSelect'
 import { ExportButtonGroup } from '../../components/ExportButtonGroup';
 import { Pagination } from '../../components/Pagination';
 import { exportToExcel, formatDateIndo } from '../../lib/export-utils';
-import { getTodayDateString } from '../../lib/date-utils';
+import { getTodayDateString, getCurrentMonthRange, getLastMonthRange, getCurrentYearRange } from '../../lib/date-utils';
 import { useAuthStore, hasPermission } from '../../stores/auth.store';
 import {
   Boxes,
@@ -1377,7 +1377,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
 
         {activeTab !== 'STOK' ? (
           <div className="flex flex-wrap items-center gap-2 text-xs shrink-0 self-start xl:self-auto">
-            <div className="flex items-center space-x-1 bg-slate-100 p-0.5 rounded-lg text-[11px] font-semibold">
+            <div className="flex flex-wrap items-center space-x-1 bg-slate-100 p-0.5 rounded-lg text-[11px] font-semibold">
               <button
                 type="button"
                 onClick={() => {
@@ -1385,7 +1385,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                   setStartDate(today);
                   setEndDate(today);
                 }}
-                className={`px-2.5 py-1 rounded-md transition-all ${
+                className={`px-2 py-1 rounded-md transition-all ${
                   startDate === getTodayDateString() && endDate === getTodayDateString()
                     ? 'bg-white text-emerald-700 shadow-xs font-bold'
                     : 'text-slate-600 hover:text-slate-900'
@@ -1396,10 +1396,40 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
               <button
                 type="button"
                 onClick={() => {
+                  const m = getCurrentMonthRange();
+                  setStartDate(m.startDate);
+                  setEndDate(m.endDate);
+                }}
+                className={`px-2 py-1 rounded-md transition-all ${
+                  startDate === getCurrentMonthRange().startDate && endDate === getCurrentMonthRange().endDate
+                    ? 'bg-white text-emerald-700 shadow-xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Bulan Ini
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const m = getLastMonthRange();
+                  setStartDate(m.startDate);
+                  setEndDate(m.endDate);
+                }}
+                className={`px-2 py-1 rounded-md transition-all ${
+                  startDate === getLastMonthRange().startDate && endDate === getLastMonthRange().endDate
+                    ? 'bg-white text-emerald-700 shadow-xs font-bold'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Bulan Lalu
+              </button>
+              <button
+                type="button"
+                onClick={() => {
                   setStartDate('');
                   setEndDate('');
                 }}
-                className={`px-2.5 py-1 rounded-md transition-all ${
+                className={`px-2 py-1 rounded-md transition-all ${
                   !startDate && !endDate
                     ? 'bg-white text-emerald-700 shadow-xs font-bold'
                     : 'text-slate-600 hover:text-slate-900'
@@ -1561,8 +1591,37 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                   </tr>
                 ) : txList.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-10 text-center text-slate-400">
-                      Tidak ada transaksi tercatat pada kategori ini.
+                    <td colSpan={7} className="p-10 text-center">
+                      <p className="text-slate-500 font-medium text-sm">
+                        {startDate || endDate
+                          ? `Tidak ada transaksi pada filter tanggal (${startDate || 'Awal'} s/d ${endDate || 'Kini'}).`
+                          : 'Tidak ada transaksi tercatat pada kategori ini.'}
+                      </p>
+                      {(startDate || endDate) && (
+                        <div className="flex items-center justify-center gap-2 mt-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const m = getLastMonthRange();
+                              setStartDate(m.startDate);
+                              setEndDate(m.endDate);
+                            }}
+                            className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold rounded-lg border border-emerald-200 transition-all cursor-pointer"
+                          >
+                            Lihat Bulan Lalu (Oktober 2026)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setStartDate('');
+                              setEndDate('');
+                            }}
+                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition-all cursor-pointer"
+                          >
+                            Tampilkan Semua Waktu
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ) : (

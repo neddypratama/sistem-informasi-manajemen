@@ -6,7 +6,7 @@ import { SearchableSelect } from '../../components/SearchableSelect';
 import { ExportButtonGroup } from '../../components/ExportButtonGroup';
 import { Pagination } from '../../components/Pagination';
 import { exportToExcel, formatDateIndo } from '../../lib/export-utils';
-import { getTodayDateString } from '../../lib/date-utils';
+import { getTodayDateString, getCurrentMonthRange, getLastMonthRange, getCurrentYearRange } from '../../lib/date-utils';
 import {
   CreditCard,
   Plus,
@@ -457,7 +457,7 @@ export const HutangPage: React.FC = () => {
           </div>
 
           {/* Quick Date Presets */}
-          <div className="flex items-center space-x-1 bg-slate-100 p-0.5 rounded-xl text-[11px] font-semibold h-[38px]">
+          <div className="flex flex-wrap items-center space-x-1 bg-slate-100 p-0.5 rounded-xl text-[11px] font-semibold h-[38px]">
             <button
               type="button"
               onClick={() => {
@@ -473,6 +473,38 @@ export const HutangPage: React.FC = () => {
               }`}
             >
               Hari Ini
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const m = getCurrentMonthRange();
+                setStartDate(m.startDate);
+                setEndDate(m.endDate);
+                setPage(1);
+              }}
+              className={`px-2.5 py-1.5 rounded-lg transition-all ${
+                startDate === getCurrentMonthRange().startDate && endDate === getCurrentMonthRange().endDate
+                  ? 'bg-white text-rose-700 shadow-xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Bulan Ini
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const m = getLastMonthRange();
+                setStartDate(m.startDate);
+                setEndDate(m.endDate);
+                setPage(1);
+              }}
+              className={`px-2.5 py-1.5 rounded-lg transition-all ${
+                startDate === getLastMonthRange().startDate && endDate === getLastMonthRange().endDate
+                  ? 'bg-white text-rose-700 shadow-xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Bulan Lalu
             </button>
             <button
               type="button"
@@ -562,8 +594,39 @@ export const HutangPage: React.FC = () => {
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="py-12 text-center text-slate-400">
-                    Tidak ada transaksi hutang yang sesuai dengan kriteria filter.
+                  <td colSpan={11} className="py-12 text-center">
+                    <p className="text-slate-500 font-medium text-sm">
+                      {startDate || endDate
+                        ? `Tidak ada transaksi hutang pada filter tanggal (${startDate || 'Awal'} s/d ${endDate || 'Kini'}).`
+                        : 'Tidak ada transaksi hutang yang sesuai dengan kriteria filter.'}
+                    </p>
+                    {(startDate || endDate) && (
+                      <div className="flex items-center justify-center gap-2 mt-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const m = getLastMonthRange();
+                            setStartDate(m.startDate);
+                            setEndDate(m.endDate);
+                            setPage(1);
+                          }}
+                          className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-800 text-xs font-bold rounded-lg border border-rose-200 transition-all cursor-pointer"
+                        >
+                          Lihat Bulan Lalu (Oktober 2026)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setStartDate('');
+                            setEndDate('');
+                            setPage(1);
+                          }}
+                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition-all cursor-pointer"
+                        >
+                          Tampilkan Semua Waktu
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ) : (
