@@ -235,7 +235,7 @@ export const KonversiBarangPage: React.FC<KonversiBarangPageProps> = ({ defaultJ
   // Calculated Total Nominal for the target item
   const calculatedTotalNominal = useMemo(() => {
     if (formQtyAkhir <= 0 || formHargaAkhir <= 0) return 0;
-    return Math.round(formQtyAkhir * formHargaAkhir);
+    return Number((formQtyAkhir * formHargaAkhir).toFixed(2));
   }, [formQtyAkhir, formHargaAkhir]);
 
   // Mutations
@@ -355,7 +355,7 @@ export const KonversiBarangPage: React.FC<KonversiBarangPageProps> = ({ defaultJ
       return;
     }
 
-    const totalNominal = Math.round(formQtyAkhir * formHargaAkhir);
+    const totalNominal = Number((formQtyAkhir * formHargaAkhir).toFixed(2));
 
     const payload = {
       tanggal: formTanggal,
@@ -446,9 +446,7 @@ export const KonversiBarangPage: React.FC<KonversiBarangPageProps> = ({ defaultJ
             </span>
           </h1>
           <p className="text-xs text-slate-500 mt-1 max-w-2xl">
-            Catat pemrosesan dan transformasi jenis komoditas (misal: <strong>Jagung OC</strong> digiling menjadi{' '}
-            <strong>Jagung Giling</strong>, atau sortir grade) secara otomatis memotong stok asal dan menerbitkan batch
-            stok baru dengan nilai modal terpelihara tanpa menimbulkan beban susut.
+            Catat pemrosesan, sortir grade, atau transformasi komoditas (seperti sortir telur <strong>Horen Merah ⇄ Horen Putih</strong>, giling <strong>Jagung OC</strong>, repack pakan, dsb). Sistem secara otomatis memotong stok asal dan menerbitkan batch stok baru dengan harga modal yang disesuaikan (susut harga atau naik).
           </p>
         </div>
 
@@ -850,8 +848,8 @@ export const KonversiBarangPage: React.FC<KonversiBarangPageProps> = ({ defaultJ
                 <CurrencyInput
                   value={formHargaAkhir}
                   onChange={(val) => setFormHargaAkhir(val)}
-                  placeholder="Contoh: Rp 7.500"
-                  allowDecimal={false}
+                  placeholder="Contoh: Rp 22.500 atau Rp 12.350,5"
+                  allowDecimal={true}
                   className="w-full border border-slate-200 rounded-xl p-2.5 text-sm font-mono font-bold bg-white"
                 />
 

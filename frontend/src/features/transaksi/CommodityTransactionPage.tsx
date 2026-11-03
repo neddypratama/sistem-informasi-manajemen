@@ -278,9 +278,26 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
     return `${year}-${month}-${day}`;
   };
 
+  const getMonthStartString = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}-01`;
+  };
+
+  const getSevenDaysAgoString = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 6);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   // State for Monitoring Tab (Telur / Pakan / Obat / Tray)
   const [monitoringType, setMonitoringType] = useState<'PEMBELIAN' | 'PENJUALAN'>('PEMBELIAN');
-  const [monitoringDate, setMonitoringDate] = useState<string>(() => getTodayString());
+  const [monitoringStartDate, setMonitoringStartDate] = useState<string>(() => getTodayString());
+  const [monitoringEndDate, setMonitoringEndDate] = useState<string>(() => getTodayString());
   const [expandedBarangId, setExpandedBarangId] = useState<number | null>(null);
   const [monitoringSubView, setMonitoringSubView] = useState<'REKAP' | 'GUDANG'>('REKAP');
 
@@ -430,9 +447,11 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
 
   // 6. Fetch Transactions for Monitoring Tab
   const { data: monitoringTxData, isLoading: loadingMonitoring } = useQuery({
-    queryKey: ['monitoringTx', commodityKey, jenisIds, monitoringType, monitoringDate, filterClientId, search],
+    queryKey: ['monitoringTx', commodityKey, jenisIds, monitoringType, monitoringStartDate, monitoringEndDate, filterClientId, search],
     queryFn: async () => {
-      let url = `/transaksi?type=${monitoringType}&startDate=${monitoringDate}&endDate=${monitoringDate}&limit=200&status=SELESAI`;
+      let url = `/transaksi?type=${monitoringType}&limit=2000&status=SELESAI`;
+      if (monitoringStartDate) url += `&startDate=${monitoringStartDate}`;
+      if (monitoringEndDate) url += `&endDate=${monitoringEndDate}`;
       if (jenisIds && jenisIds.length > 0) {
         url += `&jenisIds=${jenisIds.join(',')}`;
       }
@@ -1104,6 +1123,14 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
     });
   };
 
+  const monitoringPeriodeLabel = useMemo(() => {
+    if (!monitoringStartDate && !monitoringEndDate) return 'Semua Periode';
+    if (monitoringStartDate && !monitoringEndDate) return `Mulai ${formatTanggal(monitoringStartDate)}`;
+    if (!monitoringStartDate && monitoringEndDate) return `Sampai ${formatTanggal(monitoringEndDate)}`;
+    if (monitoringStartDate === monitoringEndDate) return formatTanggal(monitoringStartDate);
+    return `${formatTanggal(monitoringStartDate)} s/d ${formatTanggal(monitoringEndDate)}`;
+  }, [monitoringStartDate, monitoringEndDate]);
+
   const monitoringTabTitle = useMemo(() => {
     if (commodityKey === 'telur' || isEgg) return 'Monitoring Telur';
     if (commodityKey === 'pakan') return 'Monitoring Pakan';
@@ -1267,9 +1294,9 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
         return;
       }
       exportToExcel({
-        filename: `Monitoring_Stok_${title.replace(/\s+/g, '_')}_${monitoringType}_${monitoringDate}`,
+        filename: `Monitoring_Stok_${title.replace(/\s+/g, '_')}_${monitoringType}_${monitoringStartDate}_sd_${monitoringEndDate}`,
         sheetName: 'Monitoring Stok',
-        title: `MONITORING ${title.toUpperCase()} - ${monitoringType} (${monitoringDate})`,
+        title: `MONITORING ${title.toUpperCase()} - ${monitoringType} (${monitoringPeriodeLabel})`,
         columns: [
           { header: 'No', key: '_index', width: 6 },
           { header: 'Nama Barang', key: 'namaBarang', width: 30 },
@@ -1377,6 +1404,16 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                 >
                   <ArrowRightLeft className="w-4 h-4 text-indigo-600" />
                   <span>⚡ Konversi Pakan</span>
+                </Link>
+              )}
+              {(commodityKey === 'telur' || isEgg) && hasPermission(user, ['curah_konversi:create', 'konversi_global:create', 'stok_opname:create', 'stok:opname']) && (
+                <Link
+                  to="/konversi-barang"
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs rounded-xl border border-amber-200 transition-all active:scale-95"
+                  title="Konversi / Sortir Grade Telur (Merah ⇄ Putih)"
+                >
+                  <ArrowRightLeft className="w-4 h-4 text-amber-600" />
+                  <span>⚡ Konversi & Sortir Telur</span>
                 </Link>
               )}
             </>
@@ -1654,36 +1691,88 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
               </button>
             </div>
 
-            {/* Filter Per Tanggal (Default Hari Ini) */}
-            <div className="flex items-center gap-1.5">
-              <Calendar className="w-4 h-4 text-slate-400 ml-1" />
-              <input
-                type="date"
-                value={monitoringDate}
-                onChange={(e) => setMonitoringDate(e.target.value)}
-                className="px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold"
-              />
+            {/* Filter Rentang Tanggal Monitoring */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5">
+                <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
+                <input
+                  type="date"
+                  value={monitoringStartDate}
+                  onChange={(e) => setMonitoringStartDate(e.target.value)}
+                  className="bg-transparent text-xs font-semibold text-slate-700 focus:outline-none"
+                  title="Dari Tanggal"
+                />
+                <span className="text-xs text-slate-400 font-bold px-1">s/d</span>
+                <input
+                  type="date"
+                  value={monitoringEndDate}
+                  onChange={(e) => setMonitoringEndDate(e.target.value)}
+                  className="bg-transparent text-xs font-semibold text-slate-700 focus:outline-none"
+                  title="Sampai Tanggal"
+                />
+              </div>
+
+              {/* Quick Presets */}
               <button
                 type="button"
-                onClick={() => setMonitoringDate(getTodayString())}
+                onClick={() => {
+                  const today = getTodayString();
+                  setMonitoringStartDate(today);
+                  setMonitoringEndDate(today);
+                }}
                 className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                  monitoringDate === getTodayString()
-                    ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-bold'
+                  monitoringStartDate === getTodayString() && monitoringEndDate === getTodayString()
+                    ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-bold shadow-xs'
                     : 'border-slate-200 hover:bg-slate-100 text-slate-600'
                 }`}
               >
                 Hari Ini
               </button>
+
               <button
                 type="button"
-                onClick={() => setMonitoringDate(getYesterdayString())}
+                onClick={() => {
+                  const yest = getYesterdayString();
+                  setMonitoringStartDate(yest);
+                  setMonitoringEndDate(yest);
+                }}
                 className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                  monitoringDate === getYesterdayString()
-                    ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-bold'
+                  monitoringStartDate === getYesterdayString() && monitoringEndDate === getYesterdayString()
+                    ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-bold shadow-xs'
                     : 'border-slate-200 hover:bg-slate-100 text-slate-600'
                 }`}
               >
                 Kemarin
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMonitoringStartDate(getSevenDaysAgoString());
+                  setMonitoringEndDate(getTodayString());
+                }}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                  monitoringStartDate === getSevenDaysAgoString() && monitoringEndDate === getTodayString()
+                    ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-bold shadow-xs'
+                    : 'border-slate-200 hover:bg-slate-100 text-slate-600'
+                }`}
+              >
+                7 Hari
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMonitoringStartDate(getMonthStartString());
+                  setMonitoringEndDate(getTodayString());
+                }}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                  monitoringStartDate === getMonthStartString() && monitoringEndDate === getTodayString()
+                    ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-bold shadow-xs'
+                    : 'border-slate-200 hover:bg-slate-100 text-slate-600'
+                }`}
+              >
+                Bulan Ini
               </button>
             </div>
           </div>
@@ -1967,7 +2056,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                     : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                📊 Rekap {monitoringType === 'PEMBELIAN' ? 'Pembelian' : 'Penjualan'} ({formatTanggal(monitoringDate)})
+                📊 Rekap {monitoringType === 'PEMBELIAN' ? 'Pembelian' : 'Penjualan'} ({monitoringPeriodeLabel})
               </button>
               <button
                 type="button"
@@ -1986,7 +2075,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
               <div className="text-xs text-slate-500 flex items-center gap-2">
                 <span>Filter: <strong>{monitoringType}</strong></span>
                 <span>•</span>
-                <span>Tanggal: <strong>{formatTanggal(monitoringDate)}</strong></span>
+                <span>Periode: <strong>{monitoringPeriodeLabel}</strong></span>
               </div>
             )}
           </div>
@@ -2072,10 +2161,10 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                           <td colSpan={7} className="p-12 text-center text-slate-400">
                             <Boxes className="w-12 h-12 text-slate-300 mx-auto mb-2" />
                             <p className="font-bold text-slate-700 text-sm">
-                              Tidak ada transaksi {monitoringType === 'PEMBELIAN' ? 'Pembelian' : 'Penjualan'} pada tanggal {formatTanggal(monitoringDate)}.
+                              Tidak ada transaksi {monitoringType === 'PEMBELIAN' ? 'Pembelian' : 'Penjualan'} pada periode {monitoringPeriodeLabel}.
                             </p>
                             <p className="text-xs text-slate-400 mt-1">
-                              Gunakan filter tanggal atau ubah tipe transaksi di atas untuk melihat data lainnya.
+                              Gunakan filter rentang tanggal atau ubah tipe transaksi di atas untuk melihat data lainnya.
                             </p>
                           </td>
                         </tr>
@@ -2089,7 +2178,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                           {(page - 1) * limit + idx + 1}
                         </td>
                                 <td className="p-4">
-                                  <div className="font-bold text-slate-900">{r.namaBarang}</div>
+                                   <div className="font-bold text-slate-900">{r.namaBarang}</div>
                                 </td>
                                 <td className="p-4">
                                   <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-200">
@@ -2125,12 +2214,13 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                                   <td colSpan={7} className="p-3 pl-12 pr-6">
                                     <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-inner">
                                       <p className="text-[11px] font-bold text-slate-500 uppercase mb-2">
-                                        Rincian Nota Transaksi — {r.namaBarang} ({formatTanggal(monitoringDate)})
+                                        Rincian Nota Transaksi — {r.namaBarang} ({monitoringPeriodeLabel})
                                       </p>
                                       <table className="w-full text-xs text-left">
                                         <thead className="bg-slate-100 text-slate-600 font-semibold border-b">
                                           <tr>
                                             <th className="p-2">No. Faktur</th>
+                                            <th className="p-2">Tanggal</th>
                                             <th className="p-2">Mitra / Klien</th>
                                             <th className="p-2 text-right">Kuantitas</th>
                                             <th className="p-2 text-right">Harga Satuan</th>
@@ -2141,6 +2231,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                                           {r.txDetails.map((td, tdIdx) => (
                                             <tr key={td.id || tdIdx}>
                                               <td className="p-2 font-bold font-sans text-slate-800">{td.invoice}</td>
+                                              <td className="p-2 font-sans text-slate-500">{formatTanggal(td.tanggal)}</td>
                                               <td className="p-2 font-sans text-slate-600">{td.clientName}</td>
                                               <td className="p-2 text-right text-slate-900">{formatNumber(td.qty)} {r.satuan}</td>
                                               <td className="p-2 text-right text-slate-600">{formatRupiah(td.hargaSatuan)}</td>

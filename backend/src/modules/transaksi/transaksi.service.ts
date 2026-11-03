@@ -17,7 +17,7 @@ export class TransaksiService {
    */
   async findAll(query: QueryTransaksiDto) {
     const page = Math.max(1, Number(query.page || 1));
-    const limit = Math.min(200, Math.max(1, Number(query.limit || 25)));
+    const limit = Math.min(5000, Math.max(1, Number(query.limit || 25)));
     const skip = (page - 1) * limit;
 
     const where: any = {};
