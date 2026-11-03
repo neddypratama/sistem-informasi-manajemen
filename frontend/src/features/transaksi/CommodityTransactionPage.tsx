@@ -356,7 +356,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
   const { data: clientsData } = useQuery({
     queryKey: ['clientsListAll'],
     queryFn: async () => {
-      const res: any = await apiClient.get('/master/clients?limit=1000');
+      const res: any = await apiClient.get('/master/clients?limit=2000');
       if (Array.isArray(res)) return res;
       if (Array.isArray(res?.data)) return res.data;
       if (Array.isArray(res?.items)) return res.items;
@@ -2650,8 +2650,8 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                         onChange={(val) => {
                           setFormHarga(val);
                         }}
-                        allowDecimal={false}
-                        placeholder="Contoh: Rp 20.000"
+                        allowDecimal={true}
+                        placeholder="Contoh: Rp 20.000 atau Rp 12.350,5"
                         className="w-full border border-slate-200 rounded-xl p-2 text-xs font-mono font-bold bg-white"
                       />
                     </div>
@@ -2993,8 +2993,8 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                           onChange={(val) => {
                             setEditFormHarga(val);
                           }}
-                          allowDecimal={false}
-                          placeholder="Contoh: Rp 20.000"
+                          allowDecimal={true}
+                          placeholder="Contoh: Rp 20.000 atau Rp 12.350,5"
                           className="w-full border border-slate-200 rounded-xl p-2 text-xs font-mono font-bold bg-white"
                         />
                       </div>
@@ -3045,7 +3045,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                               <CurrencyInput
                                 value={it.hargaSatuan}
                                 onChange={(val) => handleEditItemHargaChange(idx, val)}
-                                allowDecimal={false}
+                                allowDecimal={true}
                                 placeholder="0"
                                 className="w-36 border border-slate-300 rounded-lg p-1.5 text-right font-mono font-bold text-slate-800 bg-slate-50/50 focus:bg-white focus:ring-2 focus:ring-blue-500"
                               />
@@ -3087,7 +3087,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                         <CurrencyInput
                           value={editDiskon}
                           onChange={(val) => setEditDiskon(val)}
-                          allowDecimal={false}
+                          allowDecimal={true}
                           placeholder="0"
                           className="w-28 border border-slate-200 rounded-lg p-1 text-right font-mono text-xs bg-white"
                         />

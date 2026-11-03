@@ -468,7 +468,7 @@ export const KonversiBarangPage: React.FC<KonversiBarangPageProps> = ({ defaultJ
               className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-600/20 flex items-center space-x-2 transition-all transform active:scale-95"
             >
               <Plus className="w-4 h-4" />
-              <span>+ Buat Konversi Baru</span>
+              <span>Buat Konversi Baru</span>
             </button>
           )}
         </div>

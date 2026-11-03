@@ -20,11 +20,11 @@ export const formatRupiahString = (
   allowDecimal: boolean = false
 ): string => {
   if (num === null || num === undefined || isNaN(num) || num === 0) return '';
-  const hasFraction = allowDecimal && num % 1 !== 0;
+  const hasFraction = allowDecimal && Math.abs(num % 1) > 0.0001;
   return (
     'Rp ' +
     new Intl.NumberFormat('id-ID', {
-      minimumFractionDigits: hasFraction ? 2 : 0,
+      minimumFractionDigits: hasFraction ? 1 : 0,
       maximumFractionDigits: 2,
     }).format(num)
   );
@@ -129,7 +129,16 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
     }
 
     // Decimal mode
-    const clean = rawInput.replace(/[^\d,.]/g, '');
+    let cleanInput = rawInput;
+    if (!cleanInput.includes(',') && cleanInput.includes('.')) {
+      const lastDotIndex = cleanInput.lastIndexOf('.');
+      const afterDot = cleanInput.slice(lastDotIndex + 1);
+      if (afterDot.length <= 2 && !/^\d{3}$/.test(afterDot)) {
+        cleanInput = cleanInput.slice(0, lastDotIndex) + ',' + afterDot;
+      }
+    }
+
+    const clean = cleanInput.replace(/[^\d,.]/g, '');
     if (!clean) {
       cursorRef.current = 0;
       setLocalText('');
@@ -141,13 +150,13 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
     let decPart = '';
     let hasComma = false;
 
-    if (rawInput.includes(',')) {
-      const parts = rawInput.split(',');
+    if (cleanInput.includes(',')) {
+      const parts = cleanInput.split(',');
       intPart = parts[0].replace(/\D/g, '');
       decPart = parts.slice(1).join('').replace(/\D/g, '').slice(0, 2);
       hasComma = true;
     } else {
-      intPart = rawInput.replace(/\D/g, '');
+      intPart = cleanInput.replace(/\D/g, '');
     }
 
     const intNum = intPart ? parseInt(intPart, 10) : 0;
@@ -172,6 +181,23 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
     onChange(finalValue);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (allowDecimal && (e.key === '.' || e.key === 'Decimal')) {
+      if (!localText.includes(',')) {
+        e.preventDefault();
+        const input = inputRef.current;
+        if (input) {
+          const pos = input.selectionStart ?? localText.length;
+          const newText = localText.slice(0, pos) + ',' + localText.slice(input.selectionEnd ?? pos);
+          const syntheticEvent = {
+            target: { value: newText, selectionEnd: pos + 1 },
+          } as React.ChangeEvent<HTMLInputElement>;
+          handleChange(syntheticEvent);
+        }
+      }
+    }
+  };
+
   const handleBlur = () => {
     if (numValue > 0) {
       setLocalText(formatRupiahString(numValue, allowDecimal));
@@ -189,6 +215,7 @@ export const CurrencyInput: React.FC<CurrencyInputProps> = ({
       name={name}
       value={localText}
       onChange={handleChange}
+      onKeyDown={handleKeyDown}
       onBlur={handleBlur}
       placeholder={placeholder}
       required={required}

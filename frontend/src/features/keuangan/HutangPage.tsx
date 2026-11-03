@@ -123,7 +123,7 @@ export const HutangPage: React.FC = () => {
   const { data: clientsData } = useQuery({
     queryKey: ['clientsList'],
     queryFn: async () => {
-      const res: any = await apiClient.get('/master/clients?limit=500');
+      const res: any = await apiClient.get('/master/clients?limit=2000');
       return Array.isArray(res.data) ? res.data : (res.data?.items || []);
     },
   });

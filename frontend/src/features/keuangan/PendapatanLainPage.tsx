@@ -80,7 +80,7 @@ export const PendapatanLainPage: React.FC = () => {
   const { data: clientsData } = useQuery({
     queryKey: ['clientsListPendapatanLain'],
     queryFn: async () => {
-      const res: any = await apiClient.get('/master/clients?limit=500');
+      const res: any = await apiClient.get('/master/clients?limit=2000');
       return Array.isArray(res.data) ? res.data : (res.data?.items || []);
     },
   });

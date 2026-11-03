@@ -172,7 +172,7 @@ export const ClientPage: React.FC = () => {
     let dataToExport = items;
     try {
       if (meta?.total && meta.total > items.length) {
-        let url = `/master/clients?limit=1000&page=1`;
+        let url = `/master/clients?limit=3000&page=1`;
         if (search) url += `&search=${encodeURIComponent(search)}`;
         if (type) url += `&type=${type}`;
         const res: any = await apiClient.get(url);

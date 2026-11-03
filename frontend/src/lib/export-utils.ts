@@ -14,10 +14,12 @@ export interface ExportColumn {
  */
 export const formatRupiah = (val: number | string | null | undefined): string => {
   const num = Number(val || 0);
+  const hasFraction = Math.abs(num % 1) > 0.0001;
   return new Intl.NumberFormat('id-ID', {
     style: 'currency',
     currency: 'IDR',
-    maximumFractionDigits: 0,
+    minimumFractionDigits: hasFraction ? 1 : 0,
+    maximumFractionDigits: 2,
   }).format(num);
 };
 

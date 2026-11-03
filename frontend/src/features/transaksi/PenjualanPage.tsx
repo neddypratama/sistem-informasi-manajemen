@@ -34,7 +34,7 @@ export const PenjualanPage: React.FC = () => {
   const { data: clientsData } = useQuery({
     queryKey: ['clientsList'],
     queryFn: async () => {
-      const res: any = await apiClient.get('/master/clients?limit=200');
+      const res: any = await apiClient.get('/master/clients?limit=2000');
       return res.data;
     },
   });
@@ -293,10 +293,11 @@ export const PenjualanPage: React.FC = () => {
                 <label className="block text-xs font-semibold text-slate-600 mb-1">Harga Satuan (Rp)</label>
                 <input
                   type="number"
+                  step="any"
                   required
                   value={hargaSatuan || ''}
                   onChange={(e) => setHargaSatuan(Number(e.target.value))}
-                  placeholder="Contoh: 24500"
+                  placeholder="Contoh: 12350.5"
                   className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 />
               </div>
