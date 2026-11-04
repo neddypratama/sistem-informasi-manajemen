@@ -1,4 +1,4 @@
-import { InventoryService, CreateOpnameDto, CreateKonversiDto } from './inventory.service.js';
+import { InventoryService, CreateOpnameDto, CreateKonversiDto, CreatePenyesuaianNonJurnalDto, RollbackOpnameDto } from './inventory.service.js';
 export declare class InventoryController {
     private readonly inventoryService;
     constructor(inventoryService: InventoryService);
@@ -122,6 +122,38 @@ export declare class InventoryController {
         jurnalId: number | null;
     }>;
     deleteOpname(id: string): Promise<{
+        success: boolean;
+        message: string;
+    }>;
+    createPenyesuaianNonJurnal(dto: CreatePenyesuaianNonJurnalDto, userId?: number): Promise<{
+        success: boolean;
+        message: string;
+        data: {
+            id: bigint;
+            createdAt: Date;
+            userId: bigint;
+            keterangan: string | null;
+            barangId: bigint;
+            tanggal: Date;
+            stokFisik: import("@prisma/client/runtime/library").Decimal;
+            selisihStok: import("@prisma/client/runtime/library").Decimal;
+            bentes: import("@prisma/client/runtime/library").Decimal;
+            ceplok: import("@prisma/client/runtime/library").Decimal;
+            prok: import("@prisma/client/runtime/library").Decimal;
+            kotor: import("@prisma/client/runtime/library").Decimal;
+            jumbo: import("@prisma/client/runtime/library").Decimal;
+            barangPakai: import("@prisma/client/runtime/library").Decimal;
+            pemakaianTray: import("@prisma/client/runtime/library").Decimal;
+            nomorOpname: string;
+            jenisOpname: string;
+            stokSistem: import("@prisma/client/runtime/library").Decimal;
+            selisih: import("@prisma/client/runtime/library").Decimal;
+            hpp: import("@prisma/client/runtime/library").Decimal;
+            totalNilai: import("@prisma/client/runtime/library").Decimal;
+            jurnalId: bigint | null;
+        };
+    }>;
+    rollbackOpname(id: string, dto: RollbackOpnameDto, userId?: number): Promise<{
         success: boolean;
         message: string;
     }>;

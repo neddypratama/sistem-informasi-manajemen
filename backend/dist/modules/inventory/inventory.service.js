@@ -8,7 +8,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsOptional, IsString, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PrismaService } from '../../database/prisma.service.js';
 export class CreateKonversiDto {
@@ -158,6 +158,49 @@ __decorate([
     IsNumber(),
     __metadata("design:type", Number)
 ], CreateOpnameDto.prototype, "customHpp", void 0);
+export class CreatePenyesuaianNonJurnalDto {
+    barangId;
+    stokFisikBaru;
+    selisihStok;
+    keterangan;
+    tanggal;
+}
+__decorate([
+    IsNotEmpty(),
+    Type(() => Number),
+    IsNumber(),
+    __metadata("design:type", Number)
+], CreatePenyesuaianNonJurnalDto.prototype, "barangId", void 0);
+__decorate([
+    IsNotEmpty(),
+    Type(() => Number),
+    IsNumber(),
+    __metadata("design:type", Number)
+], CreatePenyesuaianNonJurnalDto.prototype, "stokFisikBaru", void 0);
+__decorate([
+    IsOptional(),
+    Type(() => Number),
+    IsNumber(),
+    __metadata("design:type", Number)
+], CreatePenyesuaianNonJurnalDto.prototype, "selisihStok", void 0);
+__decorate([
+    IsOptional(),
+    IsString(),
+    __metadata("design:type", String)
+], CreatePenyesuaianNonJurnalDto.prototype, "keterangan", void 0);
+__decorate([
+    IsOptional(),
+    IsString(),
+    __metadata("design:type", String)
+], CreatePenyesuaianNonJurnalDto.prototype, "tanggal", void 0);
+export class RollbackOpnameDto {
+    revertStock;
+}
+__decorate([
+    IsOptional(),
+    IsBoolean(),
+    __metadata("design:type", Boolean)
+], RollbackOpnameDto.prototype, "revertStock", void 0);
 let InventoryService = class InventoryService {
     prisma;
     constructor(prisma) {
@@ -984,6 +1027,193 @@ let InventoryService = class InventoryService {
             }
             await tx.stokOpname.delete({ where: { id: existing.id } });
             return { success: true, message: `Stok opname ${existing.nomorOpname} berhasil dibatalkan dan stok dikembalikan.` };
+        });
+    }
+    async createPenyesuaianNonJurnal(dto, userId = 1) {
+        const barang = await this.prisma.barang.findUnique({
+            where: { id: BigInt(dto.barangId) },
+            include: { jenis: true, satuan: true },
+        });
+        if (!barang) {
+            throw new NotFoundException(`Barang dengan ID ${dto.barangId} tidak ditemukan.`);
+        }
+        const jenisName = (barang.jenis?.name || '').toLowerCase();
+        let jenisOpname = 'TELUR';
+        if (jenisName.includes('pakan') || jenisName.includes('sentrat') || jenisName.includes('curah')) {
+            jenisOpname = 'PAKAN';
+        }
+        else if (jenisName.includes('obat')) {
+            jenisOpname = 'OBAT';
+        }
+        else if (jenisName.includes('tray')) {
+            jenisOpname = 'TRAY';
+        }
+        const tanggal = dto.tanggal ? new Date(dto.tanggal) : new Date();
+        const dateStr = tanggal.toISOString().slice(0, 10).replace(/-/g, '');
+        const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+        const nomorOpname = `ADJ-${dateStr}-${jenisOpname.slice(0, 3)}-${randomSuffix}`;
+        return await this.prisma.$transaction(async (tx) => {
+            const batches = await tx.stokBatch.findMany({
+                where: { barangId: barang.id, qtySisa: { gt: 0 } },
+                orderBy: [{ tanggal: 'asc' }, { id: 'asc' }],
+            });
+            const stokSistem = batches.reduce((acc, curr) => acc + Number(curr.qtySisa), 0);
+            const stokFisik = Number(dto.stokFisikBaru);
+            const selisih = Number((stokFisik - stokSistem).toFixed(2));
+            let hpp = 0;
+            if (stokSistem > 0) {
+                const totalNilai = batches.reduce((acc, curr) => acc + Number(curr.qtySisa) * Number(curr.hargaBeli), 0);
+                hpp = totalNilai / stokSistem;
+            }
+            else {
+                const lastBatch = await tx.stokBatch.findFirst({
+                    where: { barangId: barang.id, hargaBeli: { gt: 0 } },
+                    orderBy: { id: 'desc' },
+                });
+                if (lastBatch)
+                    hpp = Number(lastBatch.hargaBeli);
+            }
+            if (selisih < 0) {
+                let sisaPotong = Math.abs(selisih);
+                for (const b of batches) {
+                    if (sisaPotong <= 0)
+                        break;
+                    const sisaBatch = Number(b.qtySisa);
+                    const potong = Math.min(sisaBatch, sisaPotong);
+                    await tx.stokBatch.update({
+                        where: { id: b.id },
+                        data: { qtySisa: { decrement: potong } },
+                    });
+                    sisaPotong -= potong;
+                }
+            }
+            else if (selisih > 0) {
+                await tx.stokBatch.create({
+                    data: {
+                        barangId: barang.id,
+                        userId: BigInt(userId || 1),
+                        qtyMasuk: selisih,
+                        qtySisa: selisih,
+                        hargaBeli: hpp,
+                        tanggal,
+                    },
+                });
+            }
+            const opname = await tx.stokOpname.create({
+                data: {
+                    nomorOpname,
+                    tanggal,
+                    barangId: barang.id,
+                    userId: BigInt(userId || 1),
+                    jenisOpname,
+                    stokSistem,
+                    stokFisik,
+                    selisih,
+                    hpp,
+                    totalNilai: 0,
+                    selisihStok: selisih,
+                    keterangan: `[NON-JURNAL ADMIN] ${dto.keterangan || 'Penyesuaian Fisik Gudang Tanpa Jurnal'}`,
+                    jurnalId: null,
+                },
+            });
+            try {
+                await tx.activityLog.create({
+                    data: {
+                        userId: BigInt(userId || 1),
+                        action: 'PENYESUAIAN_STOK_NON_JURNAL',
+                        module: 'INVENTORY',
+                        description: `Penyesuaian fisik ${barang.name}: Sistem ${stokSistem} -> Fisik ${stokFisik} (Selisih: ${selisih}). Tanpa jurnal akuntansi.`,
+                        details: {
+                            opnameId: opname.id.toString(),
+                            nomorOpname,
+                            barangId: barang.id.toString(),
+                            stokSistem,
+                            stokFisik,
+                            selisih,
+                        },
+                    },
+                });
+            }
+            catch (logErr) {
+                console.warn('Gagal mencatat activity log penyesuaian non jurnal:', logErr);
+            }
+            return {
+                success: true,
+                message: `Penyesuaian fisik ${barang.name} berhasil diterapkan. Stok sistem kini ${stokFisik} ${barang.satuan?.name || 'unit'} tanpa mempengaruhi jurnal akuntansi.`,
+                data: opname,
+            };
+        });
+    }
+    async rollbackOpname(id, revertStock = false, userId = 1) {
+        return await this.prisma.$transaction(async (tx) => {
+            const opname = await tx.stokOpname.findUnique({
+                where: { id: BigInt(id) },
+                include: { barang: true, jurnal: { include: { details: true } } },
+            });
+            if (!opname) {
+                throw new NotFoundException(`Stok opname dengan ID ${id} tidak ditemukan.`);
+            }
+            if (opname.jurnalId) {
+                await tx.jurnalDetail.deleteMany({
+                    where: { jurnalId: opname.jurnalId },
+                });
+                await tx.jurnalUmum.delete({
+                    where: { id: opname.jurnalId },
+                });
+            }
+            if (Number(opname.selisih) > 0) {
+                const selisihPositif = Number(opname.selisih);
+                const orphanBatch = await tx.stokBatch.findFirst({
+                    where: {
+                        barangId: opname.barangId,
+                        detailTransaksiId: null,
+                        qtyMasuk: selisihPositif,
+                        qtySisa: selisihPositif,
+                    },
+                    orderBy: { id: 'desc' },
+                });
+                if (orphanBatch) {
+                    await tx.stokBatch.delete({ where: { id: orphanBatch.id } });
+                }
+            }
+            if (revertStock && Number(opname.selisih) < 0) {
+                const qtyToRestore = Math.abs(Number(opname.selisih));
+                const latestBatch = await tx.stokBatch.findFirst({
+                    where: { barangId: opname.barangId },
+                    orderBy: { id: 'desc' },
+                });
+                if (latestBatch) {
+                    await tx.stokBatch.update({
+                        where: { id: latestBatch.id },
+                        data: { qtySisa: { increment: qtyToRestore } },
+                    });
+                }
+            }
+            await tx.stokOpname.delete({
+                where: { id: opname.id },
+            });
+            try {
+                await tx.activityLog.create({
+                    data: {
+                        userId: BigInt(userId || 1),
+                        action: 'ROLLBACK_STOK_OPNAME',
+                        module: 'INVENTORY',
+                        description: `Rollback opname ${opname.nomorOpname} (${opname.barang.name}). Jurnal dicabut, revertStock=${revertStock}.`,
+                        details: {
+                            nomorOpname: opname.nomorOpname,
+                            barangName: opname.barang.name,
+                            revertStock,
+                        },
+                    },
+                });
+            }
+            catch (logErr) {
+                console.warn('Gagal mencatat activity log rollback opname:', logErr);
+            }
+            return {
+                success: true,
+                message: `Stok opname ${opname.nomorOpname} (${opname.barang.name}) berhasil di-rollback. Jurnal akuntansi telah dicabut secara aman.`,
+            };
         });
     }
     async findAllKonversi(query) {

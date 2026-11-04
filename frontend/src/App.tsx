@@ -15,6 +15,7 @@ import { DetailKategoriPage } from './features/master/DetailKategoriPage';
 import { StokTelurPage } from './features/inventory/StokTelurPage';
 import { StokOpnamePage } from './features/inventory/StokOpnamePage';
 import { KonversiBarangPage } from './features/inventory/KonversiBarangPage';
+import { PenyesuaianStokPage } from './features/inventory/PenyesuaianStokPage';
 import { MenuObatPage } from './features/inventory/MenuObatPage';
 import { MenuTrayPage } from './features/inventory/MenuTrayPage';
 import { BebanPage } from './features/keuangan/BebanPage';
@@ -165,6 +166,14 @@ export const App: React.FC = () => {
               element={
                 <PermissionRoute permission="stok:opname">
                   <KonversiBarangPage />
+                </PermissionRoute>
+              }
+            />
+            <Route
+              path="penyesuaian-stok"
+              element={
+                <PermissionRoute adminOrManagerOnly={true}>
+                  <PenyesuaianStokPage />
                 </PermissionRoute>
               }
             />

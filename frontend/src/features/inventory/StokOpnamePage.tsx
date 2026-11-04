@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api-client';
+import { useAuthStore, hasPermission } from '../../stores/auth.store';
 import { ExportButtonGroup } from '../../components/ExportButtonGroup';
 import { exportToExcel, formatDateIndo } from '../../lib/export-utils';
 import {
@@ -62,6 +63,9 @@ interface OpnameRecord {
 
 export const StokOpnamePage: React.FC = () => {
   const queryClient = useQueryClient();
+  const { user } = useAuthStore();
+  const canUpdate = hasPermission(user, ['stok_opname:update', 'stok:opname']);
+  const canDelete = hasPermission(user, ['stok_opname:delete', 'stok:opname']);
   const todayStr = new Date().toISOString().slice(0, 10);
 
   // Tab View: 'LIST', 'CREATE', or 'MONITORING'
@@ -2034,20 +2038,27 @@ export const StokOpnamePage: React.FC = () => {
                           </td>
                           <td className="px-4 py-3 text-center whitespace-nowrap">
                             <div className="flex items-center justify-center space-x-1">
-                              <button
-                                onClick={() => handleOpenEdit(item)}
-                                className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
-                                title="Edit Stok Opname"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => setDeleteOpname(item)}
-                                className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                                title="Hapus Stok Opname"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              {canUpdate && (
+                                <button
+                                  onClick={() => handleOpenEdit(item)}
+                                  className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
+                                  title="Edit Stok Opname"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              {canDelete && (
+                                <button
+                                  onClick={() => setDeleteOpname(item)}
+                                  className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                  title="Hapus Stok Opname"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              {!canUpdate && !canDelete && (
+                                <span className="text-xs text-slate-400 italic">Lihat Saja</span>
+                              )}
                             </div>
                           </td>
                         </tr>

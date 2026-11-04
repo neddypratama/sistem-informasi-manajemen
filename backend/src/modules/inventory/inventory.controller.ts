@@ -1,5 +1,11 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
-import { InventoryService, CreateOpnameDto, CreateKonversiDto } from './inventory.service.js';
+import {
+  InventoryService,
+  CreateOpnameDto,
+  CreateKonversiDto,
+  CreatePenyesuaianNonJurnalDto,
+  RollbackOpnameDto,
+} from './inventory.service.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 
@@ -59,6 +65,33 @@ export class InventoryController {
   @Delete('opname/:id')
   async deleteOpname(@Param('id') id: string) {
     return this.inventoryService.deleteOpname(Number(id));
+  }
+
+  /**
+   * Penyesuaian Stok Fisik Khusus Admin (Non-Jurnal)
+   */
+  @Post('penyesuaian-non-jurnal')
+  async createPenyesuaianNonJurnal(
+    @Body() dto: CreatePenyesuaianNonJurnalDto,
+    @CurrentUser('id') userId?: number,
+  ) {
+    return this.inventoryService.createPenyesuaianNonJurnal(dto, Number(userId) || 1);
+  }
+
+  /**
+   * Safe Rollback Transaksi Stok Opname Tertentu
+   */
+  @Post('opname/:id/rollback')
+  async rollbackOpname(
+    @Param('id') id: string,
+    @Body() dto: RollbackOpnameDto,
+    @CurrentUser('id') userId?: number,
+  ) {
+    return this.inventoryService.rollbackOpname(
+      Number(id),
+      dto?.revertStock ?? false,
+      Number(userId) || 1,
+    );
   }
 
   // ==========================================

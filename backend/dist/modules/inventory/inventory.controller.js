@@ -11,7 +11,7 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
-import { InventoryService, CreateOpnameDto, CreateKonversiDto } from './inventory.service.js';
+import { InventoryService, CreateOpnameDto, CreateKonversiDto, CreatePenyesuaianNonJurnalDto, RollbackOpnameDto, } from './inventory.service.js';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 let InventoryController = class InventoryController {
@@ -44,6 +44,12 @@ let InventoryController = class InventoryController {
     }
     async deleteOpname(id) {
         return this.inventoryService.deleteOpname(Number(id));
+    }
+    async createPenyesuaianNonJurnal(dto, userId) {
+        return this.inventoryService.createPenyesuaianNonJurnal(dto, Number(userId) || 1);
+    }
+    async rollbackOpname(id, dto, userId) {
+        return this.inventoryService.rollbackOpname(Number(id), dto?.revertStock ?? false, Number(userId) || 1);
     }
     async findAllKonversi(startDate, endDate, search, page, limit) {
         return this.inventoryService.findAllKonversi({
@@ -115,6 +121,23 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], InventoryController.prototype, "deleteOpname", null);
+__decorate([
+    Post('penyesuaian-non-jurnal'),
+    __param(0, Body()),
+    __param(1, CurrentUser('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [CreatePenyesuaianNonJurnalDto, Number]),
+    __metadata("design:returntype", Promise)
+], InventoryController.prototype, "createPenyesuaianNonJurnal", null);
+__decorate([
+    Post('opname/:id/rollback'),
+    __param(0, Param('id')),
+    __param(1, Body()),
+    __param(2, CurrentUser('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, RollbackOpnameDto, Number]),
+    __metadata("design:returntype", Promise)
+], InventoryController.prototype, "rollbackOpname", null);
 __decorate([
     Get('konversi'),
     __param(0, Query('startDate')),

@@ -24,6 +24,16 @@ export declare class CreateOpnameDto {
     pemakaianTray?: number;
     customHpp?: number;
 }
+export declare class CreatePenyesuaianNonJurnalDto {
+    barangId: number;
+    stokFisikBaru: number;
+    selisihStok?: number;
+    keterangan?: string;
+    tanggal?: string;
+}
+export declare class RollbackOpnameDto {
+    revertStock?: boolean;
+}
 export declare class InventoryService {
     private prisma;
     constructor(prisma: PrismaService);
@@ -155,6 +165,38 @@ export declare class InventoryService {
         jurnalId: number | null;
     }>;
     deleteOpname(id: number): Promise<{
+        success: boolean;
+        message: string;
+    }>;
+    createPenyesuaianNonJurnal(dto: CreatePenyesuaianNonJurnalDto, userId?: number): Promise<{
+        success: boolean;
+        message: string;
+        data: {
+            id: bigint;
+            createdAt: Date;
+            userId: bigint;
+            keterangan: string | null;
+            barangId: bigint;
+            tanggal: Date;
+            stokFisik: import("@prisma/client/runtime/library").Decimal;
+            selisihStok: import("@prisma/client/runtime/library").Decimal;
+            bentes: import("@prisma/client/runtime/library").Decimal;
+            ceplok: import("@prisma/client/runtime/library").Decimal;
+            prok: import("@prisma/client/runtime/library").Decimal;
+            kotor: import("@prisma/client/runtime/library").Decimal;
+            jumbo: import("@prisma/client/runtime/library").Decimal;
+            barangPakai: import("@prisma/client/runtime/library").Decimal;
+            pemakaianTray: import("@prisma/client/runtime/library").Decimal;
+            nomorOpname: string;
+            jenisOpname: string;
+            stokSistem: import("@prisma/client/runtime/library").Decimal;
+            selisih: import("@prisma/client/runtime/library").Decimal;
+            hpp: import("@prisma/client/runtime/library").Decimal;
+            totalNilai: import("@prisma/client/runtime/library").Decimal;
+            jurnalId: bigint | null;
+        };
+    }>;
+    rollbackOpname(id: number, revertStock?: boolean, userId?: number): Promise<{
         success: boolean;
         message: string;
     }>;
