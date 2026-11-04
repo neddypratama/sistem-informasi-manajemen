@@ -22,6 +22,7 @@ export declare class CreateOpnameDto {
     jumbo?: number;
     barangPakai?: number;
     pemakaianTray?: number;
+    customHpp?: number;
 }
 export declare class InventoryService {
     private prisma;

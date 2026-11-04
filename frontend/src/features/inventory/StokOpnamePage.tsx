@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api-client';
@@ -23,6 +23,9 @@ import {
   ShieldCheck,
   Edit2,
   Trash2,
+  BarChart3,
+  Download,
+  CalendarRange,
   ArrowRightLeft,
 } from 'lucide-react';
 
@@ -61,14 +64,23 @@ export const StokOpnamePage: React.FC = () => {
   const queryClient = useQueryClient();
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  // Tab View: 'LIST' or 'CREATE'
-  const [activeTab, setActiveTab] = useState<'LIST' | 'CREATE'>('LIST');
+  // Tab View: 'LIST', 'CREATE', or 'MONITORING'
+  const [activeTab, setActiveTab] = useState<'LIST' | 'CREATE' | 'MONITORING'>('LIST');
 
-  // Filter States
+  // Filter States (Tab Riwayat)
   const [filterKomoditas, setFilterKomoditas] = useState<string>('ALL');
   const [filterSearch, setFilterSearch] = useState<string>('');
   const [filterStartDate, setFilterStartDate] = useState<string>('');
   const [filterEndDate, setFilterEndDate] = useState<string>('');
+
+  // Monitoring Susut States (Tab Monitoring Bulanan)
+  const [monitoringStartDate, setMonitoringStartDate] = useState<string>(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+  });
+  const [monitoringEndDate, setMonitoringEndDate] = useState<string>(todayStr);
+  const [monitoringKomoditas, setMonitoringKomoditas] = useState<string>('ALL');
+  const [monitoringSearch, setMonitoringSearch] = useState<string>('');
 
   // Selected Opname for Journal Modal
   const [selectedOpnameForJournal, setSelectedOpnameForJournal] = useState<OpnameRecord | null>(null);
@@ -78,6 +90,7 @@ export const StokOpnamePage: React.FC = () => {
   const [formBarangId, setFormBarangId] = useState<string>('');
   const [formTanggal, setFormTanggal] = useState<string>(todayStr);
   const [formKeterangan, setFormKeterangan] = useState<string>('');
+  const [formCustomHpp, setFormCustomHpp] = useState<string>('');
 
   // Telur Susut & Selisih Inputs
   const [formSelisihStok, setFormSelisihStok] = useState<string>('');
@@ -99,6 +112,7 @@ export const StokOpnamePage: React.FC = () => {
   const [editOpname, setEditOpname] = useState<OpnameRecord | null>(null);
   const [editTanggal, setEditTanggal] = useState<string>('');
   const [editKeterangan, setEditKeterangan] = useState<string>('');
+  const [editCustomHpp, setEditCustomHpp] = useState<string>('');
   const [editSelisihStok, setEditSelisihStok] = useState<string>('');
   const [editBentes, setEditBentes] = useState<string>('');
   const [editCeplok, setEditCeplok] = useState<string>('');
@@ -107,6 +121,8 @@ export const StokOpnamePage: React.FC = () => {
   const [editJumbo, setEditJumbo] = useState<string>('');
   const [editBarangPakai, setEditBarangPakai] = useState<string>('');
   const [editPemakaianTray, setEditPemakaianTray] = useState<string>('');
+
+  // Delete Opname State
   const [deleteOpname, setDeleteOpname] = useState<OpnameRecord | null>(null);
 
   // Toast / Alert Notification
@@ -162,6 +178,23 @@ export const StokOpnamePage: React.FC = () => {
   const currentStokSistem = Number(selectedBarangItem?.totalStok ?? selectedBarangItem?.totalQty ?? 0);
   const currentHPP = Number(selectedBarangItem?.hargaRataRata || (currentStokSistem > 0 ? (selectedBarangItem?.nilaiStok || 0) / currentStokSistem : 0));
   const currentSatuan = selectedBarangItem?.satuan || 'Kg';
+
+  // Effective HPP: custom user input if provided, otherwise fallback to current stock average HPP
+  const effectiveHPP = useMemo(() => {
+    if (formCustomHpp !== '' && !isNaN(Number(formCustomHpp))) {
+      return Number(formCustomHpp);
+    }
+    return currentHPP;
+  }, [formCustomHpp, currentHPP]);
+
+  // Sync formCustomHpp when item changes
+  useEffect(() => {
+    if (currentHPP > 0) {
+      setFormCustomHpp(String(currentHPP));
+    } else {
+      setFormCustomHpp('');
+    }
+  }, [currentHPP, formBarangId]);
 
   // 3. Fetch Opname History
   const { data: opnameHistoryResponse, isLoading: isLoadingHistory, refetch: refetchHistory } = useQuery({
@@ -237,11 +270,12 @@ export const StokOpnamePage: React.FC = () => {
 
   const netPerubahanStok = totalQtyPenambahan - totalQtyPengurangan;
   const estimatedStokFisik = Math.max(0, currentStokSistem + netPerubahanStok);
-  const totalNilaiSusut = (totalQtyPengurangan + totalQtyPenambahan) * currentHPP;
+  const totalNilaiSusut = (totalQtyPengurangan + totalQtyPenambahan) * effectiveHPP;
 
   // Live Jurnal Simulation Preview
   const previewJurnalLines = useMemo(() => {
     const lines: { akun: string; debit: number; kredit: number; ref: string }[] = [];
+    const currentHPP = effectiveHPP;
     const persediaanName =
       formKomoditas === 'TELUR'
         ? 'Persediaan Stok Telur (Kat. 59)'
@@ -339,7 +373,7 @@ export const StokOpnamePage: React.FC = () => {
       }
     }
     return lines;
-  }, [formKomoditas, selisihStokNum, bentesNum, ceplokNum, prokNum, kotorNum, jumboNum, barangPakaiNum, pemakaianTrayNum, currentHPP, currentSatuan]);
+  }, [formKomoditas, selisihStokNum, bentesNum, ceplokNum, prokNum, kotorNum, jumboNum, barangPakaiNum, pemakaianTrayNum, effectiveHPP, currentSatuan]);
 
   // 4. Mutation to Save Opname
   const createOpnameMutation = useMutation({
@@ -398,6 +432,7 @@ export const StokOpnamePage: React.FC = () => {
       tanggal: formTanggal,
       keterangan: formKeterangan || undefined,
       stokFisik: finalStokFisik,
+      customHpp: effectiveHPP > 0 ? effectiveHPP : undefined,
     };
 
     if (formKomoditas === 'TELUR') {
@@ -429,6 +464,7 @@ export const StokOpnamePage: React.FC = () => {
         `Stok Opname ${data?.nomorOpname || ''} berhasil diperbarui dan jurnal penyesuaian disinkronkan!`
       );
       queryClient.invalidateQueries({ queryKey: ['opnameHistory'] });
+      queryClient.invalidateQueries({ queryKey: ['opnameMonitoring'] });
       queryClient.invalidateQueries({ queryKey: ['stockSummaryOpname'] });
       queryClient.invalidateQueries({ queryKey: ['stockGrid'] });
       setEditOpname(null);
@@ -452,6 +488,7 @@ export const StokOpnamePage: React.FC = () => {
         'Stok Opname berhasil dibatalkan/dihapus dan persediaan/jurnal telah dipulihkan!'
       );
       queryClient.invalidateQueries({ queryKey: ['opnameHistory'] });
+      queryClient.invalidateQueries({ queryKey: ['opnameMonitoring'] });
       queryClient.invalidateQueries({ queryKey: ['stockSummaryOpname'] });
       queryClient.invalidateQueries({ queryKey: ['stockGrid'] });
       setDeleteOpname(null);
@@ -468,6 +505,7 @@ export const StokOpnamePage: React.FC = () => {
     setEditOpname(item);
     setEditTanggal(item.tanggal ? item.tanggal.slice(0, 10) : todayStr);
     setEditKeterangan(item.keterangan || '');
+    setEditCustomHpp(item.hpp ? String(item.hpp) : '');
     setEditSelisihStok(item.selisihStok !== 0 ? String(item.selisihStok) : '');
     setEditBentes(item.bentes !== 0 ? String(item.bentes) : '');
     setEditCeplok(item.ceplok !== 0 ? String(item.ceplok) : '');
@@ -487,6 +525,7 @@ export const StokOpnamePage: React.FC = () => {
       payload: {
         tanggal: editTanggal,
         keterangan: editKeterangan,
+        customHpp: Number(editCustomHpp) > 0 ? Number(editCustomHpp) : undefined,
         selisihStok: Number(editSelisihStok || 0),
         bentes: Number(editBentes || 0),
         ceplok: Number(editCeplok || 0),
@@ -548,6 +587,211 @@ export const StokOpnamePage: React.FC = () => {
         { header: 'No. Jurnal', key: 'nomorJurnal', width: 18 },
         { header: 'Petugas', key: 'userName', width: 16 },
         { header: 'Keterangan', key: 'keterangan', width: 30 },
+      ],
+      data: rows,
+    });
+  };
+
+  // Query Monitoring Susut Bulanan (Tab 3)
+  const { data: monitoringResponse, isLoading: isLoadingMonitoring } = useQuery({
+    queryKey: ['opnameMonitoring', monitoringKomoditas, monitoringStartDate, monitoringEndDate],
+    queryFn: async () => {
+      let url = '/inventory/opname?limit=3000';
+      if (monitoringKomoditas !== 'ALL') url += `&jenisOpname=${monitoringKomoditas}`;
+      if (monitoringStartDate) url += `&startDate=${monitoringStartDate}`;
+      if (monitoringEndDate) url += `&endDate=${monitoringEndDate}`;
+      const res: any = await apiClient.get(url);
+      return res.data || [];
+    },
+    enabled: activeTab === 'MONITORING',
+  });
+
+  const monitoringRawList: OpnameRecord[] = useMemo(() => {
+    if (!monitoringResponse) return [];
+    if (Array.isArray(monitoringResponse)) return monitoringResponse;
+    if (Array.isArray((monitoringResponse as any)?.data)) return (monitoringResponse as any).data;
+    if (Array.isArray((monitoringResponse as any)?.items)) return (monitoringResponse as any).items;
+    return [];
+  }, [monitoringResponse]);
+
+  // Aggregated Summary per Barang & Overall KPIs
+  const monitoringData = useMemo(() => {
+    let filtered = monitoringRawList;
+    if (monitoringSearch.trim()) {
+      const q = monitoringSearch.toLowerCase().trim();
+      filtered = filtered.filter(
+        (it) =>
+          (it.barangName || '').toLowerCase().includes(q) ||
+          (it.nomorOpname || '').toLowerCase().includes(q) ||
+          (it.keterangan || '').toLowerCase().includes(q)
+      );
+    }
+
+    const groups: Record<
+      number,
+      {
+        barangId: number;
+        barangName: string;
+        jenisOpname: string;
+        satuan: string;
+        totalBentes: number;
+        totalCeplok: number;
+        totalProk: number;
+        totalKotor: number;
+        totalJumbo: number;
+        totalBarangPakai: number;
+        totalPemakaianTray: number;
+        totalSelisihStok: number;
+        totalNilaiRp: number;
+        opnameCount: number;
+      }
+    > = {};
+
+    let kpiBentes = 0;
+    let kpiCeplok = 0;
+    let kpiKotor = 0;
+    let kpiProkJumbo = 0;
+    let kpiTray = 0;
+    let kpiBarangPakai = 0;
+    let kpiTotalNilai = 0;
+
+    filtered.forEach((op) => {
+      const bentes = Number(op.bentes) || 0;
+      const ceplok = Number(op.ceplok) || 0;
+      const prok = Number(op.prok) || 0;
+      const kotor = Number(op.kotor) || 0;
+      const jumbo = Number(op.jumbo) || 0;
+      const barangPakai = Number(op.barangPakai) || 0;
+      const pemakaianTray = Number(op.pemakaianTray) || 0;
+      const selisihStok = Number(op.selisihStok) || 0;
+      const totalNilai = Number(op.totalNilai) || 0;
+
+      kpiBentes += bentes;
+      kpiCeplok += ceplok;
+      kpiKotor += kotor;
+      kpiProkJumbo += (prok + jumbo);
+      kpiTray += pemakaianTray;
+      kpiBarangPakai += barangPakai;
+      kpiTotalNilai += totalNilai;
+
+      const bid = op.barangId;
+      if (!groups[bid]) {
+        groups[bid] = {
+          barangId: bid,
+          barangName: op.barangName || 'Produk',
+          jenisOpname: op.jenisOpname,
+          satuan: op.satuan || '',
+          totalBentes: 0,
+          totalCeplok: 0,
+          totalProk: 0,
+          totalKotor: 0,
+          totalJumbo: 0,
+          totalBarangPakai: 0,
+          totalPemakaianTray: 0,
+          totalSelisihStok: 0,
+          totalNilaiRp: 0,
+          opnameCount: 0,
+        };
+      }
+
+      groups[bid].totalBentes += bentes;
+      groups[bid].totalCeplok += ceplok;
+      groups[bid].totalProk += prok;
+      groups[bid].totalKotor += kotor;
+      groups[bid].totalJumbo += jumbo;
+      groups[bid].totalBarangPakai += barangPakai;
+      groups[bid].totalPemakaianTray += pemakaianTray;
+      groups[bid].totalSelisihStok += selisihStok;
+      groups[bid].totalNilaiRp += totalNilai;
+      groups[bid].opnameCount += 1;
+    });
+
+    const items = Object.values(groups).sort((a, b) => b.totalNilaiRp - a.totalNilaiRp);
+
+    return {
+      items,
+      rawCount: filtered.length,
+      kpis: {
+        kpiBentes,
+        kpiCeplok,
+        kpiKotor,
+        kpiProkJumbo,
+        kpiTray,
+        kpiBarangPakai,
+        kpiTotalNilai,
+      },
+    };
+  }, [monitoringRawList, monitoringSearch]);
+
+  const setMonitoringPreset = (preset: 'TODAY' | 'LAST_7' | 'THIS_MONTH' | 'LAST_MONTH' | 'THIS_YEAR') => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    if (preset === 'TODAY') {
+      const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+      setMonitoringStartDate(today);
+      setMonitoringEndDate(today);
+    } else if (preset === 'LAST_7') {
+      const past = new Date(now);
+      past.setDate(past.getDate() - 7);
+      setMonitoringStartDate(`${past.getFullYear()}-${pad(past.getMonth() + 1)}-${pad(past.getDate())}`);
+      setMonitoringEndDate(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`);
+    } else if (preset === 'THIS_MONTH') {
+      const start = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
+      const end = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate())}`;
+      setMonitoringStartDate(start);
+      setMonitoringEndDate(end);
+    } else if (preset === 'LAST_MONTH') {
+      const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const start = `${lastMonthDate.getFullYear()}-${pad(lastMonthDate.getMonth() + 1)}-01`;
+      const end = `${lastMonthDate.getFullYear()}-${pad(lastMonthDate.getMonth() + 1)}-${pad(new Date(lastMonthDate.getFullYear(), lastMonthDate.getMonth() + 1, 0).getDate())}`;
+      setMonitoringStartDate(start);
+      setMonitoringEndDate(end);
+    } else if (preset === 'THIS_YEAR') {
+      setMonitoringStartDate(`${now.getFullYear()}-01-01`);
+      setMonitoringEndDate(`${now.getFullYear()}-12-31`);
+    }
+  };
+
+  const handleExportMonitoringExcel = () => {
+    if (!monitoringData.items.length) {
+      alert('Tidak ada data monitoring susut untuk diekspor pada rentang tanggal ini.');
+      return;
+    }
+
+    const rows = monitoringData.items.map((row, idx) => ({
+      no: idx + 1,
+      barangName: row.barangName,
+      jenisOpname: row.jenisOpname,
+      satuan: row.satuan,
+      totalBentes: row.totalBentes,
+      totalCeplok: row.totalCeplok,
+      totalProk: row.totalProk,
+      totalKotor: row.totalKotor,
+      totalJumbo: row.totalJumbo,
+      totalPakaiTray: row.totalPemakaianTray || row.totalBarangPakai,
+      totalSelisihStok: row.totalSelisihStok,
+      totalNilaiRp: row.totalNilaiRp,
+      opnameCount: row.opnameCount,
+    }));
+
+    exportToExcel({
+      filename: `Laporan_Monitoring_Susut_${monitoringStartDate}_sd_${monitoringEndDate}`,
+      sheetName: 'Rekap Susut',
+      title: `REKAPITULASI LAPORAN MONITORING SUSUT & KERUSAKAN BARANG (${monitoringStartDate} s/d ${monitoringEndDate})`,
+      columns: [
+        { header: 'No', key: 'no', width: 6 },
+        { header: 'Nama Produk / Barang', key: 'barangName', width: 28 },
+        { header: 'Komoditas', key: 'jenisOpname', width: 14 },
+        { header: 'Satuan', key: 'satuan', width: 10 },
+        { header: 'Bentes', key: 'totalBentes', width: 12 },
+        { header: 'Ceplok', key: 'totalCeplok', width: 12 },
+        { header: 'Prok', key: 'totalProk', width: 12 },
+        { header: 'Kotor', key: 'totalKotor', width: 12 },
+        { header: 'Jumbo', key: 'totalJumbo', width: 12 },
+        { header: 'Pakai / Rusak', key: 'totalPakaiTray', width: 14 },
+        { header: 'Selisih Fisik', key: 'totalSelisihStok', width: 14 },
+        { header: 'Total Nilai Rugi (Rp)', key: 'totalNilaiRp', width: 20 },
+        { header: 'Frekuensi Opname', key: 'opnameCount', width: 16 },
       ],
       data: rows,
     });
@@ -615,23 +859,27 @@ export const StokOpnamePage: React.FC = () => {
             <span>Riwayat Opname ({opnameHistoryList.length})</span>
           </button>
           <button
+            onClick={() => setActiveTab('MONITORING')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center space-x-2 transition-all ${
+              activeTab === 'MONITORING'
+                ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30'
+                : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4" />
+            <span>📊 Monitoring Susut Bulanan</span>
+          </button>
+          <button
             onClick={() => setActiveTab('CREATE')}
             className={`px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center space-x-2 transition-all ${
               activeTab === 'CREATE'
-                ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30'
-                : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+                ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
+                : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
             }`}
           >
             <Plus className="w-4 h-4" />
             <span>Input Opname Fisik Baru</span>
           </button>
-          <Link
-            to="/konversi-barang"
-            className="px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center space-x-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition-all"
-          >
-            <ArrowRightLeft className="w-4 h-4 text-indigo-600" />
-            <span>Konversi / Reproses Barang</span>
-          </Link>
         </div>
       </div>
 
@@ -760,24 +1008,55 @@ export const StokOpnamePage: React.FC = () => {
 
             {/* Real-time Current Stock & HPP Info Card */}
             {formBarangId && (
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Stok Sistem Saat Ini</p>
-                  <p className="text-base font-bold text-slate-800 mt-0.5">
-                    {currentStokSistem.toLocaleString('id-ID')} <span className="text-xs font-normal text-slate-500">{currentSatuan}</span>
-                  </p>
+              <div className="space-y-3">
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Stok Sistem Saat Ini</p>
+                    <p className="text-base font-bold text-slate-800 mt-0.5">
+                      {currentStokSistem.toLocaleString('id-ID')} <span className="text-xs font-normal text-slate-500">{currentSatuan}</span>
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Rata-rata Biaya Perolehan (HPP)</p>
+                    <p className="text-base font-bold text-emerald-700 mt-0.5">
+                      {formatRupiah(effectiveHPP)} <span className="text-xs font-normal text-slate-500">/ {currentSatuan}</span>
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Estimasi Nilai Persediaan</p>
+                    <p className="text-base font-bold text-slate-800 mt-0.5 font-mono">
+                      {formatRupiah(currentStokSistem * effectiveHPP)}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Rata-rata Biaya Perolehan (HPP)</p>
-                  <p className="text-base font-bold text-emerald-700 mt-0.5">
-                    {formatRupiah(currentHPP)} <span className="text-xs font-normal text-slate-500">/ {currentSatuan}</span>
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Estimasi Nilai Persediaan</p>
-                  <p className="text-base font-bold text-slate-800 mt-0.5 font-mono">
-                    {formatRupiah(currentStokSistem * currentHPP)}
-                  </p>
+
+                {/* Input Edit HPP Modal / Harga Perolehan */}
+                <div className="p-3.5 bg-amber-50/60 rounded-xl border border-amber-200 space-y-1.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                    <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <span>Harga Satuan / HPP Modal (Rp)</span>
+                      {currentHPP === 0 && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                          ⚠️ HPP Dasar Rp 0 (Wajib Diisi)
+                        </span>
+                      )}
+                    </label>
+                    <span className="text-[11px] text-slate-500">
+                      Bisa disesuaikan jika barang belum ada pembelian atau tray second/tutup
+                    </span>
+                  </div>
+                  <div className="relative max-w-sm">
+                    <span className="absolute left-3 top-2 text-xs font-bold text-slate-400">Rp</span>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={formCustomHpp}
+                      onChange={(e) => setFormCustomHpp(e.target.value)}
+                      placeholder={currentHPP > 0 ? String(currentHPP) : "Masukkan HPP per unit..."}
+                      className="w-full pl-9 pr-3 py-1.5 border border-amber-300 rounded-lg text-xs font-mono font-bold bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -1427,161 +1706,98 @@ export const StokOpnamePage: React.FC = () => {
       {activeTab === 'LIST' && (
         <div className="space-y-4">
           {/* Filters Bar */}
-          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-            {/* Baris 1: Komoditas Tabs Scrollable & Search */}
-            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5">
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setFilterKomoditas('ALL')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
-                    filterKomoditas === 'ALL'
-                      ? 'bg-slate-900 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  Semua Komoditas
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterKomoditas('TELUR')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
-                    filterKomoditas === 'TELUR'
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  Telur
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterKomoditas('PAKAN')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
-                    filterKomoditas === 'PAKAN'
-                      ? 'bg-amber-600 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  Pakan
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterKomoditas('OBAT')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
-                    filterKomoditas === 'OBAT'
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  Obat
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterKomoditas('TRAY')}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
-                    filterKomoditas === 'TRAY'
-                      ? 'bg-teal-600 text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  Tray
-                </button>
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setFilterKomoditas('ALL')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                  filterKomoditas === 'ALL'
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Semua Komoditas
+              </button>
+              <button
+                onClick={() => setFilterKomoditas('TELUR')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                  filterKomoditas === 'TELUR'
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Telur
+              </button>
+              <button
+                onClick={() => setFilterKomoditas('PAKAN')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                  filterKomoditas === 'PAKAN'
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Pakan
+              </button>
+              <button
+                onClick={() => setFilterKomoditas('OBAT')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                  filterKomoditas === 'OBAT'
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Obat
+              </button>
+              <button
+                onClick={() => setFilterKomoditas('TRAY')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                  filterKomoditas === 'TRAY'
+                    ? 'bg-teal-600 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Tray
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center space-x-1 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5">
+                <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                <input
+                  type="date"
+                  value={filterStartDate}
+                  onChange={(e) => setFilterStartDate(e.target.value)}
+                  className="bg-transparent text-xs text-slate-700 font-medium focus:outline-none"
+                  title="Dari Tanggal"
+                />
+                <span className="text-slate-400 text-xs">-</span>
+                <input
+                  type="date"
+                  value={filterEndDate}
+                  onChange={(e) => setFilterEndDate(e.target.value)}
+                  className="bg-transparent text-xs text-slate-700 font-medium focus:outline-none"
+                  title="Sampai Tanggal"
+                />
               </div>
 
-              <div className="relative flex-1 md:max-w-xs">
+              <div className="relative flex-1 md:w-56">
                 <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                 <input
                   type="text"
                   placeholder="Cari No. Opname / Barang..."
                   value={filterSearch}
                   onChange={(e) => setFilterSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-1 focus:ring-emerald-500 bg-slate-50 min-h-[38px]"
+                  className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-emerald-500 bg-white"
                 />
               </div>
-            </div>
 
-            {/* Baris 2: Quick Dates & Custom Date Range */}
-            <div className="pt-2 border-t border-slate-100 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5">
-              <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0 scrollbar-none text-[11px] font-semibold bg-slate-100 p-1 rounded-xl shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const today = new Date().toISOString().slice(0, 10);
-                    setFilterStartDate(today);
-                    setFilterEndDate(today);
-                  }}
-                  className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
-                    filterStartDate === new Date().toISOString().slice(0, 10) && filterEndDate === new Date().toISOString().slice(0, 10)
-                      ? 'bg-white text-emerald-700 shadow-xs font-bold'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Hari Ini
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const d = new Date();
-                    const firstDay = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
-                    const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
-                    setFilterStartDate(firstDay);
-                    setFilterEndDate(lastDay);
-                  }}
-                  className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
-                    filterStartDate.endsWith('-01')
-                      ? 'bg-white text-emerald-700 shadow-xs font-bold'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Bulan Ini
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFilterStartDate('');
-                    setFilterEndDate('');
-                  }}
-                  className={`px-3 py-1.5 rounded-lg whitespace-nowrap transition-all ${
-                    !filterStartDate && !filterEndDate
-                      ? 'bg-white text-emerald-700 shadow-xs font-bold'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Semua Waktu
-                </button>
-              </div>
-
-              <div className="flex items-center gap-2 w-full md:w-auto">
-                <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:items-center">
-                  <div className="relative">
-                    <input
-                      type="date"
-                      value={filterStartDate}
-                      onChange={(e) => setFilterStartDate(e.target.value)}
-                      className="w-full sm:w-auto px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 min-h-[38px]"
-                      title="Dari Tanggal"
-                    />
-                  </div>
-                  <span className="hidden sm:inline text-slate-400 text-xs font-bold">s/d</span>
-                  <div className="relative">
-                    <input
-                      type="date"
-                      value={filterEndDate}
-                      onChange={(e) => setFilterEndDate(e.target.value)}
-                      className="w-full sm:w-auto px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs bg-slate-50 font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 min-h-[38px]"
-                      title="Sampai Tanggal"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => refetchHistory()}
-                  className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors shrink-0"
-                  title="Segarkan data"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </button>
-              </div>
+              <button
+                onClick={() => refetchHistory()}
+                className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+                title="Segarkan data"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </button>
             </div>
           </div>
 
@@ -1599,21 +1815,20 @@ export const StokOpnamePage: React.FC = () => {
                     <th className="px-4 py-3.5 text-right">Nilai Penyesuaian</th>
                     <th className="px-4 py-3.5 text-center">Jurnal Akuntansi</th>
                     <th className="px-4 py-3.5">Petugas</th>
-                    <th className="px-4 py-3.5 text-center">Status</th>
                     <th className="px-4 py-3.5 text-center">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {isLoadingHistory ? (
                     <tr>
-                      <td colSpan={10} className="px-4 py-12 text-center text-slate-400">
+                      <td colSpan={9} className="px-4 py-12 text-center text-slate-400">
                         <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-slate-400" />
                         Mengambil riwayat stok opname...
                       </td>
                     </tr>
                   ) : opnameHistoryList.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="px-4 py-12 text-center text-slate-400">
+                      <td colSpan={9} className="px-4 py-12 text-center text-slate-400">
                         <Boxes className="w-8 h-8 text-slate-300 mx-auto mb-2" />
                         Belum ada catatan stok opname yang cocok dengan filter.
                       </td>
@@ -1818,12 +2033,6 @@ export const StokOpnamePage: React.FC = () => {
                             {item.userName || 'Admin'}
                           </td>
                           <td className="px-4 py-3 text-center whitespace-nowrap">
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                              <span>Aktif</span>
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-center whitespace-nowrap">
                             <div className="flex items-center justify-center space-x-1">
                               <button
                                 onClick={() => handleOpenEdit(item)}
@@ -1846,6 +2055,381 @@ export const StokOpnamePage: React.FC = () => {
                     })
                   )}
                 </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: MONITORING SUSUT BULANAN & REKAP KERUSAKAN */}
+      {activeTab === 'MONITORING' && (
+        <div className="space-y-5 animate-fadeIn">
+          {/* Filter Bar Rekap Bulanan */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div>
+                <h3 className="font-extrabold text-slate-800 text-base flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-emerald-600" />
+                  <span>Monitoring & Rekapitulasi Susut Fisik Gudang</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Laporan akumulasi kerusakan bentes, ceplok, kotor, jumbo, pemakaian tray, dan beban penyesuaian opname.
+                </p>
+              </div>
+
+              {/* Tombol Ekspor Excel */}
+              <button
+                type="button"
+                onClick={handleExportMonitoringExcel}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-200 transition-all cursor-pointer shrink-0"
+              >
+                <Download className="w-4 h-4" />
+                <span>Ekspor Excel Laporan Susut</span>
+              </button>
+            </div>
+
+            {/* Quick Date Presets */}
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+              <span className="text-xs font-bold text-slate-500 flex items-center gap-1 mr-1">
+                <CalendarRange className="w-3.5 h-3.5 text-slate-400" /> Rentang Cepat:
+              </span>
+              <button
+                type="button"
+                onClick={() => setMonitoringPreset('THIS_MONTH')}
+                className="px-3 py-1 text-xs font-semibold rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors cursor-pointer"
+              >
+                Bulan Ini
+              </button>
+              <button
+                type="button"
+                onClick={() => setMonitoringPreset('LAST_MONTH')}
+                className="px-3 py-1 text-xs font-semibold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition-colors cursor-pointer"
+              >
+                Bulan Lalu
+              </button>
+              <button
+                type="button"
+                onClick={() => setMonitoringPreset('LAST_7')}
+                className="px-3 py-1 text-xs font-semibold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition-colors cursor-pointer"
+              >
+                7 Hari Terakhir
+              </button>
+              <button
+                type="button"
+                onClick={() => setMonitoringPreset('TODAY')}
+                className="px-3 py-1 text-xs font-semibold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition-colors cursor-pointer"
+              >
+                Hari Ini
+              </button>
+              <button
+                type="button"
+                onClick={() => setMonitoringPreset('THIS_YEAR')}
+                className="px-3 py-1 text-xs font-semibold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition-colors cursor-pointer"
+              >
+                Tahun Ini
+              </button>
+            </div>
+
+            {/* Date Pickers & Search Input */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                  Tanggal Mulai
+                </label>
+                <div className="relative">
+                  <Calendar className="w-4 h-4 absolute left-3 top-3 text-slate-400 pointer-events-none" />
+                  <input
+                    type="date"
+                    value={monitoringStartDate}
+                    onChange={(e) => setMonitoringStartDate(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 font-medium"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                  Tanggal Akhir
+                </label>
+                <div className="relative">
+                  <Calendar className="w-4 h-4 absolute left-3 top-3 text-slate-400 pointer-events-none" />
+                  <input
+                    type="date"
+                    value={monitoringEndDate}
+                    onChange={(e) => setMonitoringEndDate(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 font-medium"
+                  />
+                </div>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                  Cari Produk / Keterangan
+                </label>
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={monitoringSearch}
+                    onChange={(e) => setMonitoringSearch(e.target.value)}
+                    placeholder="Ketik nama telur, pakan, obat, tray..."
+                    className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 font-medium"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Pills Filter Komoditas */}
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+              <span className="text-xs font-bold text-slate-500 mr-1">Komoditas:</span>
+              {[
+                { id: 'ALL', label: 'Semua Komoditas' },
+                { id: 'TELUR', label: '🥚 Telur' },
+                { id: 'PAKAN', label: '🌾 Pakan' },
+                { id: 'OBAT', label: '💊 Obat' },
+                { id: 'TRAY', label: '🪵 Tray' },
+              ].map((pill) => (
+                <button
+                  key={pill.id}
+                  type="button"
+                  onClick={() => setMonitoringKomoditas(pill.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    monitoringKomoditas === pill.id
+                      ? 'bg-slate-900 text-white shadow-sm'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {pill.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 7 KPI CARDS */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
+            <div className="bg-white p-4 rounded-2xl border border-rose-100 shadow-xs">
+              <div className="flex items-center justify-between text-rose-500 mb-1">
+                <span className="text-[11px] font-bold uppercase">Bentes</span>
+                <span className="text-xs">🥚</span>
+              </div>
+              <p className="text-xl font-extrabold text-rose-900 font-mono">
+                {monitoringData.kpis.kpiBentes.toLocaleString('id-ID')}
+              </p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Susut Butir / Kg</p>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-orange-100 shadow-xs">
+              <div className="flex items-center justify-between text-orange-500 mb-1">
+                <span className="text-[11px] font-bold uppercase">Ceplok</span>
+                <span className="text-xs">🍳</span>
+              </div>
+              <p className="text-xl font-extrabold text-orange-900 font-mono">
+                {monitoringData.kpis.kpiCeplok.toLocaleString('id-ID')}
+              </p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Susut Pecah</p>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-yellow-100 shadow-xs">
+              <div className="flex items-center justify-between text-yellow-600 mb-1">
+                <span className="text-[11px] font-bold uppercase">Kotor</span>
+                <span className="text-xs">🧼</span>
+              </div>
+              <p className="text-xl font-extrabold text-yellow-900 font-mono">
+                {monitoringData.kpis.kpiKotor.toLocaleString('id-ID')}
+              </p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Sortir Telur Kotor</p>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-purple-100 shadow-xs">
+              <div className="flex items-center justify-between text-purple-500 mb-1">
+                <span className="text-[11px] font-bold uppercase">Prok / Jumbo</span>
+                <span className="text-xs">📦</span>
+              </div>
+              <p className="text-xl font-extrabold text-purple-900 font-mono">
+                {monitoringData.kpis.kpiProkJumbo.toLocaleString('id-ID')}
+              </p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Ukuran Khusus</p>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-teal-100 shadow-xs">
+              <div className="flex items-center justify-between text-teal-600 mb-1">
+                <span className="text-[11px] font-bold uppercase">Tray Rusak</span>
+                <span className="text-xs">🪵</span>
+              </div>
+              <p className="text-xl font-extrabold text-teal-900 font-mono">
+                {monitoringData.kpis.kpiTray.toLocaleString('id-ID')}
+              </p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Pemakaian / Afkir</p>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl border border-blue-100 shadow-xs">
+              <div className="flex items-center justify-between text-blue-500 mb-1">
+                <span className="text-[11px] font-bold uppercase">Pakan / Obat</span>
+                <span className="text-xs">🌾</span>
+              </div>
+              <p className="text-xl font-extrabold text-blue-900 font-mono">
+                {monitoringData.kpis.kpiBarangPakai.toLocaleString('id-ID')}
+              </p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Barang Pakai</p>
+            </div>
+
+            <div className="bg-gradient-to-br from-rose-50 to-orange-50 p-4 rounded-2xl border border-rose-200 shadow-xs col-span-2 sm:col-span-3 lg:col-span-1">
+              <div className="flex items-center justify-between text-rose-700 mb-1">
+                <span className="text-[11px] font-bold uppercase">Total Beban Susut</span>
+                <span className="text-xs">💰</span>
+              </div>
+              <p className="text-base font-extrabold text-rose-900 font-mono leading-tight">
+                {formatRupiah(monitoringData.kpis.kpiTotalNilai)}
+              </p>
+              <p className="text-[10px] text-rose-600 mt-0.5">Nilai Kerugian Nominal</p>
+            </div>
+          </div>
+
+          {/* TABEL REKAP AGREGASI PER BARANG */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center space-x-2">
+                <ClipboardCheck className="w-4 h-4 text-emerald-600" />
+                <span className="font-bold text-slate-800 text-sm">
+                  Daftar Rekap Kerusakan & Susut per Barang ({monitoringData.items.length} Produk)
+                </span>
+              </div>
+              <span className="text-xs text-slate-500">
+                Total {monitoringData.rawCount} Transaksi Opname Tercatat
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-100/70 text-slate-600 font-semibold border-b border-slate-200">
+                  <tr>
+                    <th className="px-3 py-3 w-10 text-center">No</th>
+                    <th className="px-4 py-3">Nama Produk / Barang</th>
+                    <th className="px-3 py-3 text-center">Komoditas</th>
+                    <th className="px-3 py-3 text-center">Satuan</th>
+                    <th className="px-3 py-3 text-right">Bentes</th>
+                    <th className="px-3 py-3 text-right">Ceplok</th>
+                    <th className="px-3 py-3 text-right">Prok</th>
+                    <th className="px-3 py-3 text-right">Kotor</th>
+                    <th className="px-3 py-3 text-right">Jumbo</th>
+                    <th className="px-3 py-3 text-right">Pakai / Rusak</th>
+                    <th className="px-3 py-3 text-right">Selisih Fisik</th>
+                    <th className="px-4 py-3 text-right">Total Beban (Rp)</th>
+                    <th className="px-3 py-3 text-center">Frekuensi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {isLoadingMonitoring ? (
+                    <tr>
+                      <td colSpan={13} className="px-4 py-12 text-center text-slate-400">
+                        <RefreshCw className="w-6 h-6 mx-auto animate-spin text-emerald-500 mb-2" />
+                        <p>Memuat rekapitulasi data susut fisik gudang...</p>
+                      </td>
+                    </tr>
+                  ) : monitoringData.items.length === 0 ? (
+                    <tr>
+                      <td colSpan={13} className="px-4 py-12 text-center text-slate-400">
+                        <BarChart3 className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                        <p className="font-medium text-slate-600">Tidak ada data susut opname pada rentang tanggal ini.</p>
+                        <p className="text-[11px] text-slate-400 mt-1">Ubah filter tanggal atau komoditas di atas.</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    monitoringData.items.map((row, idx) => (
+                      <tr key={row.barangId} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="px-3 py-3 text-center text-slate-400 font-mono">{idx + 1}</td>
+                        <td className="px-4 py-3 font-bold text-slate-800">
+                          {row.barangName}
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              row.jenisOpname === 'TELUR'
+                                ? 'bg-amber-100 text-amber-800'
+                                : row.jenisOpname === 'PAKAN'
+                                ? 'bg-blue-100 text-blue-800'
+                                : row.jenisOpname === 'OBAT'
+                                ? 'bg-indigo-100 text-indigo-800'
+                                : 'bg-teal-100 text-teal-800'
+                            }`}
+                          >
+                            {row.jenisOpname}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-center text-slate-500 font-mono">
+                          {row.satuan}
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono text-rose-700 font-semibold">
+                          {row.totalBentes !== 0 ? row.totalBentes.toLocaleString('id-ID') : '-'}
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono text-orange-700 font-semibold">
+                          {row.totalCeplok !== 0 ? row.totalCeplok.toLocaleString('id-ID') : '-'}
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono text-amber-700 font-semibold">
+                          {row.totalProk !== 0 ? row.totalProk.toLocaleString('id-ID') : '-'}
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono text-yellow-800 font-semibold">
+                          {row.totalKotor !== 0 ? row.totalKotor.toLocaleString('id-ID') : '-'}
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono text-purple-700 font-semibold">
+                          {row.totalJumbo !== 0 ? row.totalJumbo.toLocaleString('id-ID') : '-'}
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono text-teal-700 font-semibold">
+                          {(row.totalPemakaianTray || row.totalBarangPakai) !== 0
+                            ? (row.totalPemakaianTray || row.totalBarangPakai).toLocaleString('id-ID')
+                            : '-'}
+                        </td>
+                        <td className="px-3 py-3 text-right font-mono text-slate-700">
+                          {row.totalSelisihStok !== 0 ? (
+                            <span className={row.totalSelisihStok > 0 ? 'text-emerald-700 font-bold' : 'text-rose-700 font-bold'}>
+                              {row.totalSelisihStok > 0 ? `+${row.totalSelisihStok}` : row.totalSelisihStok}
+                            </span>
+                          ) : (
+                            '-'
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono font-bold text-rose-800 whitespace-nowrap">
+                          {formatRupiah(row.totalNilaiRp)}
+                        </td>
+                        <td className="px-3 py-3 text-center text-slate-500 font-mono">
+                          <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-semibold text-[10px]">
+                            {row.opnameCount}×
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+                {monitoringData.items.length > 0 && (
+                  <tfoot className="bg-slate-50 font-bold text-slate-800 border-t-2 border-slate-300">
+                    <tr>
+                      <td colSpan={4} className="px-4 py-3 text-right uppercase text-xs tracking-wider">
+                        Grand Total:
+                      </td>
+                      <td className="px-3 py-3 text-right font-mono text-rose-700">
+                        {monitoringData.kpis.kpiBentes.toLocaleString('id-ID')}
+                      </td>
+                      <td className="px-3 py-3 text-right font-mono text-orange-700">
+                        {monitoringData.kpis.kpiCeplok.toLocaleString('id-ID')}
+                      </td>
+                      <td className="px-3 py-3 text-right font-mono text-amber-700">-</td>
+                      <td className="px-3 py-3 text-right font-mono text-yellow-800">
+                        {monitoringData.kpis.kpiKotor.toLocaleString('id-ID')}
+                      </td>
+                      <td className="px-3 py-3 text-right font-mono text-purple-700">-</td>
+                      <td className="px-3 py-3 text-right font-mono text-teal-700">
+                        {(monitoringData.kpis.kpiTray + monitoringData.kpis.kpiBarangPakai).toLocaleString('id-ID')}
+                      </td>
+                      <td className="px-3 py-3 text-right font-mono text-slate-700">-</td>
+                      <td className="px-4 py-3 text-right font-mono text-rose-800 text-sm whitespace-nowrap">
+                        {formatRupiah(monitoringData.kpis.kpiTotalNilai)}
+                      </td>
+                      <td className="px-3 py-3 text-center font-mono text-slate-600">
+                        {monitoringData.rawCount} opname
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           </div>
@@ -1965,10 +2549,10 @@ export const StokOpnamePage: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL: EDIT STOK OPNAME */}
+      {/* MODAL EDIT STOK OPNAME */}
       {editOpname && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden animate-scaleIn">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <div className="flex items-center space-x-2.5">
                 <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
@@ -1976,10 +2560,10 @@ export const StokOpnamePage: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="font-bold text-slate-800 text-sm">
-                    Edit Stok Opname: {editOpname.nomorOpname}
+                    Edit Catatan Stok Opname
                   </h3>
-                  <p className="text-[11px] text-slate-500">
-                    {editOpname.barangName} • Komoditas: {editOpname.jenisOpname}
+                  <p className="text-[11px] text-slate-500 font-mono">
+                    {editOpname.nomorOpname} • {editOpname.barangName}
                   </p>
                 </div>
               </div>
@@ -1991,20 +2575,10 @@ export const StokOpnamePage: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSubmitEditOpname} className="p-6 overflow-y-auto space-y-4">
-              <div className="p-3 bg-amber-50/70 border border-amber-200/60 rounded-xl text-xs text-amber-900 leading-relaxed">
-                <p className="font-semibold flex items-center gap-1.5 mb-1">
-                  <ShieldCheck className="w-4 h-4 text-amber-700 flex-shrink-0" />
-                  Jaminan Keamanan & Sinkronisasi Otomatis
-                </p>
-                Perubahan stok opname akan secara otomatis membatalkan alokasi batch fisik sebelumnya,
-                menerapkan penyesuaian batch baru, dan memperbarui rincian jurnal penyesuaian akuntansi
-                terkait secara seimbang (Debit = Kredit).
-              </div>
-
+            <form onSubmit={handleSubmitEditOpname} className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
                     Tanggal Opname
                   </label>
                   <input
@@ -2012,164 +2586,177 @@ export const StokOpnamePage: React.FC = () => {
                     required
                     value={editTanggal}
                     onChange={(e) => setEditTanggal(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500 font-medium"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                    Selisih Fisik Umum ({editOpname.satuan})
+                  <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                    HPP Modal / Satuan (Rp)
                   </label>
                   <input
                     type="number"
                     step="any"
-                    value={editSelisihStok}
-                    onChange={(e) => setEditSelisihStok(e.target.value)}
-                    placeholder="0 (+/-)"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                    min="0"
+                    value={editCustomHpp}
+                    onChange={(e) => setEditCustomHpp(e.target.value)}
+                    placeholder="Masukkan HPP modal..."
+                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-mono font-bold bg-white focus:ring-2 focus:ring-amber-500"
                   />
                 </div>
               </div>
 
-              {editOpname.jenisOpname === 'TELUR' && (
-                <div className="space-y-3 pt-2 border-t border-slate-100">
-                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-                    Rincian Kategori Susut Telur (Kg)
-                  </h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {/* Input Angka Susut / Selisih Sesuai Komoditas */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                <p className="text-xs font-bold text-slate-700">Rincian Fisik & Susut ({editOpname.satuan})</p>
+                {editOpname.jenisOpname === 'TELUR' ? (
+                  <div className="grid grid-cols-3 gap-2">
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                        Bentes (Kat. 27)
-                      </label>
+                      <label className="block text-[10px] font-bold text-slate-500">Selisih Fisik</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={editSelisihStok}
+                        onChange={(e) => setEditSelisihStok(e.target.value)}
+                        placeholder="0"
+                        className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-mono font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-rose-600">Bentes</label>
                       <input
                         type="number"
                         step="any"
                         value={editBentes}
                         onChange={(e) => setEditBentes(e.target.value)}
                         placeholder="0"
-                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-amber-500"
+                        className="w-full px-2 py-1.5 border border-rose-200 rounded-lg text-xs font-mono font-bold"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                        Ceplok (Kat. 28)
-                      </label>
+                      <label className="block text-[10px] font-bold text-orange-600">Ceplok</label>
                       <input
                         type="number"
                         step="any"
                         value={editCeplok}
                         onChange={(e) => setEditCeplok(e.target.value)}
                         placeholder="0"
-                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-amber-500"
+                        className="w-full px-2 py-1.5 border border-orange-200 rounded-lg text-xs font-mono font-bold"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                        Prok (Kat. 29)
-                      </label>
+                      <label className="block text-[10px] font-bold text-amber-600">Prok</label>
                       <input
                         type="number"
                         step="any"
                         value={editProk}
                         onChange={(e) => setEditProk(e.target.value)}
                         placeholder="0"
-                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-amber-500"
+                        className="w-full px-2 py-1.5 border border-amber-200 rounded-lg text-xs font-mono font-bold"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                        Kotor (Kat. 40)
-                      </label>
+                      <label className="block text-[10px] font-bold text-yellow-700">Kotor</label>
                       <input
                         type="number"
                         step="any"
                         value={editKotor}
                         onChange={(e) => setEditKotor(e.target.value)}
                         placeholder="0"
-                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-amber-500"
+                        className="w-full px-2 py-1.5 border border-yellow-200 rounded-lg text-xs font-mono font-bold"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                        Jumbo (Kat. 45)
-                      </label>
+                      <label className="block text-[10px] font-bold text-purple-600">Jumbo</label>
                       <input
                         type="number"
                         step="any"
                         value={editJumbo}
                         onChange={(e) => setEditJumbo(e.target.value)}
                         placeholder="0"
-                        className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-amber-500"
+                        className="w-full px-2 py-1.5 border border-purple-200 rounded-lg text-xs font-mono font-bold"
                       />
                     </div>
                   </div>
-                </div>
-              )}
-
-              {(editOpname.jenisOpname === 'PAKAN' || editOpname.jenisOpname === 'OBAT') && (
-                <div className="pt-2 border-t border-slate-100">
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                    Barang Terpakai / Rusak / Kadaluarsa ({editOpname.satuan})
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={editBarangPakai}
-                    onChange={(e) => setEditBarangPakai(e.target.value)}
-                    placeholder="0"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-amber-500"
-                  />
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Alokasi beban ke akun Beban Rusak / Kadaluarsa (Kat. 30).
-                  </p>
-                </div>
-              )}
-
-              {editOpname.jenisOpname === 'TRAY' && (
-                <div className="pt-2 border-t border-slate-100">
-                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                    Tray Terpakai / Rusak ({editOpname.satuan})
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={editPemakaianTray}
-                    onChange={(e) => setEditPemakaianTray(e.target.value)}
-                    placeholder="0"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-amber-500"
-                  />
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    Alokasi beban ke akun Beban Tray Terpakai (Kat. 42).
-                  </p>
-                </div>
-              )}
+                ) : editOpname.jenisOpname === 'TRAY' ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500">Selisih Fisik</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={editSelisihStok}
+                        onChange={(e) => setEditSelisihStok(e.target.value)}
+                        placeholder="0"
+                        className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-mono font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-teal-700">Pemakaian/Rusak</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={editPemakaianTray}
+                        onChange={(e) => setEditPemakaianTray(e.target.value)}
+                        placeholder="0"
+                        className="w-full px-2 py-1.5 border border-teal-200 rounded-lg text-xs font-mono font-bold"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500">Selisih Fisik</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={editSelisihStok}
+                        onChange={(e) => setEditSelisihStok(e.target.value)}
+                        placeholder="0"
+                        className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs font-mono font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-blue-700">Barang Pakai/Rusak</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={editBarangPakai}
+                        onChange={(e) => setEditBarangPakai(e.target.value)}
+                        placeholder="0"
+                        className="w-full px-2 py-1.5 border border-blue-200 rounded-lg text-xs font-mono font-bold"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                  Keterangan / Alasan Koreksi
+                <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                  Keterangan / Catatan
                 </label>
                 <textarea
                   rows={2}
                   value={editKeterangan}
                   onChange={(e) => setEditKeterangan(e.target.value)}
-                  placeholder="Keterangan penyesuaian..."
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                  placeholder="Catatan hasil pemeriksaan fisik..."
+                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-slate-50 focus:bg-white focus:ring-2 focus:ring-amber-500"
                 />
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end space-x-2">
+              <div className="pt-2 flex items-center justify-end space-x-2">
                 <button
                   type="button"
                   onClick={() => setEditOpname(null)}
-                  className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                  className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-semibold hover:bg-slate-50 cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
                   disabled={updateOpnameMutation.isPending}
-                  className="px-5 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-200 transition-all cursor-pointer"
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-md shadow-amber-200 transition-all cursor-pointer"
                 >
-                  {updateOpnameMutation.isPending ? 'Menyimpan...' : 'Perbarui Stok Opname & Jurnal'}
+                  {updateOpnameMutation.isPending ? 'Menyimpan...' : 'Simpan Perubahan'}
                 </button>
               </div>
             </form>
@@ -2177,43 +2764,39 @@ export const StokOpnamePage: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL: HAPUS STOK OPNAME */}
+      {/* MODAL DELETE CONFIRMATION */}
       {deleteOpname && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
-            <div className="flex items-center space-x-3 text-red-600 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 p-6 space-y-4 animate-scaleIn">
+            <div className="flex items-center space-x-3 text-rose-600">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center">
                 <AlertCircle className="w-5 h-5" />
               </div>
               <div>
                 <h3 className="text-base font-bold text-slate-900">Batalkan / Hapus Stok Opname?</h3>
-                <p className="text-xs text-slate-500">Tindakan ini akan memulihkan stok persediaan</p>
+                <p className="text-xs text-slate-500">Tindakan ini akan mengembalikan persediaan</p>
               </div>
             </div>
 
             <p className="text-xs text-slate-600 leading-relaxed">
-              Anda akan membatalkan catatan stok opname{' '}
-              <strong className="font-mono text-slate-800">{deleteOpname.nomorOpname}</strong> untuk barang{' '}
-              <strong>{deleteOpname.barangName}</strong> senilai{' '}
-              <strong className="text-red-700">{formatRupiah(Number(deleteOpname.totalNilai))}</strong>.
-              Stok fisik batch akan dipulihkan secara otomatis dan jurnal akuntansi penyesuaian terkait akan dihapus.
+              Anda akan membatalkan opname nomor <strong className="font-mono text-slate-800">{deleteOpname.nomorOpname}</strong> untuk produk <strong className="text-slate-800">{deleteOpname.barangName}</strong> senilai <strong className="text-rose-700">{formatRupiah(Number(deleteOpname.totalNilai))}</strong>. Jurnal penyesuaian otomatis dan stok fisik akan dipulihkan kembali.
             </p>
 
-            <div className="mt-6 flex items-center justify-end space-x-2">
+            <div className="flex items-center justify-end space-x-2 pt-2">
               <button
                 type="button"
                 onClick={() => setDeleteOpname(null)}
-                className="px-4 py-2 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl text-xs font-semibold hover:bg-slate-50 cursor-pointer"
               >
-                Batal
+                Kembali
               </button>
               <button
                 type="button"
-                onClick={() => deleteOpnameMutation.mutate(deleteOpname.id)}
                 disabled={deleteOpnameMutation.isPending}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md shadow-red-200 transition-all cursor-pointer"
+                onClick={() => deleteOpnameMutation.mutate(deleteOpname.id)}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-200 transition-all cursor-pointer"
               >
-                {deleteOpnameMutation.isPending ? 'Menghapus...' : 'Ya, Batalkan & Hapus'}
+                {deleteOpnameMutation.isPending ? 'Menghapus...' : 'Ya, Hapus Catatan Opname'}
               </button>
             </div>
           </div>

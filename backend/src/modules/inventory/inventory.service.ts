@@ -101,6 +101,11 @@ export class CreateOpnameDto {
   @Type(() => Number)
   @IsNumber()
   pemakaianTray?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  customHpp?: number;
 }
 
 @Injectable()
@@ -354,6 +359,11 @@ export class InventoryService {
         }
       }
 
+      // Override jika user memasukkan custom HPP / taksiran HPP modal
+      if (dto.customHpp !== undefined && Number(dto.customHpp) > 0) {
+        hpp = Number(dto.customHpp);
+      }
+
       // 2. Parse kuantitas susut / pemakaian / selisih stok (bisa positif atau negatif)
       const selisihStok = Number(dto.selisihStok || 0);
       const bentes = Number(dto.bentes || 0);
@@ -595,7 +605,10 @@ export class InventoryService {
 
       const barang = existing.barang;
       const jenisOpname = existing.jenisOpname;
-      const hpp = Number(existing.hpp);
+      let hpp = Number(existing.hpp);
+      if (dto.customHpp !== undefined && Number(dto.customHpp) > 0) {
+        hpp = Number(dto.customHpp);
+      }
 
       // 1. REVERT EFEK STOK LAMA
       const oldSelisihStok = Number(existing.selisihStok);
@@ -858,6 +871,7 @@ export class InventoryService {
           stokFisik,
           selisih,
           totalNilai: totalNilaiOpname,
+          hpp,
           jurnalId,
           selisihStok: newSelisihStok,
           bentes: newBentes,

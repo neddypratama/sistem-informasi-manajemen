@@ -468,46 +468,10 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
     activeTab === 'RETUR_PEMBELIAN' ||
     (activeTab === 'STOK' && monitoringType === 'PEMBELIAN');
 
-  // Filter clients specifically for Filter Bar per tab & commodity
+  // Filter clients specifically for Filter Bar per tab & commodity - sertakan SEMUA mitra agar filter tidak terpotong
   const filterClientsList = useMemo(() => {
-    if (!clientsData) return [];
-    let list = clientsData;
-    if (isBeli) {
-      if (commodityKey === 'telur' || isEgg) {
-        list = clientsData.filter((c: any) => c.type?.toLowerCase().includes('peternak'));
-      } else if (commodityKey === 'pakan') {
-        list = clientsData.filter((c: any) => {
-          const name = (c.name || '').toLowerCase();
-          const type = (c.type || '').toLowerCase();
-          return (
-            type.includes('supplier') ||
-            name.includes('sentrat') ||
-            name.includes('supriyadi') ||
-            name.includes('pri')
-          );
-        });
-      } else if (commodityKey === 'obat') {
-        list = clientsData.filter(
-          (c: any) => c.type?.toLowerCase().includes('supplier') && c.name?.toLowerCase().includes('obat'),
-        );
-      } else if (commodityKey === 'tray') {
-        list = clientsData.filter(
-          (c: any) => c.type?.toLowerCase().includes('supplier') && c.name?.toLowerCase().includes('tray'),
-        );
-      }
-    } else {
-      // Penjualan & Retur Penjualan
-      if (commodityKey === 'pakan' || commodityKey === 'obat' || commodityKey === 'tray') {
-        list = clientsData.filter((c: any) => {
-          const t = c.type?.toLowerCase() || '';
-          return !t.includes('pedagang') && !t.includes('supplier');
-        });
-      } else if (commodityKey === 'telur' || isEgg) {
-        list = clientsData.filter((c: any) => c.type?.toLowerCase().includes('pedagang'));
-      }
-    }
-    return list.length > 0 ? list : clientsData;
-  }, [clientsData, isBeli, commodityKey, isEgg, jenisIds]);
+    return clientsData || [];
+  }, [clientsData]);
 
   // Reset client filter & page when switching tab or monitoring transaction type
   useEffect(() => {
@@ -519,54 +483,34 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
     setPage(1);
   }, [search, filterClientId, filterStatus, startDate, endDate]);
 
-
-  // Filter clients specifically per commodity on Pembelian & Penjualan
+  // Prioritaskan mitra relevan di atas, tetapi sertakan SEMUA mitra agar tidak ada klien yang hilang / tidak dapat dipilih
   const availableClients = useMemo(() => {
-    if (!clientsData) return [];
-    if (formType === 'PEMBELIAN') {
-      if (commodityKey === 'telur' || isEgg) {
-        return clientsData.filter((c: any) => c.type?.toLowerCase().includes('peternak'));
+    if (!clientsData || !Array.isArray(clientsData)) return [];
+
+    const isRelevant = (c: any) => {
+      const type = (c.type || '').toLowerCase();
+      const name = (c.name || '').toLowerCase();
+      if (formType === 'PEMBELIAN') {
+        if (commodityKey === 'telur' || isEgg) return type.includes('peternak');
+        if (commodityKey === 'pakan') return type.includes('supplier') || name.includes('sentrat') || name.includes('supriyadi') || name.includes('pri');
+        if (commodityKey === 'obat') return type.includes('supplier') || name.includes('obat');
+        if (commodityKey === 'tray') return type.includes('supplier') || name.includes('tray') || type.includes('peternak');
+      } else if (formType === 'PENJUALAN') {
+        if (commodityKey === 'telur' || isEgg) return type.includes('pedagang');
+        return !type.includes('supplier');
       }
-      if (commodityKey === 'pakan') {
-        // Tipe supplier pakan: Sentrat (SK, Ponggok, Random) dan Curah (Bp. Supriyadi / Pak Pri)
-        return clientsData.filter((c: any) => {
-          const name = (c.name || '').toLowerCase();
-          const type = (c.type || '').toLowerCase();
-          return (
-            type.includes('supplier') ||
-            name.includes('sentrat') ||
-            name.includes('supriyadi') ||
-            name.includes('pri')
-          );
-        });
-      }
-      if (commodityKey === 'obat') {
-        // Tipe supplier yang namanya "Obat %"
-        return clientsData.filter(
-          (c: any) => c.type?.toLowerCase().includes('supplier') && c.name?.toLowerCase().includes('obat'),
-        );
-      }
-      if (commodityKey === 'tray') {
-        // Tipe supplier yang namanya "Tray %"
-        return clientsData.filter(
-          (c: any) => c.type?.toLowerCase().includes('supplier') && c.name?.toLowerCase().includes('tray'),
-        );
-      }
-    } else if (formType === 'PENJUALAN') {
-      if (commodityKey === 'pakan' || commodityKey === 'obat' || commodityKey === 'tray') {
-        // Form penjualan untuk pakan, obat, dan tray: semua tipe KECUALI pedagang dan KECUALI supplier
-        return clientsData.filter((c: any) => {
-          const t = c.type?.toLowerCase() || '';
-          return !t.includes('pedagang') && !t.includes('supplier');
-        });
-      }
-      if (commodityKey === 'telur' || isEgg) {
-        // Form penjualan telur: pembeli adalah pedagang
-        return clientsData.filter((c: any) => c.type?.toLowerCase().includes('pedagang'));
-      }
-    }
-    return clientsData;
-  }, [clientsData, isEgg, commodityKey, formType, jenisIds]);
+      return true;
+    };
+
+    const relevant: any[] = [];
+    const others: any[] = [];
+    clientsData.forEach((c: any) => {
+      if (isRelevant(c)) relevant.push(c);
+      else others.push(c);
+    });
+
+    return [...relevant, ...others];
+  }, [clientsData, isEgg, commodityKey, formType]);
 
   // Auto-sync Hutang / Piutang Payment Account based on selected Client
   const handleClientSelect = (clientId: string) => {

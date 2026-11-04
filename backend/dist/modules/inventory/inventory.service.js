@@ -80,6 +80,7 @@ export class CreateOpnameDto {
     jumbo;
     barangPakai;
     pemakaianTray;
+    customHpp;
 }
 __decorate([
     IsNotEmpty(),
@@ -151,6 +152,12 @@ __decorate([
     IsNumber(),
     __metadata("design:type", Number)
 ], CreateOpnameDto.prototype, "pemakaianTray", void 0);
+__decorate([
+    IsOptional(),
+    Type(() => Number),
+    IsNumber(),
+    __metadata("design:type", Number)
+], CreateOpnameDto.prototype, "customHpp", void 0);
 let InventoryService = class InventoryService {
     prisma;
     constructor(prisma) {
@@ -358,6 +365,9 @@ let InventoryService = class InventoryService {
                     if (lastBatch) {
                         hpp = Number(lastBatch.hargaBeli);
                     }
+                }
+                if (dto.customHpp !== undefined && Number(dto.customHpp) > 0) {
+                    hpp = Number(dto.customHpp);
                 }
                 const selisihStok = Number(dto.selisihStok || 0);
                 const bentes = Number(dto.bentes || 0);
@@ -573,7 +583,10 @@ let InventoryService = class InventoryService {
             }
             const barang = existing.barang;
             const jenisOpname = existing.jenisOpname;
-            const hpp = Number(existing.hpp);
+            let hpp = Number(existing.hpp);
+            if (dto.customHpp !== undefined && Number(dto.customHpp) > 0) {
+                hpp = Number(dto.customHpp);
+            }
             const oldSelisihStok = Number(existing.selisihStok);
             const oldBentes = Number(existing.bentes);
             const oldCeplok = Number(existing.ceplok);
@@ -852,6 +865,7 @@ let InventoryService = class InventoryService {
                     stokFisik,
                     selisih,
                     totalNilai: totalNilaiOpname,
+                    hpp,
                     jurnalId,
                     selisihStok: newSelisihStok,
                     bentes: newBentes,
