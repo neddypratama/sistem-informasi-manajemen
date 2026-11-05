@@ -96,7 +96,7 @@ export declare class InventoryController {
         qtySisa: import("@prisma/client/runtime/library").Decimal;
         hargaBeli: import("@prisma/client/runtime/library").Decimal;
     })[]>;
-    findAllOpname(jenisOpname?: string, barangId?: string, startDate?: string, endDate?: string, search?: string, page?: string, limit?: string): Promise<{
+    findAllOpname(jenisOpname?: string, barangId?: string, startDate?: string, endDate?: string, search?: string, page?: string, limit?: string, tipe?: string): Promise<{
         items: {
             id: number;
             nomorOpname: string;
@@ -182,12 +182,12 @@ export declare class InventoryController {
             barangPakai: import("@prisma/client/runtime/library").Decimal;
             pemakaianTray: import("@prisma/client/runtime/library").Decimal;
             nomorOpname: string;
+            jurnalId: bigint | null;
             jenisOpname: string;
             stokSistem: import("@prisma/client/runtime/library").Decimal;
             selisih: import("@prisma/client/runtime/library").Decimal;
             hpp: import("@prisma/client/runtime/library").Decimal;
             totalNilai: import("@prisma/client/runtime/library").Decimal;
-            jurnalId: bigint | null;
         };
     }>;
     rollbackOpname(id: string, dto: RollbackOpnameDto, userId?: number): Promise<{

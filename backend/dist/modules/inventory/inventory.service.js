@@ -321,28 +321,51 @@ let InventoryService = class InventoryService {
         const limit = Math.min(200, Math.max(1, Number(query.limit || 25)));
         const skip = (page - 1) * limit;
         const where = {};
+        const andConditions = [];
         if (query.jenisOpname)
-            where.jenisOpname = query.jenisOpname;
+            andConditions.push({ jenisOpname: query.jenisOpname });
         if (query.barangId)
-            where.barangId = BigInt(query.barangId);
+            andConditions.push({ barangId: BigInt(query.barangId) });
         if (query.search) {
-            where.OR = [
-                { nomorOpname: { contains: query.search } },
-                { keterangan: { contains: query.search } },
-                { barang: { name: { contains: query.search } } },
-            ];
+            andConditions.push({
+                OR: [
+                    { nomorOpname: { contains: query.search } },
+                    { keterangan: { contains: query.search } },
+                    { barang: { name: { contains: query.search } } },
+                ],
+            });
         }
         if (query.startDate && query.endDate) {
-            where.tanggal = {
-                gte: new Date(query.startDate),
-                lte: new Date(`${query.endDate} 23:59:59`),
-            };
+            andConditions.push({
+                tanggal: {
+                    gte: new Date(query.startDate),
+                    lte: new Date(`${query.endDate} 23:59:59`),
+                },
+            });
         }
         else if (query.startDate) {
-            where.tanggal = { gte: new Date(query.startDate) };
+            andConditions.push({ tanggal: { gte: new Date(query.startDate) } });
         }
         else if (query.endDate) {
-            where.tanggal = { lte: new Date(`${query.endDate} 23:59:59`) };
+            andConditions.push({ tanggal: { lte: new Date(`${query.endDate} 23:59:59`) } });
+        }
+        if (query.tipe === 'NON_JURNAL') {
+            andConditions.push({
+                OR: [
+                    { nomorOpname: { startsWith: 'ADJ' } },
+                    { keterangan: { contains: 'NON-JURNAL' } },
+                    { jurnalId: null },
+                ],
+            });
+        }
+        else if (query.tipe === 'OPNAME') {
+            andConditions.push({
+                nomorOpname: { startsWith: 'OPN' },
+                jurnalId: { not: null },
+            });
+        }
+        if (andConditions.length > 0) {
+            where.AND = andConditions;
         }
         const [items, total] = await Promise.all([
             this.prisma.stokOpname.findMany({

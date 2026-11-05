@@ -1,9 +1,11 @@
 import React, { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api-client';
 import { useAuthStore, isAdminOrManager } from '../../stores/auth.store';
 import { formatRupiah, formatDateIndo } from '../../lib/export-utils';
 import { SearchableBarangSelect } from '../../components/SearchableBarangSelect';
+import { Pagination } from '../../components/Pagination';
 import {
   SlidersHorizontal,
   RotateCcw,
@@ -25,6 +27,7 @@ import {
   TrendingUp,
   FileCheck,
   History,
+  ClipboardCheck,
   Info,
 } from 'lucide-react';
 
@@ -66,14 +69,14 @@ export const PenyesuaianStokPage: React.FC = () => {
   const [keterangan, setKeterangan] = useState<string>('');
   const [tanggal, setTanggal] = useState<string>(todayStr);
 
-  // Filter Rollback List
+  // Filter Riwayat / Rollback List
   const [rollbackSearch, setRollbackSearch] = useState<string>('');
   const [rollbackKomoditas, setRollbackKomoditas] = useState<string>('ALL');
-  const [rollbackStartDate, setRollbackStartDate] = useState<string>(() => {
-    const d = new Date();
-    return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
-  });
-  const [rollbackEndDate, setRollbackEndDate] = useState<string>(todayStr);
+  const [rollbackTipe, setRollbackTipe] = useState<'ALL' | 'NON_JURNAL' | 'OPNAME'>('ALL');
+  const [rollbackStartDate, setRollbackStartDate] = useState<string>('');
+  const [rollbackEndDate, setRollbackEndDate] = useState<string>('');
+  const [page, setPage] = useState<number>(1);
+  const [limit, setLimit] = useState<number>(25);
 
   // Modal Rollback Target
   const [rollbackTarget, setRollbackTarget] = useState<OpnameRecord | null>(null);
@@ -169,19 +172,37 @@ export const PenyesuaianStokPage: React.FC = () => {
     return Number((val - currentSystemStock).toFixed(2));
   }, [stokFisikBaru, currentSystemStock]);
 
-  // 3. Fetch Opnames for Rollback & History
-  const { data: opnameList, isLoading: isLoadingOpname, refetch: refetchOpnames } = useQuery({
-    queryKey: ['opnameListForRollback', rollbackKomoditas, rollbackStartDate, rollbackEndDate, rollbackSearch],
+  // 3. Fetch Opnames for Rollback & History with Server-Side Pagination
+  const { data: opnameResponse, isLoading: isLoadingOpname, refetch: refetchOpnames } = useQuery({
+    queryKey: ['opnameListForRollback', rollbackKomoditas, rollbackTipe, rollbackStartDate, rollbackEndDate, rollbackSearch, page, limit],
     queryFn: async () => {
-      let url = `/inventory/opname?limit=500`;
+      let url = `/inventory/opname?page=${page}&limit=${limit}`;
       if (rollbackKomoditas !== 'ALL') url += `&jenisOpname=${rollbackKomoditas}`;
+      if (rollbackTipe !== 'ALL') url += `&tipe=${rollbackTipe}`;
       if (rollbackStartDate) url += `&startDate=${rollbackStartDate}`;
       if (rollbackEndDate) url += `&endDate=${rollbackEndDate}`;
       if (rollbackSearch) url += `&search=${encodeURIComponent(rollbackSearch)}`;
       const res: any = await apiClient.get(url);
-      return res.data || res;
+      return res;
     },
   });
+
+  const opnameList: OpnameRecord[] = useMemo(() => {
+    if (!opnameResponse) return [];
+    if (Array.isArray(opnameResponse?.data)) return opnameResponse.data;
+    if (Array.isArray(opnameResponse?.items)) return opnameResponse.items;
+    if (Array.isArray(opnameResponse)) return opnameResponse;
+    return [];
+  }, [opnameResponse]);
+
+  const meta = useMemo(() => {
+    return opnameResponse?.meta || {
+      page,
+      limit,
+      total: opnameList.length,
+      totalPages: Math.max(1, Math.ceil(opnameList.length / limit)),
+    };
+  }, [opnameResponse, page, limit, opnameList.length]);
 
   // Mutasi: Simpan Penyesuaian Non-Jurnal
   const penyesuaianMutation = useMutation({
@@ -300,19 +321,19 @@ export const PenyesuaianStokPage: React.FC = () => {
                   : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
               }`}
             >
-              <RotateCcw className="w-4 h-4" />
-              <span>Penyesuaian Non-Jurnal</span>
+              <SlidersHorizontal className="w-4 h-4" />
+              <span>Form Penyesuaian</span>
             </button>
             <button
               onClick={() => { setActiveTab('ROLLBACK'); setAlertSuccess(null); setAlertError(null); }}
               className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
                 activeTab === 'ROLLBACK'
-                  ? 'bg-rose-600 text-white shadow-md'
+                  ? 'bg-indigo-600 text-white shadow-md'
                   : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
               }`}
             >
-              <ShieldAlert className="w-4 h-4" />
-              <span>Rollback Opname</span>
+              <History className="w-4 h-4" />
+              <span>Riwayat Penyesuaian & Opname ({opnameList?.length || 0})</span>
             </button>
           </div>
         </div>
@@ -568,20 +589,66 @@ export const PenyesuaianStokPage: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 2: SAFE ROLLBACK STOK OPNAME                                          */}
+      {/* TAB 2: RIWAYAT PENYESUAIAN & OPNAME STOK (DENGAN ROLLBACK)                 */}
       {/* ========================================================================= */}
       {activeTab === 'ROLLBACK' && (
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
             <div>
               <h2 className="text-base font-bold text-slate-800 flex items-center space-x-2">
-                <RotateCcw className="w-4 h-4 text-rose-600" />
-                <span>Daftar Transaksi Stok Opname untuk di-Rollback</span>
+                <History className="w-5 h-5 text-indigo-600" />
+                <span>Riwayat Penyesuaian & Stok Opname Fisik Gudang</span>
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Pilih transaksi opname yang keliru untuk mencabut jurnal akuntansinya secara aman dan bersih.
+                Daftar lengkap audit trail penyesuaian fisik (Non-Jurnal & Opname) beserta nilai selisih dan opsi rollback aman.
               </p>
             </div>
+            <div className="flex items-center gap-2">
+              <Link
+                to="/stok-opname"
+                className="px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-slate-700 flex items-center gap-1.5 transition-colors"
+              >
+                <ClipboardCheck className="w-4 h-4 text-amber-600" />
+                <span>Buka Menu Stok Opname Lengkap</span>
+              </Link>
+            </div>
+          </div>
+
+          {/* Segmented Type Filter */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => { setRollbackTipe('ALL'); setPage(1); }}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                rollbackTipe === 'ALL'
+                  ? 'bg-slate-900 text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              Semua Mutasi
+            </button>
+            <button
+              type="button"
+              onClick={() => { setRollbackTipe('NON_JURNAL'); setPage(1); }}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                rollbackTipe === 'NON_JURNAL'
+                  ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30'
+                  : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200'
+              }`}
+            >
+              Penyesuaian Non-Jurnal Saja
+            </button>
+            <button
+              type="button"
+              onClick={() => { setRollbackTipe('OPNAME'); setPage(1); }}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                rollbackTipe === 'OPNAME'
+                  ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30'
+                  : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+              }`}
+            >
+              Stok Opname Jurnal Saja
+            </button>
           </div>
 
           {/* Filters */}
@@ -594,7 +661,10 @@ export const PenyesuaianStokPage: React.FC = () => {
                   type="text"
                   placeholder="Ketik nama / no opname..."
                   value={rollbackSearch}
-                  onChange={(e) => setRollbackSearch(e.target.value)}
+                  onChange={(e) => {
+                    setRollbackSearch(e.target.value);
+                    setPage(1);
+                  }}
                   className="w-full text-xs pl-9 pr-3 py-2 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-rose-500"
                 />
               </div>
@@ -604,7 +674,10 @@ export const PenyesuaianStokPage: React.FC = () => {
               <label className="block text-[11px] font-bold text-slate-600 mb-1">Filter Komoditas</label>
               <select
                 value={rollbackKomoditas}
-                onChange={(e) => setRollbackKomoditas(e.target.value)}
+                onChange={(e) => {
+                  setRollbackKomoditas(e.target.value);
+                  setPage(1);
+                }}
                 className="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-rose-500"
               >
                 <option value="ALL">Semua Komoditas</option>
@@ -620,7 +693,10 @@ export const PenyesuaianStokPage: React.FC = () => {
               <input
                 type="date"
                 value={rollbackStartDate}
-                onChange={(e) => setRollbackStartDate(e.target.value)}
+                onChange={(e) => {
+                  setRollbackStartDate(e.target.value);
+                  setPage(1);
+                }}
                 className="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-rose-500"
               />
             </div>
@@ -630,7 +706,10 @@ export const PenyesuaianStokPage: React.FC = () => {
               <input
                 type="date"
                 value={rollbackEndDate}
-                onChange={(e) => setRollbackEndDate(e.target.value)}
+                onChange={(e) => {
+                  setRollbackEndDate(e.target.value);
+                  setPage(1);
+                }}
                 className="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-rose-500"
               />
             </div>
@@ -663,7 +742,7 @@ export const PenyesuaianStokPage: React.FC = () => {
                   <tr>
                     <td colSpan={8} className="py-8 text-center text-slate-400">
                       <History className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                      <span>Tidak ada transaksi opname yang cocok dengan filter.</span>
+                      <span>Tidak ada transaksi yang cocok dengan filter yang dipilih.</span>
                     </td>
                   </tr>
                 ) : (
@@ -731,6 +810,21 @@ export const PenyesuaianStokPage: React.FC = () => {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Controls */}
+          <Pagination
+            page={page}
+            limit={limit}
+            total={meta.total}
+            totalPages={meta.totalPages}
+            onPageChange={(p) => setPage(p)}
+            onLimitChange={(l) => {
+              setLimit(l);
+              setPage(1);
+            }}
+            limitOptions={[10, 25, 50, 100, 200]}
+            entityName="riwayat penyesuaian"
+          />
         </div>
       )}
 

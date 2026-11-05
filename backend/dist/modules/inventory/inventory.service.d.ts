@@ -145,6 +145,7 @@ export declare class InventoryService {
         search?: string;
         page?: number;
         limit?: number;
+        tipe?: string;
     }): Promise<{
         items: {
             id: number;
@@ -231,12 +232,12 @@ export declare class InventoryService {
             barangPakai: import("@prisma/client/runtime/library").Decimal;
             pemakaianTray: import("@prisma/client/runtime/library").Decimal;
             nomorOpname: string;
+            jurnalId: bigint | null;
             jenisOpname: string;
             stokSistem: import("@prisma/client/runtime/library").Decimal;
             selisih: import("@prisma/client/runtime/library").Decimal;
             hpp: import("@prisma/client/runtime/library").Decimal;
             totalNilai: import("@prisma/client/runtime/library").Decimal;
-            jurnalId: bigint | null;
         };
     }>;
     rollbackOpname(id: number, revertStock?: boolean, userId?: number): Promise<{

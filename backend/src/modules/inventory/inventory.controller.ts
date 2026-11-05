@@ -52,6 +52,7 @@ export class InventoryController {
     @Query('search') search?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('tipe') tipe?: string,
   ) {
     return this.inventoryService.findAllOpname({
       jenisOpname,
@@ -61,6 +62,7 @@ export class InventoryController {
       search,
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,
+      tipe,
     });
   }
 

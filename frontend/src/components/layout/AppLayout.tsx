@@ -134,9 +134,9 @@ export const AppLayout: React.FC = () => {
       title: 'STOK',
       items: [
         { label: 'Monitoring Stok Global', path: '/stok', icon: Boxes, permission: 'stok:read', badge: 'Gudang', badgeColor: 'bg-emerald-500/20 text-emerald-400' },
-        { label: 'Stok Opname & Penyesuaian', path: '/stok-opname', icon: ClipboardCheck, permission: 'stok:opname', badge: 'Opname', badgeColor: 'bg-amber-500/20 text-amber-400' },
+        { label: 'Stok Opname', path: '/stok-opname', icon: ClipboardCheck, permission: 'stok:opname', badge: 'Opname', badgeColor: 'bg-amber-500/20 text-amber-400' },
         { label: 'Konversi & Reproses', path: '/konversi-barang', icon: ArrowRightLeft, permission: 'stok:opname', badge: 'Reproses', badgeColor: 'bg-indigo-500/20 text-indigo-400' },
-        { label: 'Penyesuaian Stok (Admin)', path: '/penyesuaian-stok', icon: SlidersHorizontal, adminOrManagerOnly: true, badge: 'Rollback', badgeColor: 'bg-rose-500/20 text-rose-400' },
+        { label: 'Penyesuaian Stok', path: '/penyesuaian-stok', icon: SlidersHorizontal, adminOrManagerOnly: true, badge: 'Rollback', badgeColor: 'bg-rose-500/20 text-rose-400' },
       ],
     },
     {

@@ -37,7 +37,7 @@ let InventoryController = class InventoryController {
     async getBatches(barangId) {
         return this.inventoryService.getBatches(barangId ? Number(barangId) : undefined);
     }
-    async findAllOpname(jenisOpname, barangId, startDate, endDate, search, page, limit) {
+    async findAllOpname(jenisOpname, barangId, startDate, endDate, search, page, limit, tipe) {
         return this.inventoryService.findAllOpname({
             jenisOpname,
             barangId: barangId ? Number(barangId) : undefined,
@@ -46,6 +46,7 @@ let InventoryController = class InventoryController {
             search,
             page: page ? Number(page) : undefined,
             limit: limit ? Number(limit) : undefined,
+            tipe,
         });
     }
     async createOpname(dto, userId) {
@@ -109,8 +110,9 @@ __decorate([
     __param(4, Query('search')),
     __param(5, Query('page')),
     __param(6, Query('limit')),
+    __param(7, Query('tipe')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String, String, String, String, String, String]),
+    __metadata("design:paramtypes", [String, String, String, String, String, String, String, String]),
     __metadata("design:returntype", Promise)
 ], InventoryController.prototype, "findAllOpname", null);
 __decorate([
