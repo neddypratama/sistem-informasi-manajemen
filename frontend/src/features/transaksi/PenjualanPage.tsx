@@ -152,7 +152,7 @@ export const PenjualanPage: React.FC = () => {
         <div>
           <h2 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center space-x-2">
             <ShoppingCart className="w-6 h-6 text-emerald-600" />
-            <span>Kasir POS Penjualan Telur & Produk</span>
+            <span>Transaksi Penjualan Telur & Produk</span>
           </h2>
           <p className="text-sm text-slate-500 mt-0.5">Input nota penjualan dengan alokasi FIFO atomik dan posting otomatis</p>
         </div>

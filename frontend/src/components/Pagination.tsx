@@ -2,9 +2,10 @@ import React from 'react';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 
 export interface PaginationProps {
-  page: number;
-  limit: number;
-  total: number;
+  page?: number;
+  currentPage?: number;
+  limit?: number;
+  total?: number;
   totalPages?: number;
   onPageChange: (newPage: number) => void;
   onLimitChange?: (newLimit: number) => void;
@@ -14,9 +15,10 @@ export interface PaginationProps {
 }
 
 export const Pagination: React.FC<PaginationProps> = ({
-  page,
-  limit,
-  total,
+  page: propPage,
+  currentPage: propCurrentPage,
+  limit = 25,
+  total = 0,
   totalPages,
   onPageChange,
   onLimitChange,
@@ -24,9 +26,12 @@ export const Pagination: React.FC<PaginationProps> = ({
   entityName = 'data',
   className = '',
 }) => {
-  const calculatedTotalPages = totalPages || Math.max(1, Math.ceil(total / (limit || 25)));
-  const from = total === 0 ? 0 : (page - 1) * limit + 1;
-  const to = Math.min(page * limit, total);
+  const activePage = propPage ?? propCurrentPage ?? 1;
+  const safeTotal = typeof total === 'number' && !isNaN(total) ? Math.max(0, total) : 0;
+  const safeLimit = typeof limit === 'number' && limit > 0 ? limit : 25;
+  const calculatedTotalPages = totalPages || Math.max(1, Math.ceil(safeTotal / safeLimit));
+  const from = safeTotal === 0 ? 0 : (activePage - 1) * safeLimit + 1;
+  const to = Math.min(activePage * safeLimit, safeTotal);
 
   return (
     <div
@@ -38,7 +43,7 @@ export const Pagination: React.FC<PaginationProps> = ({
           <div className="flex items-center space-x-1.5">
             <span className="font-medium text-slate-600">Tampilkan:</span>
             <select
-              value={limit}
+              value={safeLimit}
               onChange={(e) => {
                 onLimitChange(Number(e.target.value));
                 onPageChange(1);
@@ -57,15 +62,15 @@ export const Pagination: React.FC<PaginationProps> = ({
         <div className="text-slate-600 font-medium">
           Menampilkan{' '}
           <strong className="font-bold text-slate-900 font-mono">
-            {from.toLocaleString('id-ID')}
+            {Number(from || 0).toLocaleString('id-ID')}
           </strong>{' '}
           –{' '}
           <strong className="font-bold text-slate-900 font-mono">
-            {to.toLocaleString('id-ID')}
+            {Number(to || 0).toLocaleString('id-ID')}
           </strong>{' '}
           dari{' '}
           <strong className="font-bold text-slate-900 font-mono">
-            {total.toLocaleString('id-ID')}
+            {Number(safeTotal || 0).toLocaleString('id-ID')}
           </strong>{' '}
           {entityName}
         </div>
@@ -77,7 +82,7 @@ export const Pagination: React.FC<PaginationProps> = ({
         <button
           type="button"
           onClick={() => onPageChange(1)}
-          disabled={page <= 1}
+          disabled={activePage <= 1}
           title="Halaman Pertama"
           className="p-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-35 disabled:cursor-not-allowed text-slate-600 transition-colors"
         >
@@ -87,35 +92,35 @@ export const Pagination: React.FC<PaginationProps> = ({
         {/* Tombol Sebelumnya (<) */}
         <button
           type="button"
-          onClick={() => onPageChange(Math.max(1, page - 1))}
-          disabled={page <= 1}
-          className="px-2.5 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-35 disabled:cursor-not-allowed font-medium text-slate-700 flex items-center space-x-1 transition-colors"
+          onClick={() => onPageChange(Math.max(1, activePage - 1))}
+          disabled={activePage <= 1}
+          title="Halaman Sebelumnya"
+          className="p-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-35 disabled:cursor-not-allowed text-slate-600 transition-colors"
         >
-          <ChevronLeft className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Sebelumnya</span>
+          <ChevronLeft className="w-4 h-4" />
         </button>
 
-        {/* Indikator Halaman Aktif */}
-        <div className="px-3 py-1.5 bg-slate-100 rounded-lg font-mono font-bold text-slate-800 text-xs">
-          Halaman {page} / {calculatedTotalPages}
-        </div>
+        {/* Info Halaman Saat Ini */}
+        <span className="px-3 py-1 text-slate-700 font-bold font-mono">
+          {activePage} / {calculatedTotalPages}
+        </span>
 
         {/* Tombol Selanjutnya (>) */}
         <button
           type="button"
-          onClick={() => onPageChange(Math.min(calculatedTotalPages, page + 1))}
-          disabled={page >= calculatedTotalPages}
-          className="px-2.5 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-35 disabled:cursor-not-allowed font-medium text-slate-700 flex items-center space-x-1 transition-colors"
+          onClick={() => onPageChange(Math.min(calculatedTotalPages, activePage + 1))}
+          disabled={activePage >= calculatedTotalPages}
+          title="Halaman Selanjutnya"
+          className="p-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-35 disabled:cursor-not-allowed text-slate-600 transition-colors"
         >
-          <span className="hidden sm:inline">Selanjutnya</span>
-          <ChevronRight className="w-3.5 h-3.5" />
+          <ChevronRight className="w-4 h-4" />
         </button>
 
         {/* Tombol Terakhir (>>) */}
         <button
           type="button"
           onClick={() => onPageChange(calculatedTotalPages)}
-          disabled={page >= calculatedTotalPages}
+          disabled={activePage >= calculatedTotalPages}
           title="Halaman Terakhir"
           className="p-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-35 disabled:cursor-not-allowed text-slate-600 transition-colors"
         >

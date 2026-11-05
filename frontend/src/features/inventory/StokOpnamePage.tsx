@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api-client';
 import { useAuthStore, hasPermission } from '../../stores/auth.store';
 import { ExportButtonGroup } from '../../components/ExportButtonGroup';
+import { SearchableBarangSelect } from '../../components/SearchableBarangSelect';
 import { exportToExcel, formatDateIndo } from '../../lib/export-utils';
 import {
   ClipboardCheck,
@@ -971,26 +972,15 @@ export const StokOpnamePage: React.FC = () => {
             {/* Select Barang & Tanggal */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
               <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Pilih Nama Barang <span className="text-rose-500">*</span>
-                </label>
-                <select
+                <SearchableBarangSelect
+                  barangs={filteredBarangList}
                   value={formBarangId}
-                  onChange={(e) => setFormBarangId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+                  onChange={(id) => setFormBarangId(id)}
+                  stockItems={stockSummaryData || []}
+                  label="Pilih Nama Barang"
+                  placeholder="🔍 Ketik atau cari nama / kode barang..."
                   required
-                >
-                  <option value="">-- Pilih Barang ({filteredBarangList.length} items tersedia) --</option>
-                  {filteredBarangList.map((b: any) => {
-                    const st = stockSummaryData?.find((s: any) => Number(s.id || s.barangId) === Number(b.id));
-                    const stockQty = Number(st?.totalStok ?? st?.totalQty ?? 0);
-                    return (
-                      <option key={b.id} value={b.id}>
-                        [{b.code}] {b.name} (Stok Sistem: {stockQty.toLocaleString('id-ID')} {b.satuan?.name || 'Kg'})
-                      </option>
-                    );
-                  })}
-                </select>
+                />
               </div>
 
               <div>

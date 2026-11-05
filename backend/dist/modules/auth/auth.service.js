@@ -66,8 +66,7 @@ let AuthService = AuthService_1 = class AuthService {
         else if (cleanInput === 'akuntansi') {
             searchTerms.push('akuntasi');
         }
-        else if (cleanInput === 'kasir' ||
-            cleanInput === 'kas_tunai' ||
+        else if (cleanInput === 'kas_tunai' ||
             cleanInput === 'kas tunai') {
             searchTerms.push('tunai');
         }

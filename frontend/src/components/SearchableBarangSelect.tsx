@@ -94,6 +94,10 @@ export const SearchableBarangSelect: React.FC<SearchableBarangSelectProps> = ({
       ? Number(match.sisaQty)
       : match.totalStok !== undefined
       ? Number(match.totalStok)
+      : match.qtySisa !== undefined
+      ? Number(match.qtySisa)
+      : match.totalSisa !== undefined
+      ? Number(match.totalSisa)
       : match.totalQty !== undefined
       ? Number(match.totalQty)
       : match.stok !== undefined
@@ -193,9 +197,9 @@ export const SearchableBarangSelect: React.FC<SearchableBarangSelectProps> = ({
                         </div>
                         <div className="text-[11px] text-slate-500 flex items-center space-x-2">
                           {b.jenis?.name && <span>{b.jenis.name}</span>}
-                          {stockVal !== null && (
+                          {typeof stockVal === 'number' && !isNaN(stockVal) && (
                             <span className="text-emerald-700 font-mono font-medium">
-                              • Stok: {stockVal.toLocaleString('id-ID')} {b.satuan?.name || 'Kg'}
+                              • Stok: {Number(stockVal || 0).toLocaleString('id-ID')} {b.satuan?.name || 'Kg'}
                             </span>
                           )}
                         </div>

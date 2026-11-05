@@ -37,18 +37,29 @@ export declare class RollbackOpnameDto {
 export declare class InventoryService {
     private prisma;
     constructor(prisma: PrismaService);
-    getStockSummary(jenisId?: number): Promise<{
+    getStockSummary(jenisIdOrParams?: number | {
+        jenisId?: number;
+        jenisIds?: number[];
+        search?: string;
+        page?: number;
+        limit?: number;
+    }): Promise<{
         id: number;
         barangId: number;
         code: string | null;
         name: string;
         jenisId: number;
         jenis: string;
+        jenisName: string;
         satuan: string;
+        satuanName: string;
         totalStok: number;
         totalQty: number;
+        qtySisa: number;
+        totalSisa: number;
         nilaiStok: number;
         hargaRataRata: number;
+        hpp: number;
         stokMinimum: number;
         isDibawahMinimum: boolean;
         batches: {
@@ -58,7 +69,39 @@ export declare class InventoryService {
             qtySisa: number;
             hargaBeli: number;
         }[];
-    }[]>;
+    }[] | {
+        items: {
+            id: number;
+            barangId: number;
+            code: string | null;
+            name: string;
+            jenisId: number;
+            jenis: string;
+            jenisName: string;
+            satuan: string;
+            satuanName: string;
+            totalStok: number;
+            totalQty: number;
+            qtySisa: number;
+            totalSisa: number;
+            nilaiStok: number;
+            hargaRataRata: number;
+            hpp: number;
+            stokMinimum: number;
+            isDibawahMinimum: boolean;
+            batches: {
+                id: number;
+                tanggal: Date;
+                qtyMasuk: number;
+                qtySisa: number;
+                hargaBeli: number;
+            }[];
+        }[];
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+    }>;
     getBatches(barangId?: number): Promise<({
         barang: {
             satuan: {

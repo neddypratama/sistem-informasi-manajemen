@@ -90,7 +90,6 @@ export class AuthService {
     } else if (cleanInput === 'akuntansi') {
       searchTerms.push('akuntasi');
     } else if (
-      cleanInput === 'kasir' ||
       cleanInput === 'kas_tunai' ||
       cleanInput === 'kas tunai'
     ) {

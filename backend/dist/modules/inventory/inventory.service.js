@@ -206,13 +206,41 @@ let InventoryService = class InventoryService {
     constructor(prisma) {
         this.prisma = prisma;
     }
-    async getStockSummary(jenisId) {
+    async getStockSummary(jenisIdOrParams) {
+        let jenisId;
+        let jenisIds;
+        let search;
+        let page;
+        let limit;
+        if (typeof jenisIdOrParams === 'number') {
+            jenisId = jenisIdOrParams;
+        }
+        else if (typeof jenisIdOrParams === 'object' && jenisIdOrParams !== null) {
+            jenisId = jenisIdOrParams.jenisId;
+            jenisIds = jenisIdOrParams.jenisIds;
+            search = jenisIdOrParams.search;
+            page = jenisIdOrParams.page;
+            limit = jenisIdOrParams.limit;
+        }
         const where = { isActive: true };
-        if (jenisId) {
+        if (jenisIds && jenisIds.length > 0) {
+            where.jenisId = { in: jenisIds.map((id) => BigInt(id)) };
+        }
+        else if (jenisId) {
             where.jenisId = BigInt(jenisId);
         }
+        if (search && search.trim() !== '') {
+            const q = search.trim();
+            where.OR = [
+                { name: { contains: q } },
+                { code: { contains: q } },
+            ];
+        }
+        const hasPagination = page !== undefined && limit !== undefined && limit > 0;
+        const total = hasPagination ? await this.prisma.barang.count({ where }) : 0;
         const barangs = await this.prisma.barang.findMany({
             where,
+            ...(hasPagination ? { skip: (page - 1) * limit, take: limit } : {}),
             include: {
                 jenis: true,
                 satuan: true,
@@ -230,7 +258,7 @@ let InventoryService = class InventoryService {
             },
             orderBy: { name: 'asc' },
         });
-        return barangs.map((b) => {
+        const items = barangs.map((b) => {
             const totalSisa = b.stokBatches.reduce((acc, curr) => acc + Number(curr.qtySisa), 0);
             const totalNilaiStok = b.stokBatches.reduce((acc, curr) => acc + Number(curr.qtySisa) * Number(curr.hargaBeli), 0);
             const hargaRataRata = totalSisa > 0 ? totalNilaiStok / totalSisa : 0;
@@ -241,11 +269,16 @@ let InventoryService = class InventoryService {
                 name: b.name,
                 jenisId: Number(b.jenisId),
                 jenis: b.jenis.name,
+                jenisName: b.jenis.name,
                 satuan: b.satuan?.name || 'Kg',
+                satuanName: b.satuan?.name || 'Kg',
                 totalStok: totalSisa,
                 totalQty: totalSisa,
+                qtySisa: totalSisa,
+                totalSisa: totalSisa,
                 nilaiStok: totalNilaiStok,
                 hargaRataRata,
+                hpp: hargaRataRata,
                 stokMinimum: Number(b.stokMinimum),
                 isDibawahMinimum: totalSisa <= Number(b.stokMinimum),
                 batches: b.stokBatches.map((sb) => ({
@@ -257,6 +290,16 @@ let InventoryService = class InventoryService {
                 })),
             };
         });
+        if (hasPagination) {
+            return {
+                items,
+                total,
+                page: page,
+                limit: limit,
+                totalPages: Math.ceil(total / limit),
+            };
+        }
+        return items;
     }
     async getBatches(barangId) {
         const where = { qtySisa: { gt: 0 } };

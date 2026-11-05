@@ -2,18 +2,23 @@ import { InventoryService, CreateOpnameDto, CreateKonversiDto, CreatePenyesuaian
 export declare class InventoryController {
     private readonly inventoryService;
     constructor(inventoryService: InventoryService);
-    getStockSummary(jenisId?: string): Promise<{
+    getStockSummary(jenisId?: string, jenisIds?: string, search?: string, page?: string, limit?: string): Promise<{
         id: number;
         barangId: number;
         code: string | null;
         name: string;
         jenisId: number;
         jenis: string;
+        jenisName: string;
         satuan: string;
+        satuanName: string;
         totalStok: number;
         totalQty: number;
+        qtySisa: number;
+        totalSisa: number;
         nilaiStok: number;
         hargaRataRata: number;
+        hpp: number;
         stokMinimum: number;
         isDibawahMinimum: boolean;
         batches: {
@@ -23,7 +28,39 @@ export declare class InventoryController {
             qtySisa: number;
             hargaBeli: number;
         }[];
-    }[]>;
+    }[] | {
+        items: {
+            id: number;
+            barangId: number;
+            code: string | null;
+            name: string;
+            jenisId: number;
+            jenis: string;
+            jenisName: string;
+            satuan: string;
+            satuanName: string;
+            totalStok: number;
+            totalQty: number;
+            qtySisa: number;
+            totalSisa: number;
+            nilaiStok: number;
+            hargaRataRata: number;
+            hpp: number;
+            stokMinimum: number;
+            isDibawahMinimum: boolean;
+            batches: {
+                id: number;
+                tanggal: Date;
+                qtyMasuk: number;
+                qtySisa: number;
+                hargaBeli: number;
+            }[];
+        }[];
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+    }>;
     getBatches(barangId?: string): Promise<({
         barang: {
             satuan: {

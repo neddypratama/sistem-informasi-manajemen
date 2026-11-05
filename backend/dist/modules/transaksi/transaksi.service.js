@@ -358,6 +358,24 @@ let TransaksiService = class TransaksiService {
                 if (isCurah) {
                     itemKategoriId = BigInt(8);
                 }
+                else if (jenisName.includes('hijauan')) {
+                    itemKategoriId = BigInt(101);
+                }
+                else if (jenisName.includes('konsentrat')) {
+                    itemKategoriId = BigInt(102);
+                }
+                else if (jenisName.includes('bahan baku')) {
+                    itemKategoriId = BigInt(103);
+                }
+                else if (jenisName.includes('premix')) {
+                    itemKategoriId = BigInt(104);
+                }
+                else if (jenisName.includes('rmn')) {
+                    itemKategoriId = BigInt(105);
+                }
+                else if (jenisName.includes('barang') || barang?.jenisId === 16n) {
+                    itemKategoriId = BigInt(107);
+                }
                 else if (jenisName.includes('pakan') || jenisName.includes('sentrat')) {
                     itemKategoriId = (barangName.includes('kucing') || barang?.jenisId === 10n) ? BigInt(7) : BigInt(6);
                 }
@@ -506,7 +524,18 @@ let TransaksiService = class TransaksiService {
             });
             firstItemJenisName = firstItemBarang?.jenis?.name?.toLowerCase() || '';
             firstItemName = firstItemBarang?.name?.toLowerCase() || '';
-            if (firstItemJenisName.includes('pakan') || firstItemJenisName.includes('sentrat') || firstItemJenisName.includes('curah')) {
+            const isTokoItem = (firstItemBarang?.jenisId && firstItemBarang.jenisId >= 11n && firstItemBarang.jenisId <= 17n) ||
+                firstItemJenisName.includes('konsentrat') ||
+                firstItemJenisName.includes('hijauan') ||
+                firstItemJenisName.includes('premix') ||
+                firstItemJenisName.includes('bahan baku') ||
+                firstItemJenisName.includes('rmn');
+            if (isTokoItem) {
+                prefix = 'TKO';
+            }
+            else if (firstItemJenisName.includes('pakan') ||
+                firstItemJenisName.includes('sentrat') ||
+                firstItemJenisName.includes('curah')) {
                 prefix = 'STR';
             }
             else if (firstItemJenisName.includes('obat')) {
@@ -526,7 +555,10 @@ let TransaksiService = class TransaksiService {
         return this.prisma.$transaction(async (tx) => {
             const isFirstItemCurah = firstItemBarang?.jenisId === 9n || firstItemJenisName.includes('curah') || firstItemName.includes('curah');
             let defaultHutangId = 72;
-            if (prefix === 'STR') {
+            if (prefix === 'TKO') {
+                defaultHutangId = 127;
+            }
+            else if (prefix === 'STR') {
                 defaultHutangId = ((createDto.clientId && Number(createDto.clientId) === 241) || isFirstItemCurah) ? 76 : 83;
             }
             else if (prefix === 'OBT')
@@ -580,6 +612,22 @@ let TransaksiService = class TransaksiService {
                 let itemKategoriId = BigInt(59);
                 if (isCurah)
                     itemKategoriId = BigInt(89);
+                else if (jenisName.includes('hijauan') || barang?.jenisId === 11n)
+                    itemKategoriId = BigInt(117);
+                else if (jenisName.includes('konsentrat') || barang?.jenisId === 12n)
+                    itemKategoriId = BigInt(118);
+                else if (jenisName.includes('bahan baku') || barang?.jenisId === 13n)
+                    itemKategoriId = BigInt(119);
+                else if (jenisName.includes('premix') || barang?.jenisId === 14n)
+                    itemKategoriId = BigInt(120);
+                else if (barang?.jenisId === 10n || jenisName.includes('kucing'))
+                    itemKategoriId = BigInt(121);
+                else if (barang?.jenisId === 15n || (jenisName.includes('obat') && jenisName.includes('rmn')))
+                    itemKategoriId = BigInt(122);
+                else if (barang?.jenisId === 17n || (jenisName.includes('obat') && jenisName.includes('unggas')))
+                    itemKategoriId = BigInt(123);
+                else if (jenisName.includes('barang') || barang?.jenisId === 16n)
+                    itemKategoriId = BigInt(124);
                 else if (jenisName.includes('pakan') || jenisName.includes('sentrat'))
                     itemKategoriId = BigInt(60);
                 else if (jenisName.includes('obat'))
@@ -629,13 +677,31 @@ let TransaksiService = class TransaksiService {
                 },
             });
             let akunPersediaanId = BigInt(59);
-            if (prefix === 'STR') {
+            if (firstItemBarang?.jenisId === 11n)
+                akunPersediaanId = BigInt(117);
+            else if (firstItemBarang?.jenisId === 12n)
+                akunPersediaanId = BigInt(118);
+            else if (firstItemBarang?.jenisId === 13n)
+                akunPersediaanId = BigInt(119);
+            else if (firstItemBarang?.jenisId === 14n)
+                akunPersediaanId = BigInt(120);
+            else if (firstItemBarang?.jenisId === 10n)
+                akunPersediaanId = BigInt(121);
+            else if (firstItemBarang?.jenisId === 15n)
+                akunPersediaanId = BigInt(122);
+            else if (firstItemBarang?.jenisId === 17n)
+                akunPersediaanId = BigInt(123);
+            else if (firstItemBarang?.jenisId === 16n)
+                akunPersediaanId = BigInt(124);
+            else if (prefix === 'STR') {
                 akunPersediaanId = isFirstItemCurah ? BigInt(89) : BigInt(60);
             }
             else if (prefix === 'OBT')
                 akunPersediaanId = BigInt(61);
             else if (prefix === 'TRY')
                 akunPersediaanId = BigInt(62);
+            else if (prefix === 'TKO')
+                akunPersediaanId = BigInt(118);
             await tx.jurnalDetail.createMany({
                 data: [
                     { jurnalId: jurnal.id, coaId: akunPersediaanId, kategoriId: akunPersediaanId, debit: total, kredit: 0 },

@@ -15,8 +15,27 @@ export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
 
   @Get('summary')
-  async getStockSummary(@Query('jenisId') jenisId?: string) {
-    return this.inventoryService.getStockSummary(jenisId ? Number(jenisId) : undefined);
+  async getStockSummary(
+    @Query('jenisId') jenisId?: string,
+    @Query('jenisIds') jenisIds?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const parsedJenisIds = jenisIds
+      ? jenisIds
+          .split(',')
+          .map((id) => Number(id.trim()))
+          .filter((n) => !isNaN(n) && n > 0)
+      : undefined;
+
+    return this.inventoryService.getStockSummary({
+      jenisId: jenisId ? Number(jenisId) : undefined,
+      jenisIds: parsedJenisIds,
+      search,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+    });
   }
 
   @Get('batches')

@@ -900,7 +900,7 @@ export const UserManagementPage: React.FC = () => {
                   required
                   value={formUsername}
                   onChange={(e) => setFormUsername(e.target.value)}
-                  placeholder="Contoh: budi_kasir"
+                  placeholder="Contoh: budi_staff"
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none font-mono"
                 />
               </div>

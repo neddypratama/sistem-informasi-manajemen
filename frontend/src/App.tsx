@@ -68,7 +68,7 @@ const PermissionRoute: React.FC<{
   return children;
 };
 
-// Landing Page: Dashboard Analitik untuk Admin & Manager, Welcome Page untuk Staf Operasional lainnya
+// Landing Page: Admin & Manager ke Dashboard, staf lainnya ke Welcome Page
 const MainLanding: React.FC = () => {
   const { user } = useAuthStore();
   if (isAdminOrManager(user)) {
@@ -136,15 +136,8 @@ export const App: React.FC = () => {
               }
             />
 
-            {/* Quick POS & Global Monitoring */}
-            <Route
-              path="penjualan"
-              element={
-                <PermissionRoute permission="pos:access">
-                  <PenjualanPage />
-                </PermissionRoute>
-              }
-            />
+            {/* Global Monitoring & Transaksi Penjualan */}
+            <Route path="penjualan" element={<PenjualanPage />} />
             <Route
               path="stok"
               element={

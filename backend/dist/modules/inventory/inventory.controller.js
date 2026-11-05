@@ -19,8 +19,20 @@ let InventoryController = class InventoryController {
     constructor(inventoryService) {
         this.inventoryService = inventoryService;
     }
-    async getStockSummary(jenisId) {
-        return this.inventoryService.getStockSummary(jenisId ? Number(jenisId) : undefined);
+    async getStockSummary(jenisId, jenisIds, search, page, limit) {
+        const parsedJenisIds = jenisIds
+            ? jenisIds
+                .split(',')
+                .map((id) => Number(id.trim()))
+                .filter((n) => !isNaN(n) && n > 0)
+            : undefined;
+        return this.inventoryService.getStockSummary({
+            jenisId: jenisId ? Number(jenisId) : undefined,
+            jenisIds: parsedJenisIds,
+            search,
+            page: page ? Number(page) : undefined,
+            limit: limit ? Number(limit) : undefined,
+        });
     }
     async getBatches(barangId) {
         return this.inventoryService.getBatches(barangId ? Number(barangId) : undefined);
@@ -73,8 +85,12 @@ let InventoryController = class InventoryController {
 __decorate([
     Get('summary'),
     __param(0, Query('jenisId')),
+    __param(1, Query('jenisIds')),
+    __param(2, Query('search')),
+    __param(3, Query('page')),
+    __param(4, Query('limit')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [String, String, String, String, String]),
     __metadata("design:returntype", Promise)
 ], InventoryController.prototype, "getStockSummary", null);
 __decorate([

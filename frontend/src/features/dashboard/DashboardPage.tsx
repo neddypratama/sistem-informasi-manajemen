@@ -84,7 +84,7 @@ export const DashboardPage: React.FC = () => {
               className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg transition-all text-xs flex items-center space-x-1.5 active:scale-95"
             >
               <ShoppingCart className="w-4 h-4" />
-              <span>Kasir Penjualan</span>
+              <span>Transaksi Penjualan</span>
             </Link>
             <Link
               to="/jurnal-umum"
@@ -414,7 +414,7 @@ export const DashboardPage: React.FC = () => {
                 <span>Aktivitas Transaksi Terbaru Masuk Sistem</span>
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Log mutasi kasir dan pembukuan komoditas real-time
+                Log transaksi operasional dan pembukuan komoditas real-time
               </p>
             </div>
             <Link

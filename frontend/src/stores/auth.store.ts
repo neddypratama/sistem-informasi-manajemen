@@ -39,6 +39,7 @@ export const hasPermission = (
   // Role Admin & Manager memiliki hak akses penuh ke seluruh fitur sistem
   if (isAdminOrManager(user)) return true;
   if (!requiredPermission) return true;
+
   if (!user.permissions || !Array.isArray(user.permissions)) return false;
 
   const requiredList = Array.isArray(requiredPermission)

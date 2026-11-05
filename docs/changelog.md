@@ -5,6 +5,18 @@ Dokumen ini mencatat seluruh riwayat perubahan arsitektur, fitur, dan evolusi te
 
 ---
 
+## [2.2.0] - Penyatuan Modul Kasir Toko Retail (POS) & Struk Thermal 58mm (November 2026)
+
+### 🚀 Ditambahkan (Added)
+* **Penyatuan Sistem Kasir Toko ke ERP Pusat:** Penggabungan seluruh data master, kategori komoditas ruminansia, dan stok aktif toko kasir dari database `kasir` ke dalam satu arsitektur terpadu `erp-bimapratama`.
+* **Antarmuka POS Kasir Modern (`/kasir`):** Layar kasir cepat dengan pencarian instan, filter kategori komoditas, toggle satuan dinamis (Eceran vs Sak/Partai), input uang tunai, kalkulasi kembalian otomatis, dan tombol pintas `F9`.
+* **Cetak Struk Kasir Thermal (58mm):** Format nota thermal profesional khusus printer kasir 58mm dengan logo dan data identitas resmi *Bima Pratama Feed*.
+* **Riwayat Nota & Reprint:** Tab riwayat penjualan hari ini yang memungkinkan kasir mencetak ulang struk pelanggan kapan saja.
+* **Skema Multi-Satuan & Pembayaran POS:** Penambahan kolom `harga_eceran` & `harga_sak` pada `barangs`, serta `uang_diterima` & `kembalian` pada `transaksis`.
+* **Role & User Kasir Khusus:** Role `Kasir` (ID: 9) dan user `kasir` yang langsung diarahkan otomatis ke layar kasir saat login.
+
+---
+
 ## [2.1.0] - Pembaruan Fitur Operasional & Hak Akses Granular (November 2026)
 
 ### 🚀 Ditambahkan (Added)

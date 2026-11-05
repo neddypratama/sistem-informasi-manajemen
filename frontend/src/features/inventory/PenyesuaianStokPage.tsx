@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../../lib/api-client';
 import { useAuthStore, isAdminOrManager } from '../../stores/auth.store';
 import { formatRupiah, formatDateIndo } from '../../lib/export-utils';
+import { SearchableBarangSelect } from '../../components/SearchableBarangSelect';
 import {
   SlidersHorizontal,
   RotateCcw,
@@ -105,8 +106,11 @@ export const PenyesuaianStokPage: React.FC = () => {
 
   // Filter barangs by selected commodity
   const filteredBarangs = useMemo(() => {
-    if (!barangsData || !Array.isArray(barangsData)) return [];
-    return barangsData.filter((b: any) => {
+    if (!barangsData) return [];
+    const list = Array.isArray(barangsData)
+      ? barangsData
+      : (barangsData as any)?.data || (barangsData as any)?.items || [];
+    return list.filter((b: any) => {
       if (formKomoditas === 'ALL') return true;
       const jName = (b.jenis?.name || '').toLowerCase();
       const bName = (b.name || '').toLowerCase();
@@ -126,16 +130,33 @@ export const PenyesuaianStokPage: React.FC = () => {
     });
   }, [barangsData, formKomoditas]);
 
+  const stockSummaryList = useMemo(() => {
+    if (!stockSummaryData) return [];
+    return Array.isArray(stockSummaryData)
+      ? stockSummaryData
+      : Array.isArray((stockSummaryData as any)?.data)
+      ? (stockSummaryData as any).data
+      : (stockSummaryData as any)?.items || [];
+  }, [stockSummaryData]);
+
   // Selected Barang Object & Current Stock
   const selectedBarangObj = useMemo(() => {
     if (!selectedBarangId || !barangsData) return null;
-    return barangsData.find((b: any) => String(b.id) === selectedBarangId) || null;
+    const list = Array.isArray(barangsData)
+      ? barangsData
+      : (barangsData as any)?.data || (barangsData as any)?.items || [];
+    return list.find((b: any) => String(b.id) === String(selectedBarangId)) || null;
   }, [selectedBarangId, barangsData]);
 
   const currentSystemStock = useMemo(() => {
     if (!selectedBarangId || !stockSummaryData) return 0;
-    const found = stockSummaryData.find((s: any) => String(s.id) === selectedBarangId);
-    return found ? Number(found.totalSisa || 0) : 0;
+    const list = Array.isArray(stockSummaryData)
+      ? stockSummaryData
+      : Array.isArray((stockSummaryData as any)?.data)
+      ? (stockSummaryData as any).data
+      : (stockSummaryData as any)?.items || [];
+    const found = list.find((s: any) => String(s.id || s.barangId) === String(selectedBarangId));
+    return found ? Number(found.totalStok ?? found.qtySisa ?? found.totalSisa ?? found.totalQty ?? 0) : 0;
   }, [selectedBarangId, stockSummaryData]);
 
   const satuanName = selectedBarangObj?.satuan?.name || 'unit';
@@ -371,24 +392,17 @@ export const PenyesuaianStokPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Dropdown Barang */}
+              {/* Dropdown Barang Searchable */}
               <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-                  Nama Barang <span className="text-rose-500">*</span>
-                </label>
-                <select
+                <SearchableBarangSelect
+                  barangs={filteredBarangs}
                   value={selectedBarangId}
-                  onChange={(e) => setSelectedBarangId(e.target.value)}
-                  className="w-full text-sm border border-slate-200 rounded-xl p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  onChange={(id) => setSelectedBarangId(id)}
+                  stockItems={stockSummaryList}
+                  label="Nama Barang"
+                  placeholder="🔍 Ketik atau cari nama / kode barang..."
                   required
-                >
-                  <option value="">-- Pilih Barang yang ingin disesuaikan --</option>
-                  {filteredBarangs.map((b: any) => (
-                    <option key={b.id} value={b.id}>
-                      [{b.code || b.id}] {b.name} ({b.jenis?.name || 'Umum'})
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
 
               {/* Status Barang Terpilih */}
