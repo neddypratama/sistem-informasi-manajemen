@@ -150,6 +150,14 @@ export class TransaksiController {
     return this.transaksiService.createKasMutasi(body, userId || 1);
   }
 
+  @Delete('kas-mutasi/:jurnalId')
+  async deleteKasMutasi(
+    @Param('jurnalId') jurnalId: string,
+    @CurrentUser('id') userId: number,
+  ) {
+    return this.transaksiService.deleteKasMutasi(Number(jurnalId), userId || 1);
+  }
+
   @Put(':id')
   async update(
     @Param('id') id: string,

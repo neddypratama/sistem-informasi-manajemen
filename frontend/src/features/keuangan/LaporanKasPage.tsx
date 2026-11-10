@@ -25,6 +25,7 @@ import {
   X,
   CheckCircle2,
   XCircle,
+  Trash2,
 } from 'lucide-react';
 
 export const LaporanKasPage: React.FC = () => {
@@ -250,6 +251,24 @@ export const LaporanKasPage: React.FC = () => {
       alert(`Gagal mencatat mutasi kas: ${err.response?.data?.message || err.message}`);
     },
   });
+
+  // Mutation: Hapus / Batalkan Mutasi Kas Manual
+  const deleteKasMutasiMutation = useMutation({
+    mutationFn: async (jurnalId: number) => apiClient.delete(`/transaksi/kas-mutasi/${jurnalId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['laporanKas'] });
+      alert('Mutasi kas berhasil dibatalkan/dihapus.');
+    },
+    onError: (err: any) => {
+      alert(`Gagal membatalkan mutasi kas: ${err.response?.data?.message || err.message}`);
+    },
+  });
+
+  const handleDeleteMutasi = (jurnalId: number, noJurnal: string) => {
+    if (window.confirm(`Yakin ingin membatalkan/menghapus mutasi kas dengan No. Jurnal ${noJurnal}? Tindakan ini akan mengembalikan saldo kas ke posisi sebelumnya.`)) {
+      deleteKasMutasiMutation.mutate(jurnalId);
+    }
+  };
 
   const formatRupiah = (val: number | string | null | undefined) => {
     const num = Number(val) || 0;
@@ -780,18 +799,19 @@ export const LaporanKasPage: React.FC = () => {
                   <th className="py-3.5 px-4 text-right">Kas Masuk (Debit)</th>
                   <th className="py-3.5 px-4 text-right">Kas Keluar (Kredit)</th>
                   <th className="py-3.5 px-4 text-center">Status</th>
+                  <th className="py-3.5 px-4 text-center">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={10} className="py-12 text-center text-slate-400">
+                    <td colSpan={11} className="py-12 text-center text-slate-400">
                       Memuat rincian mutasi kas...
                     </td>
                   </tr>
                 ) : mutasiRinci.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="py-12 text-center text-slate-400">
+                    <td colSpan={11} className="py-12 text-center text-slate-400">
                       Tidak ada data mutasi kas yang cocok dengan filter yang dipilih.
                     </td>
                   </tr>
@@ -866,6 +886,20 @@ export const LaporanKasPage: React.FC = () => {
                             </span>
                           )}
                         </td>
+                        <td className="py-3 px-4 text-center whitespace-nowrap">
+                          {!m.invoice && canCatat ? (
+                            <button
+                              onClick={() => handleDeleteMutasi(m.jurnal_id, m.nomor_jurnal || '')}
+                              disabled={deleteKasMutasiMutation.isPending}
+                              title="Batalkan / Hapus Mutasi Kas Manual Ini"
+                              className="inline-flex items-center justify-center p-1.5 rounded-lg text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors border border-transparent hover:border-rose-200"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          ) : (
+                            <span className="text-slate-300">-</span>
+                          )}
+                        </td>
                       </tr>
                     );
                   })
@@ -882,6 +916,7 @@ export const LaporanKasPage: React.FC = () => {
                   <td className="py-3.5 px-4 text-right font-mono text-red-700 text-sm whitespace-nowrap">
                     {formatRupiah(totalPengeluaran)}
                   </td>
+                  <td className="py-3.5 px-4"></td>
                   <td className="py-3.5 px-4"></td>
                 </tr>
               </tfoot>

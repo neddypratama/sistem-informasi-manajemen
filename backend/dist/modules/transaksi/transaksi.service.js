@@ -2206,6 +2206,30 @@ let TransaksiService = class TransaksiService {
             };
         });
     }
+    async deleteKasMutasi(jurnalId, _userId) {
+        const jurnal = await this.prisma.jurnalUmum.findUnique({
+            where: { id: BigInt(jurnalId) },
+            include: { details: true },
+        });
+        if (!jurnal) {
+            throw new NotFoundException(`Mutasi kas dengan ID Jurnal ${jurnalId} tidak ditemukan.`);
+        }
+        if (jurnal.transaksiId) {
+            throw new BadRequestException(`Jurnal ini terhubung ke transaksi operasional dagang. Silakan batalkan melalui menu transaksi terkait.`);
+        }
+        return this.prisma.$transaction(async (tx) => {
+            await tx.jurnalDetail.deleteMany({
+                where: { jurnalId: BigInt(jurnalId) },
+            });
+            await tx.jurnalUmum.delete({
+                where: { id: BigInt(jurnalId) },
+            });
+            return {
+                success: true,
+                message: `Mutasi kas ${jurnal.nomorJurnal} berhasil dihapus.`,
+            };
+        });
+    }
     async getClientLedger(clientId) {
         const client = await this.prisma.client.findUnique({
             where: { id: BigInt(clientId) },

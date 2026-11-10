@@ -60,6 +60,9 @@ let TransaksiController = class TransaksiController {
     async createKasMutasi(body, userId) {
         return this.transaksiService.createKasMutasi(body, userId || 1);
     }
+    async deleteKasMutasi(jurnalId, userId) {
+        return this.transaksiService.deleteKasMutasi(Number(jurnalId), userId || 1);
+    }
     async update(id, body, userId) {
         return this.transaksiService.update(Number(id), body, userId || 1);
     }
@@ -168,6 +171,14 @@ __decorate([
     __metadata("design:paramtypes", [Object, Number]),
     __metadata("design:returntype", Promise)
 ], TransaksiController.prototype, "createKasMutasi", null);
+__decorate([
+    Delete('kas-mutasi/:jurnalId'),
+    __param(0, Param('jurnalId')),
+    __param(1, CurrentUser('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Number]),
+    __metadata("design:returntype", Promise)
+], TransaksiController.prototype, "deleteKasMutasi", null);
 __decorate([
     Put(':id'),
     __param(0, Param('id')),

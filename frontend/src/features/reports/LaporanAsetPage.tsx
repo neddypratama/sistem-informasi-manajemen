@@ -212,8 +212,11 @@ export const LaporanAsetPage: React.FC = () => {
             <Landmark className="w-7 h-7 text-emerald-600" />
             <span>Laporan Aset, Liabilitas, & Modal (Neraca Posisi)</span>
           </h2>
-          <p className="text-sm text-slate-500 mt-1">
-            Ringkasan posisi kekayaan aset lancar/stok, kewajiban liabilitas mitra/bank, dan modal bersih perusahaan
+          <p className="text-sm text-slate-500 mt-1 flex flex-wrap items-center gap-2">
+            <span>Ringkasan posisi kekayaan aset lancar/stok, kewajiban liabilitas mitra/bank, dan modal bersih perusahaan</span>
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              Cut-off Posisi: {endDate || startDate || 'Semua Waktu (Kini)'}
+            </span>
           </p>
         </div>
 

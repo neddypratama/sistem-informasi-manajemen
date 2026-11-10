@@ -5,6 +5,15 @@ Dokumen ini mencatat seluruh riwayat perubahan arsitektur, fitur, dan evolusi te
 
 ---
 
+## [2.2.1] - Perbaikan Presisi Laporan Aset (Neraca Posisi Keuangan) & Rekonstruksi Saldo Mitra Historis (November 2026)
+
+### 🐛 Diperbaiki (Fixed)
+* **Koreksi Logika Neraca Posisi Keuangan Kumulatif (`asOfDate`):** Menghapus filter `BETWEEN start AND end` pada akun permanen (Kas, Bank, Stok) yang sebelumnya memotong saldo awal, menyebabkan Kas Deby dan Stok Curah berangka minus saat rentang waktu dipilih. Seluruh akun permanen kini diakumulasikan secara kumulatif sampai batas tanggal cut-off (`<= asOfDate`).
+* **Rekonstruksi Saldo Hutang & Piutang Mitra Historis:** Memperbaiki bug kalkulasi saldo hutang mitra masa lalu (seperti per 31 Oktober) yang sebelumnya menjumlahkan kotor seluruh pembelian kredit tanpa memotong pelunasan/pembayaran kas keluar. Nilai hutang Bp. Supriyadi per 31 Okt kini kembali presisi dan normal di angka ~Rp 1,35 Miliar (sebelumnya membengkak menjadi Rp 9,78 Miliar karena mengabaikan pembayaran kas/transfer).
+* **Indikator Posisi Cut-off pada Antarmuka Laporan Aset:** Menambahkan badge informatif posisi tanggal cut-off di header Laporan Aset pada antarmuka frontend.
+
+---
+
 ## [2.2.0] - Penyatuan Modul Kasir Toko Retail (POS) & Struk Thermal 58mm (November 2026)
 
 ### 🚀 Ditambahkan (Added)

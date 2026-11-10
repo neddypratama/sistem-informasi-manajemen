@@ -518,35 +518,25 @@ let ReportsService = class ReportsService {
         };
     }
     async getLaporanAset(startDate, endDate) {
-        let dateCondition = Prisma.empty;
-        let clientDateCondition = Prisma.empty;
-        let start = null;
-        let end = null;
         const sStr = startDate && startDate.trim().length > 0 ? startDate.trim() : null;
         const eStr = endDate && endDate.trim().length > 0 ? endDate.trim() : null;
+        let asOfDate = null;
         if (sStr && eStr) {
-            let dStart = new Date(`${sStr} 00:00:00`);
-            let dEnd = new Date(`${eStr} 23:59:59`);
-            if (dStart > dEnd) {
-                const tmp = dStart;
-                dStart = new Date(`${eStr} 00:00:00`);
-                dEnd = new Date(`${sStr} 23:59:59`);
-            }
-            start = dStart;
-            end = dEnd;
-            dateCondition = Prisma.sql `AND ju.tanggal BETWEEN ${start} AND ${end}`;
-            clientDateCondition = Prisma.sql `AND t.tanggal BETWEEN ${start} AND ${end}`;
-        }
-        else if (sStr) {
-            start = new Date(`${sStr} 00:00:00`);
-            dateCondition = Prisma.sql `AND ju.tanggal >= ${start}`;
-            clientDateCondition = Prisma.sql `AND t.tanggal >= ${start}`;
+            const dStart = new Date(`${sStr} 23:59:59`);
+            const dEnd = new Date(`${eStr} 23:59:59`);
+            asOfDate = dEnd >= dStart ? dEnd : dStart;
         }
         else if (eStr) {
-            end = new Date(`${eStr} 23:59:59`);
-            dateCondition = Prisma.sql `AND ju.tanggal <= ${end}`;
-            clientDateCondition = Prisma.sql `AND t.tanggal <= ${end}`;
+            asOfDate = new Date(`${eStr} 23:59:59`);
         }
+        else if (sStr) {
+            asOfDate = new Date(`${sStr} 23:59:59`);
+        }
+        const now = new Date();
+        const isHistorical = asOfDate !== null && asOfDate < now;
+        const dateCondition = asOfDate
+            ? Prisma.sql `AND ju.tanggal <= ${asOfDate}`
+            : Prisma.empty;
         const nonClientRows = await this.prisma.$queryRaw `
       SELECT 
         k.id as kategori_id,
@@ -589,30 +579,115 @@ let ReportsService = class ReportsService {
             }
         }
         let clientRows;
-        if (!sStr && !eStr) {
+        if (!isHistorical) {
             clientRows = await this.prisma.$queryRaw `
         SELECT id, name, type, saldo_piutang, saldo_hutang
         FROM clients
       `;
         }
         else {
-            clientRows = await this.prisma.$queryRaw `
-        SELECT 
-          c.id, c.name, c.type,
-          COALESCE((
-            SELECT SUM(t.total) FROM transaksis t
-            WHERE t.client_id = c.id AND t.type = 'PENJUALAN' AND t.status = 'SELESAI'
-              AND t.payment_method = 'KREDIT_BON'
-              ${clientDateCondition}
-          ), 0) as saldo_piutang,
-          COALESCE((
-            SELECT SUM(t.total) FROM transaksis t
-            WHERE t.client_id = c.id AND t.type = 'PEMBELIAN' AND t.status = 'SELESAI'
-              AND t.payment_method = 'KREDIT_BON'
-              ${clientDateCondition}
-          ), 0) as saldo_hutang
-        FROM clients c
-      `;
+            const txsAfter = await this.prisma.transaksi.findMany({
+                where: {
+                    status: 'SELESAI',
+                    tanggal: { gt: asOfDate },
+                },
+                select: {
+                    id: true,
+                    type: true,
+                    paymentMethod: true,
+                    clientId: true,
+                    total: true,
+                    details: {
+                        select: {
+                            subtotal: true,
+                            kategori: {
+                                select: {
+                                    id: true,
+                                    name: true,
+                                    detailKategori: { select: { name: true, type: true } },
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+            const deltaHutang = new Map();
+            const deltaPiutang = new Map();
+            for (const t of txsAfter) {
+                if (!t.clientId)
+                    continue;
+                const cId = t.clientId.toString();
+                const tot = Number(t.total || 0);
+                if (t.type === 'PEMBELIAN' && t.paymentMethod === 'KREDIT_BON') {
+                    deltaHutang.set(cId, (deltaHutang.get(cId) || 0) + tot);
+                }
+                else if (t.type === 'PENJUALAN' && t.paymentMethod === 'KREDIT_BON') {
+                    deltaPiutang.set(cId, (deltaPiutang.get(cId) || 0) + tot);
+                }
+                else if (t.type === 'RETUR_PEMBELIAN') {
+                    deltaHutang.set(cId, (deltaHutang.get(cId) || 0) - tot);
+                }
+                else if (t.type === 'RETUR_PENJUALAN') {
+                    deltaPiutang.set(cId, (deltaPiutang.get(cId) || 0) - tot);
+                }
+                else if (t.type === 'KAS_KELUAR') {
+                    for (const d of t.details) {
+                        const dType = d.kategori?.detailKategori?.type;
+                        const sub = Number(d.subtotal || 0);
+                        if (dType === 'Liabilitas' ||
+                            d.kategori?.name?.includes('Hutang') ||
+                            d.kategori?.name?.includes('Saldo')) {
+                            deltaHutang.set(cId, (deltaHutang.get(cId) || 0) - sub);
+                        }
+                        else if (dType === 'Aset' ||
+                            d.kategori?.name?.includes('Piutang')) {
+                            deltaPiutang.set(cId, (deltaPiutang.get(cId) || 0) + sub);
+                        }
+                        else {
+                            deltaHutang.set(cId, (deltaHutang.get(cId) || 0) - sub);
+                        }
+                    }
+                }
+                else if (t.type === 'KAS_MASUK') {
+                    for (const d of t.details) {
+                        const dType = d.kategori?.detailKategori?.type;
+                        const sub = Number(d.subtotal || 0);
+                        if (dType === 'Aset' ||
+                            d.kategori?.name?.includes('Piutang')) {
+                            deltaPiutang.set(cId, (deltaPiutang.get(cId) || 0) - sub);
+                        }
+                        else if (dType === 'Liabilitas' ||
+                            d.kategori?.name?.includes('Hutang') ||
+                            d.kategori?.name?.includes('Saldo')) {
+                            deltaHutang.set(cId, (deltaHutang.get(cId) || 0) + sub);
+                        }
+                        else {
+                            deltaPiutang.set(cId, (deltaPiutang.get(cId) || 0) - sub);
+                        }
+                    }
+                }
+            }
+            const allClients = await this.prisma.client.findMany({
+                select: {
+                    id: true,
+                    name: true,
+                    type: true,
+                    saldoPiutang: true,
+                    saldoHutang: true,
+                },
+            });
+            clientRows = allClients.map((c) => {
+                const cId = c.id.toString();
+                const dH = deltaHutang.get(cId) || 0;
+                const dP = deltaPiutang.get(cId) || 0;
+                return {
+                    id: c.id,
+                    name: c.name,
+                    type: c.type,
+                    saldo_piutang: Math.max(0, Number(c.saldoPiutang || 0) - dP),
+                    saldo_hutang: Math.max(0, Number(c.saldoHutang || 0) - dH),
+                };
+            });
         }
         const piutangNet = {
             'Piutang Peternak': 0,

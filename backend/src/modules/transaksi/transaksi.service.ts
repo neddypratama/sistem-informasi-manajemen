@@ -2485,6 +2485,41 @@ export class TransaksiService {
   }
 
   /**
+   * Hapus / Batalkan Mutasi Kas Langsung (Jurnal Umum manual)
+   */
+  async deleteKasMutasi(jurnalId: number, _userId: number) {
+    const jurnal = await this.prisma.jurnalUmum.findUnique({
+      where: { id: BigInt(jurnalId) },
+      include: { details: true },
+    });
+
+    if (!jurnal) {
+      throw new NotFoundException(`Mutasi kas dengan ID Jurnal ${jurnalId} tidak ditemukan.`);
+    }
+
+    if (jurnal.transaksiId) {
+      throw new BadRequestException(
+        `Jurnal ini terhubung ke transaksi operasional dagang. Silakan batalkan melalui menu transaksi terkait.`,
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.jurnalDetail.deleteMany({
+        where: { jurnalId: BigInt(jurnalId) },
+      });
+
+      await tx.jurnalUmum.delete({
+        where: { id: BigInt(jurnalId) },
+      });
+
+      return {
+        success: true,
+        message: `Mutasi kas ${jurnal.nomorJurnal} berhasil dihapus.`,
+      };
+    });
+  }
+
+  /**
    * Menghasilkan Buku Besar Pembantu (Mutasi Piutang & Hutang) untuk Klien tertentu
    * Menampilkan seluruh jurnal umum dan transaksi operasional terkait
    */

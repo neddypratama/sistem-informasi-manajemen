@@ -442,6 +442,10 @@ export declare class TransaksiController {
         nominal: number;
         type: "TRANSFER" | "MASUK" | "KELUAR";
     }>;
+    deleteKasMutasi(jurnalId: string, userId: number): Promise<{
+        success: boolean;
+        message: string;
+    }>;
     update(id: string, body: {
         keterangan?: string;
         tanggal?: string;

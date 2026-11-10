@@ -568,6 +568,10 @@ export declare class TransaksiService {
         nominal: number;
         type: "TRANSFER" | "MASUK" | "KELUAR";
     }>;
+    deleteKasMutasi(jurnalId: number, _userId: number): Promise<{
+        success: boolean;
+        message: string;
+    }>;
     getClientLedger(clientId: number): Promise<{
         client: {
             id: string;
