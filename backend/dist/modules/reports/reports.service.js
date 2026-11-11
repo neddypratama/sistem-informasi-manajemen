@@ -565,6 +565,10 @@ let ReportsService = class ReportsService {
       ) jd ON jd.kategori_id = k.id
       WHERE dk.type IN ('Aset', 'Liabilitas')
         AND k.name != 'Penyesuaian Stok'
+        AND dk.name != 'Stok Curah'
+        AND k.name != 'Stok Curah'
+        AND dk.id != 40
+        AND k.id != 89
       GROUP BY k.id, k.name, k.code, dk.id, dk.name, dk.type
       ORDER BY dk.id, k.id
     `;
@@ -764,6 +768,9 @@ let ReportsService = class ReportsService {
       FROM detail_kategoris dk
       LEFT JOIN kategoris k ON k.detail_kategori_id = dk.id
       WHERE dk.type IN ('Aset', 'Liabilitas')
+        AND dk.name != 'Stok Curah'
+        AND dk.id != 40
+        AND (k.id IS NULL OR (k.id != 89 AND k.name != 'Stok Curah'))
       ORDER BY dk.id, k.id
     `;
         const asetMap = new Map();
