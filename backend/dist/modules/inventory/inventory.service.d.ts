@@ -60,6 +60,8 @@ export declare class InventoryService {
         nilaiStok: number;
         hargaRataRata: number;
         hpp: number;
+        lastHargaJual: number;
+        lastHargaBeli: number;
         stokMinimum: number;
         isDibawahMinimum: boolean;
         batches: {
@@ -87,6 +89,8 @@ export declare class InventoryService {
             nilaiStok: number;
             hargaRataRata: number;
             hpp: number;
+            lastHargaJual: number;
+            lastHargaBeli: number;
             stokMinimum: number;
             isDibawahMinimum: boolean;
             batches: {

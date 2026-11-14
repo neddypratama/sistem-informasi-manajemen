@@ -19,6 +19,8 @@ export declare class InventoryController {
         nilaiStok: number;
         hargaRataRata: number;
         hpp: number;
+        lastHargaJual: number;
+        lastHargaBeli: number;
         stokMinimum: number;
         isDibawahMinimum: boolean;
         batches: {
@@ -46,6 +48,8 @@ export declare class InventoryController {
             nilaiStok: number;
             hargaRataRata: number;
             hpp: number;
+            lastHargaJual: number;
+            lastHargaBeli: number;
             stokMinimum: number;
             isDibawahMinimum: boolean;
             batches: {

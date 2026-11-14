@@ -6,11 +6,12 @@ export const PakanModulePage: React.FC = () => {
   return (
     <CommodityTransactionPage
       commodityKey="pakan"
-      title="Modul Transaksi & Manajemen Pakan Ternak"
-      subtitle="Pengelolaan lengkap Pembelian (Pakan Masuk), Penjualan (Pakan Keluar), Retur, dan Stok Fisik Sentrat & Curah"
+      title="Pakan Pabrikan (Sentrat)"
+      subtitle="Pengelolaan lengkap Pembelian, Penjualan, Retur, dan Stok Fisik Pakan Sentrat / Pabrikan"
       icon={Wheat}
-      accentColor="amber"
-      jenisIds={[8, 9, 10]}
+      accentColor="blue"
+      jenisIds={[8, 10]}
+      allowedBarangJenisIds={[8, 9, 10]}
       isEgg={false}
     />
   );

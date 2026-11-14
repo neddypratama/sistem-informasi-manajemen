@@ -350,6 +350,9 @@ export class TransaksiService {
       });
 
       let grandTotalHpp = 0;
+      const pendapatanMap = new Map<bigint, number>();
+      const hppMap = new Map<bigint, number>();
+      const persediaanMap = new Map<bigint, number>();
 
       // 2. Alokasi FIFO & simpan baris detail transaksi
       for (const item of createDto.items) {
@@ -359,37 +362,9 @@ export class TransaksiService {
           where: { id: BigInt(item.barangId) },
           include: { jenis: true },
         });
-        const jenisName = barang?.jenis?.name?.toLowerCase() || '';
-        const barangName = barang?.name?.toLowerCase() || '';
-        let itemKategoriId = BigInt(1);
-        const isCurah = barang?.jenisId === 9n || jenisName.includes('curah') || barangName.includes('curah');
-        if (isCurah) {
-          itemKategoriId = BigInt(8); // Penjualan Pakan Curah
-        } else if (jenisName.includes('hijauan')) {
-          itemKategoriId = BigInt(101); // Penjualan Hijauan
-        } else if (jenisName.includes('konsentrat')) {
-          itemKategoriId = BigInt(102); // Penjualan Konsentrat
-        } else if (jenisName.includes('bahan baku')) {
-          itemKategoriId = BigInt(103); // Penjualan Bahan Baku Konsentrat
-        } else if (jenisName.includes('premix')) {
-          itemKategoriId = BigInt(104); // Penjualan Premix
-        } else if (jenisName.includes('rmn')) {
-          itemKategoriId = BigInt(105); // Penjualan Obat-Obatan RMN
-        } else if (jenisName.includes('barang') || barang?.jenisId === 16n) {
-          itemKategoriId = BigInt(107); // Penjualan Barang
-        } else if (jenisName.includes('pakan') || jenisName.includes('sentrat')) {
-          itemKategoriId = (barangName.includes('kucing') || barang?.jenisId === 10n) ? BigInt(7) : BigInt(6);
-        } else if (jenisName.includes('obat')) {
-          itemKategoriId = BigInt(9);
-        } else if (jenisName.includes('tray')) {
-          itemKategoriId = BigInt(10);
-        } else {
-          if (barangName.includes('bebek')) itemKategoriId = BigInt(2);
-          else if (barangName.includes('puyuh')) itemKategoriId = BigInt(3);
-          else if (barangName.includes('arab')) itemKategoriId = BigInt(4);
-          else if (barangName.includes('asin')) itemKategoriId = BigInt(5);
-          else itemKategoriId = BigInt(1);
-        }
+
+        const coaMapping = this.getBarangCoaMapping(barang);
+        const itemKategoriId = coaMapping.akunPendapatanId;
 
         const detail = await tx.detailTransaksi.create({
           data: {
@@ -424,6 +399,36 @@ export class TransaksiService {
         });
 
         grandTotalHpp += fifoResult.totalHpp;
+
+        // Alokasikan diskon proporsional (jika ada) ke pendapatan item
+        const itemDiscount = subtotal > 0 ? (itemSubtotal / subtotal) * diskon : 0;
+        const netItemRevenue = Math.max(0, itemSubtotal - itemDiscount);
+
+        pendapatanMap.set(
+          coaMapping.akunPendapatanId,
+          (pendapatanMap.get(coaMapping.akunPendapatanId) || 0) + netItemRevenue,
+        );
+        hppMap.set(
+          coaMapping.akunHppId,
+          (hppMap.get(coaMapping.akunHppId) || 0) + fifoResult.totalHpp,
+        );
+        persediaanMap.set(
+          coaMapping.akunPersediaanId,
+          (persediaanMap.get(coaMapping.akunPersediaanId) || 0) + fifoResult.totalHpp,
+        );
+      }
+
+      // Pastikan total kredit pendapatan presisi sama dengan total tagihan transaksi (zero-rounding discrepancy)
+      let sumNetRev = 0;
+      for (const val of pendapatanMap.values()) sumNetRev += val;
+      const revDiff = total - sumNetRev;
+      if (Math.abs(revDiff) > 0.0001 && pendapatanMap.size > 0) {
+        let maxK = Array.from(pendapatanMap.keys())[0];
+        let maxV = -1;
+        for (const [k, v] of pendapatanMap.entries()) {
+          if (v > maxV) { maxV = v; maxK = k; }
+        }
+        pendapatanMap.set(maxK, (pendapatanMap.get(maxK) || 0) + revDiff);
       }
 
       // 3. Update saldo piutang client jika Bon Kredit / Piutang
@@ -434,7 +439,7 @@ export class TransaksiService {
         });
       }
 
-      // Posting Jurnal Umum Akuntansi (Double-Entry Balance)
+      // Posting Jurnal Umum Akuntansi (Double-Entry Multi-COA Balance)
       const jurnal = await tx.jurnalUmum.create({
         data: {
           transaksiId: transaksi.id,
@@ -444,71 +449,52 @@ export class TransaksiService {
         },
       });
 
-      // Tentukan akun COA / Kategori sesuai komoditas barang
-      let akunPendapatanId = BigInt(1); // Default Penjualan Telur Horn
-      let akunHppId = BigInt(90);        // Default HPP Telur Horn
-      let akunPersediaanId = BigInt(59); // Default Stok Telur
+      const jurnalDetailsData: any[] = [
+        // 1. Debit Kas/Bank/Piutang sebesar TOTAL invoice
+        { jurnalId: jurnal.id, coaId: akunDebitId, kategoriId: akunDebitId, debit: total, kredit: 0 },
+      ];
 
-      const firstItem = createDto.items[0];
-      if (firstItem) {
-        const barang = await tx.barang.findUnique({
-          where: { id: BigInt(firstItem.barangId) },
-          include: { jenis: true },
-        });
-        const jenisName = barang?.jenis?.name?.toLowerCase() || '';
-        const barangName = barang?.name?.toLowerCase() || '';
-        const isCurah = barang?.jenisId === 9n || jenisName.includes('curah') || barangName.includes('curah');
+      // 2. Kredit Akun Pendapatan per komoditas
+      for (const [pendapatanId, revAmount] of pendapatanMap.entries()) {
+        if (revAmount > 0 || pendapatanMap.size === 1) {
+          jurnalDetailsData.push({
+            jurnalId: jurnal.id,
+            coaId: pendapatanId,
+            kategoriId: pendapatanId,
+            debit: 0,
+            kredit: revAmount,
+          });
+        }
+      }
 
-        if (isCurah) {
-          akunPersediaanId = BigInt(89); // Stok Curah
-          akunPendapatanId = BigInt(8);  // Penjualan Pakan Curah
-          akunHppId = BigInt(96);         // HPP Pakan Curah
-        } else if (jenisName.includes('pakan') || jenisName.includes('sentrat')) {
-          akunPersediaanId = BigInt(60); // Stok Pakan Sentrat
-          if (barangName.includes('kucing') || barang?.jenisId === 10n) {
-            akunPendapatanId = BigInt(7); // Penjualan Pakan Kucing
-            akunHppId = BigInt(97);        // HPP Pakan Kucing
-          } else {
-            akunPendapatanId = BigInt(6); // Penjualan Pakan Sentrat/Pabrikan
-            akunHppId = BigInt(95);        // HPP Pakan Sentrat/Pabrikan
-          }
-        } else if (jenisName.includes('obat')) {
-          akunPersediaanId = BigInt(61); // Stok Obat
-          akunPendapatanId = BigInt(9);  // Penjualan Obat-Obatan
-          akunHppId = BigInt(98);         // HPP Obat-Obatan
-        } else if (jenisName.includes('tray')) {
-          akunPersediaanId = BigInt(62); // Stok Tray
-          akunPendapatanId = BigInt(10); // Penjualan EggTray
-          akunHppId = BigInt(99);         // HPP EggTray
-        } else {
-          // Telur
-          akunPersediaanId = BigInt(59); // Stok Telur
-          if (barangName.includes('bebek')) {
-            akunPendapatanId = BigInt(2);
-            akunHppId = BigInt(91);
-          } else if (barangName.includes('puyuh')) {
-            akunPendapatanId = BigInt(3);
-            akunHppId = BigInt(92);
-          } else if (barangName.includes('arab')) {
-            akunPendapatanId = BigInt(4);
-            akunHppId = BigInt(93);
-          } else if (barangName.includes('asin')) {
-            akunPendapatanId = BigInt(5);
-            akunHppId = BigInt(94);
-          } else {
-            akunPendapatanId = BigInt(1);
-            akunHppId = BigInt(90);
-          }
+      // 3. Debit HPP per komoditas
+      for (const [hppId, hppAmount] of hppMap.entries()) {
+        if (hppAmount > 0) {
+          jurnalDetailsData.push({
+            jurnalId: jurnal.id,
+            coaId: hppId,
+            kategoriId: hppId,
+            debit: hppAmount,
+            kredit: 0,
+          });
+        }
+      }
+
+      // 4. Kredit Persediaan per komoditas
+      for (const [persediaanId, stokAmount] of persediaanMap.entries()) {
+        if (stokAmount > 0) {
+          jurnalDetailsData.push({
+            jurnalId: jurnal.id,
+            coaId: persediaanId,
+            kategoriId: persediaanId,
+            debit: 0,
+            kredit: stokAmount,
+          });
         }
       }
 
       await tx.jurnalDetail.createMany({
-        data: [
-          { jurnalId: jurnal.id, coaId: akunDebitId, kategoriId: akunDebitId, debit: total, kredit: 0 },
-          { jurnalId: jurnal.id, coaId: akunPendapatanId, kategoriId: akunPendapatanId, debit: 0, kredit: total },
-          { jurnalId: jurnal.id, coaId: akunHppId, kategoriId: akunHppId, debit: grandTotalHpp, kredit: 0 },
-          { jurnalId: jurnal.id, coaId: akunPersediaanId, kategoriId: akunPersediaanId, debit: 0, kredit: grandTotalHpp },
-        ],
+        data: jurnalDetailsData,
       });
 
       return transaksi;
@@ -619,6 +605,8 @@ export class TransaksiService {
         },
       });
 
+      const persediaanPembelianMap = new Map<bigint, number>();
+
       for (const item of createDto.items) {
         const itemSubtotal = item.qty * item.hargaSatuan;
 
@@ -671,6 +659,28 @@ export class TransaksiService {
             hargaBeli: item.hargaSatuan,
           },
         });
+
+        // Alokasikan diskon proporsional jika ada
+        const itemDiscount = subtotal > 0 ? (itemSubtotal / subtotal) * diskon : 0;
+        const netItemCost = Math.max(0, itemSubtotal - itemDiscount);
+
+        persediaanPembelianMap.set(
+          itemKategoriId,
+          (persediaanPembelianMap.get(itemKategoriId) || 0) + netItemCost,
+        );
+      }
+
+      // Pastikan total persediaan sama persis dengan total pembayaran
+      let sumPersediaan = 0;
+      for (const val of persediaanPembelianMap.values()) sumPersediaan += val;
+      const costDiff = total - sumPersediaan;
+      if (Math.abs(costDiff) > 0.0001 && persediaanPembelianMap.size > 0) {
+        let maxK = Array.from(persediaanPembelianMap.keys())[0];
+        let maxV = -1;
+        for (const [k, v] of persediaanPembelianMap.entries()) {
+          if (v > maxV) { maxV = v; maxK = k; }
+        }
+        persediaanPembelianMap.set(maxK, (persediaanPembelianMap.get(maxK) || 0) + costDiff);
       }
 
       // Update saldo hutang jika pembelian kredit/hutang
@@ -681,7 +691,7 @@ export class TransaksiService {
         });
       }
 
-      // Posting Jurnal Pembelian (Double-Entry Balance)
+      // Posting Jurnal Pembelian Multi-COA (Double-Entry Balance)
       const jurnal = await tx.jurnalUmum.create({
         data: {
           transaksiId: transaksi.id,
@@ -691,26 +701,30 @@ export class TransaksiService {
         },
       });
 
-      let akunPersediaanId = BigInt(59); // Stok Telur
-      if (firstItemBarang?.jenisId === 11n) akunPersediaanId = BigInt(117);
-      else if (firstItemBarang?.jenisId === 12n) akunPersediaanId = BigInt(118);
-      else if (firstItemBarang?.jenisId === 13n) akunPersediaanId = BigInt(119);
-      else if (firstItemBarang?.jenisId === 14n) akunPersediaanId = BigInt(120);
-      else if (firstItemBarang?.jenisId === 10n) akunPersediaanId = BigInt(121);
-      else if (firstItemBarang?.jenisId === 15n) akunPersediaanId = BigInt(122);
-      else if (firstItemBarang?.jenisId === 17n) akunPersediaanId = BigInt(123);
-      else if (firstItemBarang?.jenisId === 16n) akunPersediaanId = BigInt(124);
-      else if (prefix === 'STR') {
-        akunPersediaanId = isFirstItemCurah ? BigInt(89) : BigInt(60); // 89: Stok Curah, 60: Stok Pakan Sentrat
-      } else if (prefix === 'OBT') akunPersediaanId = BigInt(61); // Stok Obat
-      else if (prefix === 'TRY') akunPersediaanId = BigInt(62); // Stok Tray
-      else if (prefix === 'TKO') akunPersediaanId = BigInt(118); // Stok Konsentrat Toko
+      const jurnalPembelianDetails: any[] = [];
+      // 1. Debit Persediaan per komoditas
+      for (const [persediaanId, stokAmount] of persediaanPembelianMap.entries()) {
+        if (stokAmount > 0 || persediaanPembelianMap.size === 1) {
+          jurnalPembelianDetails.push({
+            jurnalId: jurnal.id,
+            coaId: persediaanId,
+            kategoriId: persediaanId,
+            debit: stokAmount,
+            kredit: 0,
+          });
+        }
+      }
+      // 2. Kredit Kas/Bank/Hutang sebesar TOTAL invoice
+      jurnalPembelianDetails.push({
+        jurnalId: jurnal.id,
+        coaId: akunKreditId,
+        kategoriId: akunKreditId,
+        debit: 0,
+        kredit: total,
+      });
 
       await tx.jurnalDetail.createMany({
-        data: [
-          { jurnalId: jurnal.id, coaId: akunPersediaanId, kategoriId: akunPersediaanId, debit: total, kredit: 0 },
-          { jurnalId: jurnal.id, coaId: akunKreditId, kategoriId: akunKreditId, debit: 0, kredit: total },
-        ],
+        data: jurnalPembelianDetails,
       });
 
       return transaksi;
@@ -2847,5 +2861,77 @@ export class TransaksiService {
         saldoNet: saldoPiutang - saldoHutang,
       },
     };
+  }
+
+  /**
+   * Helper pemetaan akun COA (Pendapatan, HPP, Persediaan) per barang untuk Multi-COA Split Journal
+   */
+  private getBarangCoaMapping(barang: any): {
+    akunPendapatanId: bigint;
+    akunHppId: bigint;
+    akunPersediaanId: bigint;
+  } {
+    const jenisId = barang?.jenisId ? BigInt(barang.jenisId) : 0n;
+    const jenisName = (barang?.jenis?.name || '').toLowerCase();
+    const barangName = (barang?.name || '').toLowerCase();
+
+    // 1. Pakan Curah (Pak Pri)
+    const isCurah = jenisId === 9n || jenisName.includes('curah') || barangName.includes('curah');
+    if (isCurah) {
+      return {
+        akunPendapatanId: 8n,   // Penjualan Pakan Curah
+        akunHppId: 96n,          // HPP Pakan Curah
+        akunPersediaanId: 89n,   // Stok Curah
+      };
+    }
+
+    // 2. Toko Pertanian / Peternakan
+    if (
+      (jenisId >= 11n && jenisId <= 17n) ||
+      jenisName.includes('konsentrat') ||
+      jenisName.includes('hijauan') ||
+      jenisName.includes('premix') ||
+      jenisName.includes('bahan baku') ||
+      jenisName.includes('rmn')
+    ) {
+      let pId = 107n;
+      let hId = 114n;
+      let sId = 124n;
+      if (jenisName.includes('hijauan') || jenisId === 11n) { pId = 101n; hId = 108n; sId = 117n; }
+      else if (jenisName.includes('konsentrat') || jenisId === 12n) { pId = 102n; hId = 109n; sId = 118n; }
+      else if (jenisName.includes('bahan baku') || jenisId === 13n) { pId = 103n; hId = 110n; sId = 119n; }
+      else if (jenisName.includes('premix') || jenisId === 14n) { pId = 104n; hId = 111n; sId = 120n; }
+      else if (jenisId === 10n || barangName.includes('kucing')) { pId = 7n; hId = 97n; sId = 121n; }
+      else if (jenisName.includes('rmn') || jenisId === 15n) { pId = 105n; hId = 112n; sId = 122n; }
+      else if (jenisId === 17n) { pId = 106n; hId = 113n; sId = 123n; }
+      return { akunPendapatanId: pId, akunHppId: hId, akunPersediaanId: sId };
+    }
+
+    // 3. Pakan Pabrikan / Sentrat (Bima Pratama)
+    if (jenisName.includes('pakan') || jenisName.includes('sentrat') || jenisId === 8n) {
+      if (barangName.includes('kucing') || jenisId === 10n) {
+        return { akunPendapatanId: 7n, akunHppId: 97n, akunPersediaanId: 60n };
+      }
+      return { akunPendapatanId: 6n, akunHppId: 95n, akunPersediaanId: 60n };
+    }
+
+    // 4. Obat-Obatan
+    if (jenisName.includes('obat') || jenisId === 18n) {
+      return { akunPendapatanId: 9n, akunHppId: 98n, akunPersediaanId: 61n };
+    }
+
+    // 5. Tray Telur
+    if (jenisName.includes('tray') || jenisId === 19n) {
+      return { akunPendapatanId: 10n, akunHppId: 99n, akunPersediaanId: 62n };
+    }
+
+    // 6. Telur
+    let pId = 1n; // Horn
+    let hId = 90n;
+    if (barangName.includes('bebek')) { pId = 2n; hId = 91n; }
+    else if (barangName.includes('puyuh')) { pId = 3n; hId = 92n; }
+    else if (barangName.includes('arab')) { pId = 4n; hId = 93n; }
+    else if (barangName.includes('asin')) { pId = 5n; hId = 94n; }
+    return { akunPendapatanId: pId, akunHppId: hId, akunPersediaanId: 59n };
   }
 }

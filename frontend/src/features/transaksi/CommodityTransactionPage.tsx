@@ -46,6 +46,7 @@ interface CommodityConfig {
   icon: React.ComponentType<{ className?: string }>;
   accentColor: string;
   jenisIds: number[];
+  allowedBarangJenisIds?: number[];
   isEgg?: boolean;
 }
 
@@ -205,6 +206,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
   icon: HeaderIcon,
   accentColor,
   jenisIds,
+  allowedBarangJenisIds,
   isEgg = false,
 }) => {
   const queryClient = useQueryClient();
@@ -356,8 +358,9 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
   const [formError, setFormError] = useState<string | null>(null);
 
   // 1. Fetch Barangs specifically for this commodity
+  const effectiveBarangJenisIds = allowedBarangJenisIds && allowedBarangJenisIds.length > 0 ? allowedBarangJenisIds : jenisIds;
   const { data: allBarangs } = useQuery({
-    queryKey: ['barangsForCommodity', jenisIds],
+    queryKey: ['barangsForCommodity', effectiveBarangJenisIds],
     queryFn: async () => {
       const res: any = await apiClient.get('/master/barangs?limit=1000');
       let list: any[] = [];
@@ -365,7 +368,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
       else if (Array.isArray(res?.data)) list = res.data;
       else if (Array.isArray(res?.items)) list = res.items;
       else if (Array.isArray(res?.data?.items)) list = res.data.items;
-      return list.filter((b: any) => jenisIds.includes(Number(b.jenisId ?? b.jenis?.id ?? 0)));
+      return list.filter((b: any) => effectiveBarangJenisIds.includes(Number(b.jenisId ?? b.jenis?.id ?? 0)));
     },
   });
 
@@ -407,11 +410,11 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
 
   // 4. Fetch Inventory Summary
   const { data: stockItems, isLoading: loadingStock } = useQuery({
-    queryKey: ['stockCommodity', jenisIds],
+    queryKey: ['stockCommodity', effectiveBarangJenisIds],
     queryFn: async () => {
       const res: any = await apiClient.get(`/inventory/summary`);
       const list = Array.isArray(res) ? res : (res?.data || []);
-      return list.filter((item: any) => jenisIds.includes(Number(item.jenisId ?? item.jenis?.id ?? 0)));
+      return list.filter((item: any) => effectiveBarangJenisIds.includes(Number(item.jenisId ?? item.jenis?.id ?? 0)));
     },
   });
 
@@ -444,6 +447,26 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
       });
     });
   }, [originalTransactions, originalTxType, jenisIds]);
+
+  const selectedBarangObj = useMemo(() => {
+    if (!selectedBarangId || !allBarangs) return null;
+    return allBarangs.find((b: any) => String(b.id) === String(selectedBarangId)) || null;
+  }, [selectedBarangId, allBarangs]);
+
+  const selectedBarangStockInfo = useMemo(() => {
+    if (!selectedBarangId || !stockItems) return null;
+    return stockItems.find((s: any) => Number(s.id || s.barangId) === Number(selectedBarangId)) || null;
+  }, [selectedBarangId, stockItems]);
+
+  const editSelectedBarangObj = useMemo(() => {
+    if (!editSelectedBarangId || !allBarangs) return null;
+    return allBarangs.find((b: any) => String(b.id) === String(editSelectedBarangId)) || null;
+  }, [editSelectedBarangId, allBarangs]);
+
+  const editSelectedBarangStockInfo = useMemo(() => {
+    if (!editSelectedBarangId || !stockItems) return null;
+    return stockItems.find((s: any) => Number(s.id || s.barangId) === Number(editSelectedBarangId)) || null;
+  }, [editSelectedBarangId, stockItems]);
 
   // 6. Fetch Transactions for Monitoring Tab
   const { data: monitoringTxData, isLoading: loadingMonitoring } = useQuery({
@@ -614,7 +637,7 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
     }
   }, [formType, formPaymentAccountId]);
 
-  // When barang selected in Penjualan, auto-fetch suggested FIFO price
+  // When barang selected in Penjualan or Pembelian, auto-fetch suggested price
   const handleBarangSelect = (bId: string) => {
     setSelectedBarangId(bId);
     setFormError(null);
@@ -625,8 +648,11 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
 
     const matchedStock = stockItems?.find((s: any) => Number(s.id || s.barangId) === Number(bId));
     if (matchedStock) {
-      const suggestedPrice = Number(matchedStock.hargaRataRata || 0);
-      if (suggestedPrice > 0 && formType === 'PENJUALAN') {
+      const isBeli = formType === 'PEMBELIAN' || formType === 'RETUR_PENJUALAN';
+      const suggestedPrice = isBeli
+        ? Number(matchedStock.lastHargaBeli || matchedStock.hargaRataRata || 0)
+        : Number(matchedStock.lastHargaJual || matchedStock.hargaRataRata || 0);
+      if (suggestedPrice > 0) {
         setFormHarga(suggestedPrice);
       }
     }
@@ -991,7 +1017,10 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
     }
     const matchedStock = stockItems?.find((s: any) => Number(s.id || s.barangId) === Number(bId));
     if (matchedStock) {
-      const suggestedPrice = Number(matchedStock.hargaRataRata || 0);
+      const isBeli = editModalTx?.type === 'PEMBELIAN' || editModalTx?.type === 'RETUR_PENJUALAN';
+      const suggestedPrice = isBeli
+        ? Number(matchedStock.lastHargaBeli || matchedStock.hargaRataRata || 0)
+        : Number(matchedStock.lastHargaJual || matchedStock.hargaRataRata || 0);
       if (suggestedPrice > 0) {
         setEditFormHarga(suggestedPrice);
       }
@@ -1196,25 +1225,52 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
     return raw;
   }, [txData, jenisIds]);
 
+  const getCommodityDetails = (tx: any) => {
+    if (!tx?.details || !Array.isArray(tx.details)) return [];
+    if (!jenisIds || jenisIds.length === 0) return tx.details;
+    return tx.details.filter((d: any) => {
+      const bJenisId = Number(d.barang?.jenisId ?? d.barang?.jenis?.id ?? 0);
+      return bJenisId ? jenisIds.includes(bJenisId) : true;
+    });
+  };
+
+  const getCommodityTotal = (tx: any) => {
+    const comDetails = getCommodityDetails(tx);
+    if (!tx?.details || tx.details.length === comDetails.length) {
+      return Number(tx?.total) || 0;
+    }
+    const comSubtotal = comDetails.reduce(
+      (sum: number, d: any) => sum + Number(d.subtotal ?? (Number(d.qty || 0) * Number(d.hargaSatuan || 0))),
+      0,
+    );
+    const txSubtotal = Number(tx.subtotal) || 0;
+    const txDiskon = Number(tx.diskon) || 0;
+    if (txDiskon > 0 && txSubtotal > 0) {
+      const propDiskon = (comSubtotal / txSubtotal) * txDiskon;
+      return Math.max(0, comSubtotal - propDiskon);
+    }
+    return comSubtotal;
+  };
+
   const txMeta = txData?.meta || {
     total: txList.length,
-    totalKeseluruhan: txList.filter((t: any) => t.status !== 'BATAL').reduce((acc: number, curr: any) => acc + (Number(curr.total) || 0), 0),
+    totalKeseluruhan: txList.filter((t: any) => t.status !== 'BATAL').reduce((acc: number, curr: any) => acc + getCommodityTotal(curr), 0),
   };
 
   const pageTotal = useMemo(() => {
     return txList
       .filter((t: any) => t.status !== 'BATAL')
-      .reduce((acc: number, curr: any) => acc + (Number(curr.total) || 0), 0);
-  }, [txList]);
+      .reduce((acc: number, curr: any) => acc + getCommodityTotal(curr), 0);
+  }, [txList, jenisIds]);
 
   const pageQtyTotal = useMemo(() => {
     return txList
       .filter((t: any) => t.status !== 'BATAL')
       .reduce((acc: number, curr: any) => {
-        const q = (curr.details || []).reduce((sum: number, d: any) => sum + Number(d.qty || 0), 0);
+        const q = getCommodityDetails(curr).reduce((sum: number, d: any) => sum + Number(d.qty || 0), 0);
         return acc + q;
       }, 0);
-  }, [txList]);
+  }, [txList, jenisIds]);
 
   const activePageCount = useMemo(() => {
     return txList.filter((t: any) => t.status !== 'BATAL').length;
@@ -1222,12 +1278,13 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
 
   const filteredStock = useMemo(() => {
     if (!stockItems) return [];
-    if (!search) return stockItems;
-    return stockItems.filter((it: any) =>
+    const primaryItems = stockItems.filter((it: any) => jenisIds.includes(Number(it.jenisId ?? it.jenis?.id ?? 0)));
+    if (!search) return primaryItems;
+    return primaryItems.filter((it: any) =>
       (it.name || '').toLowerCase().includes(search.toLowerCase()) ||
       (it.code || '').toLowerCase().includes(search.toLowerCase())
     );
-  }, [stockItems, search]);
+  }, [stockItems, jenisIds, search]);
 
   const totalCart = cartItems.reduce((acc, curr) => acc + curr.subtotal, 0) - formDiskon;
 
@@ -1827,11 +1884,9 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                   </tr>
                 ) : (
                   txList.map((tx: any, idx: number) => {
-                    const commodityDetails = (tx.details || []).filter((d: any) => {
-                      if (!jenisIds || jenisIds.length === 0) return true;
-                      const bJenisId = Number(d.barang?.jenisId ?? d.barang?.jenis?.id ?? 0);
-                      return bJenisId ? jenisIds.includes(bJenisId) : true;
-                    });
+                    const commodityDetails = getCommodityDetails(tx);
+                    const commodityTotal = getCommodityTotal(tx);
+                    const isMultiCommodity = tx.details && tx.details.length > commodityDetails.length;
                     const firstItem = commodityDetails[0] || tx.details?.[0];
                     const itemCount = commodityDetails.length;
                     const isBatal = tx.status === 'BATAL';
@@ -1886,9 +1941,19 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                               </span>
                             )}
                           </span>
+                          {isMultiCommodity && (
+                            <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                              Nota Gabungan
+                            </span>
+                          )}
                         </td>
                         <td className={`p-4 text-right font-mono font-bold text-xs ${isBatal ? 'line-through text-slate-400' : 'text-slate-900'}`}>
-                          {formatRupiah(tx.total)}
+                          <div>{formatRupiah(commodityTotal)}</div>
+                          {isMultiCommodity && (
+                            <div className="text-[10px] font-normal text-slate-400" title={`Total nota belanja: ${formatRupiah(tx.total)}`}>
+                              Total Nota: {formatRupiah(tx.total)}
+                            </div>
+                          )}
                         </td>
                         <td className="p-4 text-center whitespace-nowrap">
                           {isBatal ? (
@@ -2664,6 +2729,43 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                     />
                   </div>
 
+                  {selectedBarangObj && (
+                    <div className="flex flex-wrap items-center justify-between px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs gap-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-slate-500 font-medium">Sisa Stok Fisik:</span>
+                        <span
+                          className={`font-mono font-bold ${
+                            (selectedBarangStockInfo?.totalStok ?? 0) > 0 ? 'text-emerald-700' : 'text-rose-600'
+                          }`}
+                        >
+                          {Number(selectedBarangStockInfo?.totalStok ?? 0).toLocaleString('id-ID')} {selectedBarangObj.satuan?.name || 'Kg'}
+                        </span>
+                        {(selectedBarangStockInfo?.totalStok ?? 0) <= 0 && (
+                          <span className="text-[10px] font-semibold text-rose-500 bg-rose-50 px-1.5 py-0.5 rounded">
+                            Stok Habis
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center space-x-3 text-[11px] text-slate-500">
+                        {formType === 'PENJUALAN' && Number(selectedBarangStockInfo?.lastHargaJual || 0) > 0 && (
+                          <span>
+                            Jual Terakhir: <strong className="text-slate-700 font-mono">{formatRupiah(Number(selectedBarangStockInfo.lastHargaJual))}</strong>
+                          </span>
+                        )}
+                        {formType === 'PEMBELIAN' && Number(selectedBarangStockInfo?.lastHargaBeli || 0) > 0 && (
+                          <span>
+                            Beli Terakhir: <strong className="text-slate-700 font-mono">{formatRupiah(Number(selectedBarangStockInfo.lastHargaBeli))}</strong>
+                          </span>
+                        )}
+                        {Number(selectedBarangStockInfo?.hpp || 0) > 0 && (
+                          <span>
+                            HPP: <strong className="text-slate-600 font-mono">{formatRupiah(Number(selectedBarangStockInfo.hpp))}</strong>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1">Volume / Kuantitas</label>
@@ -3044,6 +3146,43 @@ export const CommodityTransactionPage: React.FC<CommodityConfig> = ({
                         </button>
                       </div>
                     </div>
+
+                    {editSelectedBarangObj && (
+                      <div className="flex flex-wrap items-center justify-between px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs gap-2">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-slate-500 font-medium">Sisa Stok Fisik:</span>
+                          <span
+                            className={`font-mono font-bold ${
+                              (editSelectedBarangStockInfo?.totalStok ?? 0) > 0 ? 'text-emerald-700' : 'text-rose-600'
+                            }`}
+                          >
+                            {Number(editSelectedBarangStockInfo?.totalStok ?? 0).toLocaleString('id-ID')} {editSelectedBarangObj.satuan?.name || 'Kg'}
+                          </span>
+                          {(editSelectedBarangStockInfo?.totalStok ?? 0) <= 0 && (
+                            <span className="text-[10px] font-semibold text-rose-500 bg-rose-50 px-1.5 py-0.5 rounded">
+                              Stok Habis
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-3 text-[11px] text-slate-500">
+                          {Number(editSelectedBarangStockInfo?.lastHargaJual || 0) > 0 && (
+                            <span>
+                              Jual Terakhir: <strong className="text-slate-700 font-mono">{formatRupiah(Number(editSelectedBarangStockInfo.lastHargaJual))}</strong>
+                            </span>
+                          )}
+                          {Number(editSelectedBarangStockInfo?.lastHargaBeli || 0) > 0 && (
+                            <span>
+                              Beli Terakhir: <strong className="text-slate-700 font-mono">{formatRupiah(Number(editSelectedBarangStockInfo.lastHargaBeli))}</strong>
+                            </span>
+                          )}
+                          {Number(editSelectedBarangStockInfo?.hpp || 0) > 0 && (
+                            <span>
+                              HPP: <strong className="text-slate-600 font-mono">{formatRupiah(Number(editSelectedBarangStockInfo.hpp))}</strong>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Tabel Barang yang Bisa Diedit */}

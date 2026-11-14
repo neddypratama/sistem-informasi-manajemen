@@ -135,6 +135,21 @@ export const SearchableBarangSelect: React.FC<SearchableBarangSelectProps> = ({
                   {selectedBarang.jenis.name}
                 </span>
               )}
+              {(() => {
+                const stockVal = getStockForBarang(selectedBarang.id);
+                if (typeof stockVal === 'number' && !isNaN(stockVal)) {
+                  return (
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold font-mono shrink-0 ${
+                        stockVal > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-700'
+                      }`}
+                    >
+                      Stok: {Number(stockVal).toLocaleString('id-ID')}
+                    </span>
+                  );
+                }
+                return null;
+              })()}
             </div>
           ) : (
             <span className="text-slate-400 font-normal">{placeholder}</span>

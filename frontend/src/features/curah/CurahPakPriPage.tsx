@@ -502,6 +502,7 @@ export const CurahPakPriPage: React.FC = () => {
             icon={Wheat}
             accentColor="amber"
             jenisIds={[9]}
+            allowedBarangJenisIds={[8, 9, 10]}
             isEgg={false}
           />
         </div>

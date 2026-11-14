@@ -611,4 +611,5 @@ export declare class TransaksiService {
             saldoNet: number;
         };
     }>;
+    private getBarangCoaMapping;
 }

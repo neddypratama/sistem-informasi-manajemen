@@ -345,58 +345,17 @@ let TransaksiService = class TransaksiService {
                 },
             });
             let grandTotalHpp = 0;
+            const pendapatanMap = new Map();
+            const hppMap = new Map();
+            const persediaanMap = new Map();
             for (const item of createDto.items) {
                 const itemSubtotal = item.qty * item.hargaSatuan;
                 const barang = await tx.barang.findUnique({
                     where: { id: BigInt(item.barangId) },
                     include: { jenis: true },
                 });
-                const jenisName = barang?.jenis?.name?.toLowerCase() || '';
-                const barangName = barang?.name?.toLowerCase() || '';
-                let itemKategoriId = BigInt(1);
-                const isCurah = barang?.jenisId === 9n || jenisName.includes('curah') || barangName.includes('curah');
-                if (isCurah) {
-                    itemKategoriId = BigInt(8);
-                }
-                else if (jenisName.includes('hijauan')) {
-                    itemKategoriId = BigInt(101);
-                }
-                else if (jenisName.includes('konsentrat')) {
-                    itemKategoriId = BigInt(102);
-                }
-                else if (jenisName.includes('bahan baku')) {
-                    itemKategoriId = BigInt(103);
-                }
-                else if (jenisName.includes('premix')) {
-                    itemKategoriId = BigInt(104);
-                }
-                else if (jenisName.includes('rmn')) {
-                    itemKategoriId = BigInt(105);
-                }
-                else if (jenisName.includes('barang') || barang?.jenisId === 16n) {
-                    itemKategoriId = BigInt(107);
-                }
-                else if (jenisName.includes('pakan') || jenisName.includes('sentrat')) {
-                    itemKategoriId = (barangName.includes('kucing') || barang?.jenisId === 10n) ? BigInt(7) : BigInt(6);
-                }
-                else if (jenisName.includes('obat')) {
-                    itemKategoriId = BigInt(9);
-                }
-                else if (jenisName.includes('tray')) {
-                    itemKategoriId = BigInt(10);
-                }
-                else {
-                    if (barangName.includes('bebek'))
-                        itemKategoriId = BigInt(2);
-                    else if (barangName.includes('puyuh'))
-                        itemKategoriId = BigInt(3);
-                    else if (barangName.includes('arab'))
-                        itemKategoriId = BigInt(4);
-                    else if (barangName.includes('asin'))
-                        itemKategoriId = BigInt(5);
-                    else
-                        itemKategoriId = BigInt(1);
-                }
+                const coaMapping = this.getBarangCoaMapping(barang);
+                const itemKategoriId = coaMapping.akunPendapatanId;
                 const detail = await tx.detailTransaksi.create({
                     data: {
                         transaksiId: transaksi.id,
@@ -420,6 +379,26 @@ let TransaksiService = class TransaksiService {
                     },
                 });
                 grandTotalHpp += fifoResult.totalHpp;
+                const itemDiscount = subtotal > 0 ? (itemSubtotal / subtotal) * diskon : 0;
+                const netItemRevenue = Math.max(0, itemSubtotal - itemDiscount);
+                pendapatanMap.set(coaMapping.akunPendapatanId, (pendapatanMap.get(coaMapping.akunPendapatanId) || 0) + netItemRevenue);
+                hppMap.set(coaMapping.akunHppId, (hppMap.get(coaMapping.akunHppId) || 0) + fifoResult.totalHpp);
+                persediaanMap.set(coaMapping.akunPersediaanId, (persediaanMap.get(coaMapping.akunPersediaanId) || 0) + fifoResult.totalHpp);
+            }
+            let sumNetRev = 0;
+            for (const val of pendapatanMap.values())
+                sumNetRev += val;
+            const revDiff = total - sumNetRev;
+            if (Math.abs(revDiff) > 0.0001 && pendapatanMap.size > 0) {
+                let maxK = Array.from(pendapatanMap.keys())[0];
+                let maxV = -1;
+                for (const [k, v] of pendapatanMap.entries()) {
+                    if (v > maxV) {
+                        maxV = v;
+                        maxK = k;
+                    }
+                }
+                pendapatanMap.set(maxK, (pendapatanMap.get(maxK) || 0) + revDiff);
             }
             if (paymentMethod === 'KREDIT_BON' && createDto.clientId) {
                 await tx.client.update({
@@ -435,75 +414,44 @@ let TransaksiService = class TransaksiService {
                     keterangan: `Penjualan ${invoice} (${paymentMethod === 'KREDIT_BON' ? 'PIUTANG' : paymentMethod})`,
                 },
             });
-            let akunPendapatanId = BigInt(1);
-            let akunHppId = BigInt(90);
-            let akunPersediaanId = BigInt(59);
-            const firstItem = createDto.items[0];
-            if (firstItem) {
-                const barang = await tx.barang.findUnique({
-                    where: { id: BigInt(firstItem.barangId) },
-                    include: { jenis: true },
-                });
-                const jenisName = barang?.jenis?.name?.toLowerCase() || '';
-                const barangName = barang?.name?.toLowerCase() || '';
-                const isCurah = barang?.jenisId === 9n || jenisName.includes('curah') || barangName.includes('curah');
-                if (isCurah) {
-                    akunPersediaanId = BigInt(89);
-                    akunPendapatanId = BigInt(8);
-                    akunHppId = BigInt(96);
+            const jurnalDetailsData = [
+                { jurnalId: jurnal.id, coaId: akunDebitId, kategoriId: akunDebitId, debit: total, kredit: 0 },
+            ];
+            for (const [pendapatanId, revAmount] of pendapatanMap.entries()) {
+                if (revAmount > 0 || pendapatanMap.size === 1) {
+                    jurnalDetailsData.push({
+                        jurnalId: jurnal.id,
+                        coaId: pendapatanId,
+                        kategoriId: pendapatanId,
+                        debit: 0,
+                        kredit: revAmount,
+                    });
                 }
-                else if (jenisName.includes('pakan') || jenisName.includes('sentrat')) {
-                    akunPersediaanId = BigInt(60);
-                    if (barangName.includes('kucing') || barang?.jenisId === 10n) {
-                        akunPendapatanId = BigInt(7);
-                        akunHppId = BigInt(97);
-                    }
-                    else {
-                        akunPendapatanId = BigInt(6);
-                        akunHppId = BigInt(95);
-                    }
+            }
+            for (const [hppId, hppAmount] of hppMap.entries()) {
+                if (hppAmount > 0) {
+                    jurnalDetailsData.push({
+                        jurnalId: jurnal.id,
+                        coaId: hppId,
+                        kategoriId: hppId,
+                        debit: hppAmount,
+                        kredit: 0,
+                    });
                 }
-                else if (jenisName.includes('obat')) {
-                    akunPersediaanId = BigInt(61);
-                    akunPendapatanId = BigInt(9);
-                    akunHppId = BigInt(98);
-                }
-                else if (jenisName.includes('tray')) {
-                    akunPersediaanId = BigInt(62);
-                    akunPendapatanId = BigInt(10);
-                    akunHppId = BigInt(99);
-                }
-                else {
-                    akunPersediaanId = BigInt(59);
-                    if (barangName.includes('bebek')) {
-                        akunPendapatanId = BigInt(2);
-                        akunHppId = BigInt(91);
-                    }
-                    else if (barangName.includes('puyuh')) {
-                        akunPendapatanId = BigInt(3);
-                        akunHppId = BigInt(92);
-                    }
-                    else if (barangName.includes('arab')) {
-                        akunPendapatanId = BigInt(4);
-                        akunHppId = BigInt(93);
-                    }
-                    else if (barangName.includes('asin')) {
-                        akunPendapatanId = BigInt(5);
-                        akunHppId = BigInt(94);
-                    }
-                    else {
-                        akunPendapatanId = BigInt(1);
-                        akunHppId = BigInt(90);
-                    }
+            }
+            for (const [persediaanId, stokAmount] of persediaanMap.entries()) {
+                if (stokAmount > 0) {
+                    jurnalDetailsData.push({
+                        jurnalId: jurnal.id,
+                        coaId: persediaanId,
+                        kategoriId: persediaanId,
+                        debit: 0,
+                        kredit: stokAmount,
+                    });
                 }
             }
             await tx.jurnalDetail.createMany({
-                data: [
-                    { jurnalId: jurnal.id, coaId: akunDebitId, kategoriId: akunDebitId, debit: total, kredit: 0 },
-                    { jurnalId: jurnal.id, coaId: akunPendapatanId, kategoriId: akunPendapatanId, debit: 0, kredit: total },
-                    { jurnalId: jurnal.id, coaId: akunHppId, kategoriId: akunHppId, debit: grandTotalHpp, kredit: 0 },
-                    { jurnalId: jurnal.id, coaId: akunPersediaanId, kategoriId: akunPersediaanId, debit: 0, kredit: grandTotalHpp },
-                ],
+                data: jurnalDetailsData,
             });
             return transaksi;
         });
@@ -601,6 +549,7 @@ let TransaksiService = class TransaksiService {
                     keterangan: createDto.keterangan,
                 },
             });
+            const persediaanPembelianMap = new Map();
             for (const item of createDto.items) {
                 const itemSubtotal = item.qty * item.hargaSatuan;
                 const barang = await tx.barang.findUnique({
@@ -661,6 +610,24 @@ let TransaksiService = class TransaksiService {
                         hargaBeli: item.hargaSatuan,
                     },
                 });
+                const itemDiscount = subtotal > 0 ? (itemSubtotal / subtotal) * diskon : 0;
+                const netItemCost = Math.max(0, itemSubtotal - itemDiscount);
+                persediaanPembelianMap.set(itemKategoriId, (persediaanPembelianMap.get(itemKategoriId) || 0) + netItemCost);
+            }
+            let sumPersediaan = 0;
+            for (const val of persediaanPembelianMap.values())
+                sumPersediaan += val;
+            const costDiff = total - sumPersediaan;
+            if (Math.abs(costDiff) > 0.0001 && persediaanPembelianMap.size > 0) {
+                let maxK = Array.from(persediaanPembelianMap.keys())[0];
+                let maxV = -1;
+                for (const [k, v] of persediaanPembelianMap.entries()) {
+                    if (v > maxV) {
+                        maxV = v;
+                        maxK = k;
+                    }
+                }
+                persediaanPembelianMap.set(maxK, (persediaanPembelianMap.get(maxK) || 0) + costDiff);
             }
             if (paymentMethod === 'KREDIT_BON' && clientId) {
                 await tx.client.update({
@@ -676,37 +643,27 @@ let TransaksiService = class TransaksiService {
                     keterangan: `Pembelian ${invoice} (${paymentMethod === 'KREDIT_BON' ? 'HUTANG' : paymentMethod})`,
                 },
             });
-            let akunPersediaanId = BigInt(59);
-            if (firstItemBarang?.jenisId === 11n)
-                akunPersediaanId = BigInt(117);
-            else if (firstItemBarang?.jenisId === 12n)
-                akunPersediaanId = BigInt(118);
-            else if (firstItemBarang?.jenisId === 13n)
-                akunPersediaanId = BigInt(119);
-            else if (firstItemBarang?.jenisId === 14n)
-                akunPersediaanId = BigInt(120);
-            else if (firstItemBarang?.jenisId === 10n)
-                akunPersediaanId = BigInt(121);
-            else if (firstItemBarang?.jenisId === 15n)
-                akunPersediaanId = BigInt(122);
-            else if (firstItemBarang?.jenisId === 17n)
-                akunPersediaanId = BigInt(123);
-            else if (firstItemBarang?.jenisId === 16n)
-                akunPersediaanId = BigInt(124);
-            else if (prefix === 'STR') {
-                akunPersediaanId = isFirstItemCurah ? BigInt(89) : BigInt(60);
+            const jurnalPembelianDetails = [];
+            for (const [persediaanId, stokAmount] of persediaanPembelianMap.entries()) {
+                if (stokAmount > 0 || persediaanPembelianMap.size === 1) {
+                    jurnalPembelianDetails.push({
+                        jurnalId: jurnal.id,
+                        coaId: persediaanId,
+                        kategoriId: persediaanId,
+                        debit: stokAmount,
+                        kredit: 0,
+                    });
+                }
             }
-            else if (prefix === 'OBT')
-                akunPersediaanId = BigInt(61);
-            else if (prefix === 'TRY')
-                akunPersediaanId = BigInt(62);
-            else if (prefix === 'TKO')
-                akunPersediaanId = BigInt(118);
+            jurnalPembelianDetails.push({
+                jurnalId: jurnal.id,
+                coaId: akunKreditId,
+                kategoriId: akunKreditId,
+                debit: 0,
+                kredit: total,
+            });
             await tx.jurnalDetail.createMany({
-                data: [
-                    { jurnalId: jurnal.id, coaId: akunPersediaanId, kategoriId: akunPersediaanId, debit: total, kredit: 0 },
-                    { jurnalId: jurnal.id, coaId: akunKreditId, kategoriId: akunKreditId, debit: 0, kredit: total },
-                ],
+                data: jurnalPembelianDetails,
             });
             return transaksi;
         });
@@ -2505,6 +2462,96 @@ let TransaksiService = class TransaksiService {
                 saldoNet: saldoPiutang - saldoHutang,
             },
         };
+    }
+    getBarangCoaMapping(barang) {
+        const jenisId = barang?.jenisId ? BigInt(barang.jenisId) : 0n;
+        const jenisName = (barang?.jenis?.name || '').toLowerCase();
+        const barangName = (barang?.name || '').toLowerCase();
+        const isCurah = jenisId === 9n || jenisName.includes('curah') || barangName.includes('curah');
+        if (isCurah) {
+            return {
+                akunPendapatanId: 8n,
+                akunHppId: 96n,
+                akunPersediaanId: 89n,
+            };
+        }
+        if ((jenisId >= 11n && jenisId <= 17n) ||
+            jenisName.includes('konsentrat') ||
+            jenisName.includes('hijauan') ||
+            jenisName.includes('premix') ||
+            jenisName.includes('bahan baku') ||
+            jenisName.includes('rmn')) {
+            let pId = 107n;
+            let hId = 114n;
+            let sId = 124n;
+            if (jenisName.includes('hijauan') || jenisId === 11n) {
+                pId = 101n;
+                hId = 108n;
+                sId = 117n;
+            }
+            else if (jenisName.includes('konsentrat') || jenisId === 12n) {
+                pId = 102n;
+                hId = 109n;
+                sId = 118n;
+            }
+            else if (jenisName.includes('bahan baku') || jenisId === 13n) {
+                pId = 103n;
+                hId = 110n;
+                sId = 119n;
+            }
+            else if (jenisName.includes('premix') || jenisId === 14n) {
+                pId = 104n;
+                hId = 111n;
+                sId = 120n;
+            }
+            else if (jenisId === 10n || barangName.includes('kucing')) {
+                pId = 7n;
+                hId = 97n;
+                sId = 121n;
+            }
+            else if (jenisName.includes('rmn') || jenisId === 15n) {
+                pId = 105n;
+                hId = 112n;
+                sId = 122n;
+            }
+            else if (jenisId === 17n) {
+                pId = 106n;
+                hId = 113n;
+                sId = 123n;
+            }
+            return { akunPendapatanId: pId, akunHppId: hId, akunPersediaanId: sId };
+        }
+        if (jenisName.includes('pakan') || jenisName.includes('sentrat') || jenisId === 8n) {
+            if (barangName.includes('kucing') || jenisId === 10n) {
+                return { akunPendapatanId: 7n, akunHppId: 97n, akunPersediaanId: 60n };
+            }
+            return { akunPendapatanId: 6n, akunHppId: 95n, akunPersediaanId: 60n };
+        }
+        if (jenisName.includes('obat') || jenisId === 18n) {
+            return { akunPendapatanId: 9n, akunHppId: 98n, akunPersediaanId: 61n };
+        }
+        if (jenisName.includes('tray') || jenisId === 19n) {
+            return { akunPendapatanId: 10n, akunHppId: 99n, akunPersediaanId: 62n };
+        }
+        let pId = 1n;
+        let hId = 90n;
+        if (barangName.includes('bebek')) {
+            pId = 2n;
+            hId = 91n;
+        }
+        else if (barangName.includes('puyuh')) {
+            pId = 3n;
+            hId = 92n;
+        }
+        else if (barangName.includes('arab')) {
+            pId = 4n;
+            hId = 93n;
+        }
+        else if (barangName.includes('asin')) {
+            pId = 5n;
+            hId = 94n;
+        }
+        return { akunPendapatanId: pId, akunHppId: hId, akunPersediaanId: 59n };
     }
 };
 TransaksiService = __decorate([

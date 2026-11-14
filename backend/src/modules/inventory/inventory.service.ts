@@ -192,26 +192,59 @@ export class InventoryService {
     const hasPagination = page !== undefined && limit !== undefined && limit > 0;
     const total = hasPagination ? await this.prisma.barang.count({ where }) : 0;
 
-    const barangs = await this.prisma.barang.findMany({
-      where,
-      ...(hasPagination ? { skip: (page! - 1) * limit!, take: limit! } : {}),
-      include: {
-        jenis: true,
-        satuan: true,
-        stokBatches: {
-          where: { qtySisa: { gt: 0 } },
-          select: {
-            id: true,
-            tanggal: true,
-            qtyMasuk: true,
-            qtySisa: true,
-            hargaBeli: true,
+    const [barangs, lastSales, lastBuys] = await Promise.all([
+      this.prisma.barang.findMany({
+        where,
+        ...(hasPagination ? { skip: (page! - 1) * limit!, take: limit! } : {}),
+        include: {
+          jenis: true,
+          satuan: true,
+          stokBatches: {
+            where: { qtySisa: { gt: 0 } },
+            select: {
+              id: true,
+              tanggal: true,
+              qtyMasuk: true,
+              qtySisa: true,
+              hargaBeli: true,
+            },
+            orderBy: { tanggal: 'asc' },
           },
-          orderBy: { tanggal: 'asc' },
         },
-      },
-      orderBy: { name: 'asc' },
-    });
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.$queryRawUnsafe<any[]>(`
+        SELECT dt.barang_id as barangId, dt.harga_satuan as hargaSatuan
+        FROM detail_transaksis dt
+        INNER JOIN (
+          SELECT dt2.barang_id, MAX(dt2.id) as max_id
+          FROM detail_transaksis dt2
+          INNER JOIN transaksis t2 ON dt2.transaksi_id = t2.id
+          WHERE t2.type = 'PENJUALAN' AND t2.status != 'BATAL'
+          GROUP BY dt2.barang_id
+        ) latest ON dt.id = latest.max_id
+      `).catch(() => []),
+      this.prisma.$queryRawUnsafe<any[]>(`
+        SELECT dt.barang_id as barangId, dt.harga_satuan as hargaSatuan
+        FROM detail_transaksis dt
+        INNER JOIN (
+          SELECT dt2.barang_id, MAX(dt2.id) as max_id
+          FROM detail_transaksis dt2
+          INNER JOIN transaksis t2 ON dt2.transaksi_id = t2.id
+          WHERE t2.type = 'PEMBELIAN' AND t2.status != 'BATAL'
+          GROUP BY dt2.barang_id
+        ) latest ON dt.id = latest.max_id
+      `).catch(() => []),
+    ]);
+
+    const lastSalesMap = new Map<number, number>();
+    for (const s of lastSales) {
+      lastSalesMap.set(Number(s.barangId), Number(s.hargaSatuan));
+    }
+    const lastBuysMap = new Map<number, number>();
+    for (const b of lastBuys) {
+      lastBuysMap.set(Number(b.barangId), Number(b.hargaSatuan));
+    }
 
     const items = barangs.map((b) => {
       const totalSisa = b.stokBatches.reduce((acc, curr) => acc + Number(curr.qtySisa), 0);
@@ -220,6 +253,8 @@ export class InventoryService {
         0,
       );
       const hargaRataRata = totalSisa > 0 ? totalNilaiStok / totalSisa : 0;
+      const lastHargaJual = lastSalesMap.get(Number(b.id)) || 0;
+      const lastHargaBeli = lastBuysMap.get(Number(b.id)) || 0;
 
       return {
         id: Number(b.id),
@@ -238,6 +273,8 @@ export class InventoryService {
         nilaiStok: totalNilaiStok,
         hargaRataRata,
         hpp: hargaRataRata,
+        lastHargaJual,
+        lastHargaBeli,
         stokMinimum: Number(b.stokMinimum),
         isDibawahMinimum: totalSisa <= Number(b.stokMinimum),
         batches: b.stokBatches.map((sb) => ({
