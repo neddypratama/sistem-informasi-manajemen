@@ -335,9 +335,14 @@ export const CurahPakPriPage: React.FC = () => {
         {/* KPI 1: Posisi Saldo Modal / Pinjaman Bp. Supriyadi */}
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs relative overflow-hidden group hover:shadow-md transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              Saldo Rekening Bp. Supriyadi
-            </span>
+            <div>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                Saldo Rekening Bp. Supriyadi
+              </span>
+              <span className="text-[10px] font-semibold text-indigo-600">
+                {endDate ? `Posisi per ${formatDateIndo(endDate)}` : 'Posisi Terkini (Live)'}
+              </span>
+            </div>
             <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center group-hover:scale-105 transition-transform">
               <Wallet className="w-5 h-5" />
             </div>

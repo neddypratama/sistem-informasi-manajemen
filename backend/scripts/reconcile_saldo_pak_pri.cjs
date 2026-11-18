@@ -6,7 +6,7 @@
  * Penggunaan:
  *   Preview (Dry-Run): node backend/scripts/reconcile_saldo_pak_pri.cjs
  *   Eksekusi Update  : node backend/scripts/reconcile_saldo_pak_pri.cjs --apply
- *   Kustom Patokan   : node backend/scripts/reconcile_saldo_pak_pri.cjs --cutoff=2026-10-30 --base=1260384005 --apply
+ *   Kustom Patokan   : node backend/scripts/reconcile_saldo_pak_pri.cjs --cutoff=2026-10-31 --base=1260384005 --apply
  */
 
 const { PrismaClient } = require('../node_modules/@prisma/client');
@@ -15,7 +15,7 @@ const prisma = new PrismaClient();
 function parseArgs() {
   const args = process.argv.slice(2);
   let apply = false;
-  let cutoff = '2026-10-30';
+  let cutoff = '2026-10-31';
   let baseSaldo = 1260384005;
 
   for (const arg of args) {

@@ -2807,21 +2807,23 @@ export class TransaksiService {
     let dateFilter = Prisma.sql`WHERE (t.status IS NULL OR t.status != 'BATAL')`;
     const sStr = startDate && startDate.trim().length > 0 ? startDate.trim() : null;
     const eStr = endDate && endDate.trim().length > 0 ? endDate.trim() : null;
+    let asOfDate: Date | null = null;
 
     if (sStr && eStr) {
       let dStart = new Date(`${sStr} 00:00:00`);
       let dEnd = new Date(`${eStr} 23:59:59`);
       if (dStart > dEnd) {
-        const tmp = dStart;
         dStart = new Date(`${eStr} 00:00:00`);
         dEnd = new Date(`${sStr} 23:59:59`);
       }
+      asOfDate = dEnd;
       dateFilter = Prisma.sql`WHERE (t.status IS NULL OR t.status != 'BATAL') AND t.tanggal BETWEEN ${dStart} AND ${dEnd}`;
     } else if (sStr) {
       const dStart = new Date(`${sStr} 00:00:00`);
       dateFilter = Prisma.sql`WHERE (t.status IS NULL OR t.status != 'BATAL') AND t.tanggal >= ${dStart}`;
     } else if (eStr) {
       const dEnd = new Date(`${eStr} 23:59:59`);
+      asOfDate = dEnd;
       dateFilter = Prisma.sql`WHERE (t.status IS NULL OR t.status != 'BATAL') AND t.tanggal <= ${dEnd}`;
     }
 
@@ -2923,8 +2925,111 @@ export class TransaksiService {
     const laba = pen - hp;
     const margin = pen > 0 ? (laba / pen) * 100 : 0;
 
-    const saldoHutang = Number(clientSupriyadi?.saldoHutang || 0);
-    const saldoPiutang = Number(clientSupriyadi?.saldoPiutang || 0);
+    let saldoHutang = Number(clientSupriyadi?.saldoHutang || 0);
+    let saldoPiutang = Number(clientSupriyadi?.saldoPiutang || 0);
+
+    // Jika ada filter tanggal akhir (endDate), hitung saldo historis per asOfDate
+    // menggunakan rumus rollback yang persis sama dengan Laporan Aset
+    if (asOfDate && clientSupriyadi) {
+      const pakPriId = clientSupriyadi.id;
+      const txsAfter = await this.prisma.transaksi.findMany({
+        where: {
+          status: 'SELESAI',
+          tanggal: { gt: asOfDate },
+          OR: [
+            { clientId: pakPriId },
+            { type: { in: ['PENJUALAN', 'RETUR_PENJUALAN'] } },
+          ],
+        },
+        select: {
+          type: true,
+          paymentMethod: true,
+          clientId: true,
+          subtotal: true,
+          diskon: true,
+          total: true,
+          details: {
+            select: {
+              subtotal: true,
+              kategoriId: true,
+              barang: {
+                select: {
+                  jenisId: true,
+                  name: true,
+                  jenis: { select: { name: true } },
+                },
+              },
+              kategori: {
+                select: {
+                  name: true,
+                  detailKategori: { select: { type: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      let deltaHutang = 0;
+      let deltaPiutang = 0;
+
+      for (const t of txsAfter) {
+        const tot = Number(t.total || 0);
+        const curahNet = this.calculateCurahNetTotal(
+          t.details,
+          Number(t.subtotal || 0),
+          Number(t.diskon || 0),
+        );
+
+        if (t.type === 'PENJUALAN') {
+          if (curahNet > 0) deltaHutang += curahNet;
+          if (t.clientId === pakPriId && t.paymentMethod === 'KREDIT_BON') {
+            deltaPiutang += tot;
+          }
+        } else if (t.type === 'RETUR_PENJUALAN') {
+          if (curahNet > 0) deltaHutang -= curahNet;
+          if (t.clientId === pakPriId && t.paymentMethod === 'KREDIT_BON') {
+            deltaPiutang -= tot;
+          }
+        } else if (t.clientId === pakPriId && t.type === 'KAS_KELUAR') {
+          for (const d of t.details) {
+            const dType = d.kategori?.detailKategori?.type;
+            const sub = Number(d.subtotal || 0);
+            if (
+              dType === 'Liabilitas' ||
+              d.kategori?.name?.includes('Hutang') ||
+              d.kategori?.name?.includes('Saldo') ||
+              !dType
+            ) {
+              deltaHutang -= sub;
+            } else if (dType === 'Aset' || d.kategori?.name?.includes('Piutang')) {
+              deltaPiutang += sub;
+            } else {
+              deltaHutang -= sub;
+            }
+          }
+        } else if (t.clientId === pakPriId && t.type === 'KAS_MASUK') {
+          for (const d of t.details) {
+            const dType = d.kategori?.detailKategori?.type;
+            const sub = Number(d.subtotal || 0);
+            if (dType === 'Aset' || d.kategori?.name?.includes('Piutang')) {
+              deltaPiutang -= sub;
+            } else if (
+              dType === 'Liabilitas' ||
+              d.kategori?.name?.includes('Hutang') ||
+              d.kategori?.name?.includes('Saldo')
+            ) {
+              deltaHutang += sub;
+            } else {
+              deltaPiutang -= sub;
+            }
+          }
+        }
+      }
+
+      saldoHutang = Math.max(0, saldoHutang - deltaHutang);
+      saldoPiutang = Math.max(0, saldoPiutang - deltaPiutang);
+    }
 
     return {
       penjualanCurah: pen,
