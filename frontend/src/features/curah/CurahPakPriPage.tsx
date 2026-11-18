@@ -224,6 +224,7 @@ export const CurahPakPriPage: React.FC = () => {
   const mitra = summaryData?.mitraSupriyadi;
   const saldoHutang = Number(mitra?.saldoHutang || 0);
   const saldoPiutang = Number(mitra?.saldoPiutang || 0);
+  const saldoNet = saldoPiutang - saldoHutang; // < 0: Hak Pak Pri (Liabilitas BP), > 0: Ditalangi BP (Aset BP)
 
   return (
     <div className="space-y-6 pb-12">
@@ -343,18 +344,18 @@ export const CurahPakPriPage: React.FC = () => {
           </div>
           <div className="mt-3">
             <div className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">
-              {formatRupiah(Math.abs(saldoHutang > 0 ? saldoHutang : saldoPiutang))}
+              {formatRupiah(Math.abs(saldoNet))}
             </div>
             <div className="mt-2 flex items-center space-x-1.5">
-              {saldoHutang > 0 ? (
-                <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300">
-                  <AlertTriangle className="w-3 h-3 text-amber-600" />
-                  <span>Ditalangi Bima Pratama</span>
-                </span>
-              ) : saldoPiutang > 0 ? (
+              {saldoNet < 0 ? (
                 <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
                   <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                  <span>Kelebihan / Hak Pak Pri</span>
+                  <span>Saldo / Hak Pak Pri (Liabilitas BP)</span>
+                </span>
+              ) : saldoNet > 0 ? (
+                <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-extrabold bg-amber-100 text-amber-800 border border-amber-300">
+                  <AlertTriangle className="w-3 h-3 text-amber-600" />
+                  <span>Ditalangi Bima Pratama (Aset BP)</span>
                 </span>
               ) : (
                 <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-extrabold bg-slate-100 text-slate-700">
@@ -363,7 +364,7 @@ export const CurahPakPriPage: React.FC = () => {
               )}
             </div>
             <p className="text-[11px] text-slate-500 mt-2 leading-tight">
-              Belanja bahan ditalangi Kas BP dikurangi setoran hasil jual curah.
+              Saldo awal + Penjualan curah + Pemasukan - Pengeluaran &amp; pembayaran pakai duit BP.
             </p>
           </div>
         </div>

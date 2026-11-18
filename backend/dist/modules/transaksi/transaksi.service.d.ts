@@ -612,4 +612,7 @@ export declare class TransaksiService {
         };
     }>;
     private getBarangCoaMapping;
+    private isBarangCurah;
+    private calculateCurahNetTotal;
+    private getPakPriClientId;
 }

@@ -439,6 +439,18 @@ export class TransaksiService {
         });
       }
 
+      // 3b. Konsinyasi Pakan Curah (Pak Pri): semua penjualan curah (Lunas & Bon) otomatis menambah Saldo Pak Pri
+      const curahNetRevenue = pendapatanMap.get(8n) || 0;
+      if (curahNetRevenue > 0) {
+        const pakPriId = await this.getPakPriClientId(tx);
+        if (pakPriId) {
+          await tx.client.update({
+            where: { id: pakPriId },
+            data: { saldoHutang: { increment: curahNetRevenue } },
+          });
+        }
+      }
+
       // Posting Jurnal Umum Akuntansi (Double-Entry Multi-COA Balance)
       const jurnal = await tx.jurnalUmum.create({
         data: {
@@ -684,10 +696,13 @@ export class TransaksiService {
       }
 
       // Update saldo hutang jika pembelian kredit/hutang
-      if (paymentMethod === 'KREDIT_BON' && clientId) {
+      // Khusus Pakan Curah (COA 89): murni catat stok & HPP internal Pak Pri, tidak mengubah saldo hutang BP
+      const curahBuyNet = persediaanPembelianMap.get(89n) || 0;
+      const nonCurahBuyTotal = Math.max(0, total - curahBuyNet);
+      if (paymentMethod === 'KREDIT_BON' && clientId && nonCurahBuyTotal > 0) {
         await tx.client.update({
           where: { id: clientId },
-          data: { saldoHutang: { increment: total } },
+          data: { saldoHutang: { increment: nonCurahBuyTotal } },
         });
       }
 
@@ -761,12 +776,19 @@ export class TransaksiService {
         },
       });
 
+      let curahReturNet = 0;
       for (const item of createDto.items) {
         const itemSubtotal = item.qty * item.hargaSatuan;
+        const barang = await tx.barang.findUnique({
+          where: { id: BigInt(item.barangId) },
+          include: { jenis: true },
+        });
+        const coaMapping = this.getBarangCoaMapping(barang);
         const detail = await tx.detailTransaksi.create({
           data: {
             transaksiId: transaksi.id,
             barangId: BigInt(item.barangId),
+            kategoriId: coaMapping.akunPendapatanId,
             qty: item.qty,
             hargaSatuan: item.hargaSatuan,
             subtotal: itemSubtotal,
@@ -774,6 +796,11 @@ export class TransaksiService {
             totalHpp: itemSubtotal,
           },
         });
+
+        if (coaMapping.akunPendapatanId === 8n) {
+          const itemDiskon = subtotal > 0 ? (itemSubtotal / subtotal) * diskon : 0;
+          curahReturNet += Math.max(0, itemSubtotal - itemDiskon);
+        }
 
         // Kembalikan ke stok batch
         await tx.stokBatch.create({
@@ -795,6 +822,17 @@ export class TransaksiService {
           where: { id: BigInt(createDto.clientId) },
           data: { saldoPiutang: { decrement: total } },
         });
+      }
+
+      // Konsinyasi Pakan Curah (Pak Pri): retur penjualan curah otomatis mengurangi Saldo Pak Pri
+      if (curahReturNet > 0) {
+        const pakPriId = await this.getPakPriClientId(tx);
+        if (pakPriId) {
+          await tx.client.update({
+            where: { id: pakPriId },
+            data: { saldoHutang: { decrement: curahReturNet } },
+          });
+        }
       }
 
       // Posting Jurnal Retur Penjualan (Double-Entry Balance)
@@ -824,20 +862,10 @@ export class TransaksiService {
           where: { id: BigInt(firstItem.barangId) },
           include: { jenis: true },
         });
-        const jenisName = barang?.jenis?.name?.toLowerCase() || '';
-        if (jenisName.includes('pakan') || jenisName.includes('sentrat') || jenisName.includes('curah')) {
-          akunPersediaanId = BigInt(60);
-          akunReturPenjualanId = BigInt(6);
-          akunHppId = BigInt(95);
-        } else if (jenisName.includes('obat')) {
-          akunPersediaanId = BigInt(61);
-          akunReturPenjualanId = BigInt(9);
-          akunHppId = BigInt(98);
-        } else if (jenisName.includes('tray')) {
-          akunPersediaanId = BigInt(62);
-          akunReturPenjualanId = BigInt(10);
-          akunHppId = BigInt(99);
-        }
+        const firstCoa = this.getBarangCoaMapping(barang);
+        akunReturPenjualanId = firstCoa.akunPendapatanId;
+        akunPersediaanId = firstCoa.akunPersediaanId;
+        akunHppId = firstCoa.akunHppId;
       }
 
       await tx.jurnalDetail.createMany({
@@ -883,12 +911,19 @@ export class TransaksiService {
         },
       });
 
+      let curahReturBuyNet = 0;
       for (const item of createDto.items) {
         const itemSubtotal = item.qty * item.hargaSatuan;
+        const barang = await tx.barang.findUnique({
+          where: { id: BigInt(item.barangId) },
+          include: { jenis: true },
+        });
+        const coaMapping = this.getBarangCoaMapping(barang);
         const detail = await tx.detailTransaksi.create({
           data: {
             transaksiId: transaksi.id,
             barangId: BigInt(item.barangId),
+            kategoriId: coaMapping.akunPersediaanId,
             qty: item.qty,
             hargaSatuan: item.hargaSatuan,
             subtotal: itemSubtotal,
@@ -896,6 +931,11 @@ export class TransaksiService {
             totalHpp: itemSubtotal,
           },
         });
+
+        if (coaMapping.akunPersediaanId === 89n) {
+          const itemDiskon = subtotal > 0 ? (itemSubtotal / subtotal) * diskon : 0;
+          curahReturBuyNet += Math.max(0, itemSubtotal - itemDiskon);
+        }
 
         // Alokasikan pengurangan stok secara spesifik per batch jika ada originalDetailId
         if (item.originalDetailId) {
@@ -936,11 +976,12 @@ export class TransaksiService {
         }
       }
 
-      // Potong hutang jika bon
-      if (createDto.paymentMethod === 'KREDIT_BON' && createDto.clientId) {
+      // Potong hutang jika bon — kecualikan Pakan Curah karena pembelian curah tidak masuk saldo hutang BP
+      const nonCurahReturTotal = Math.max(0, total - curahReturBuyNet);
+      if (createDto.paymentMethod === 'KREDIT_BON' && createDto.clientId && nonCurahReturTotal > 0) {
         await tx.client.update({
           where: { id: BigInt(createDto.clientId) },
-          data: { saldoHutang: { decrement: total } },
+          data: { saldoHutang: { decrement: nonCurahReturTotal } },
         });
       }
 
@@ -968,14 +1009,8 @@ export class TransaksiService {
           where: { id: BigInt(firstItem.barangId) },
           include: { jenis: true },
         });
-        const jenisName = barang?.jenis?.name?.toLowerCase() || '';
-        if (jenisName.includes('pakan') || jenisName.includes('sentrat') || jenisName.includes('curah')) {
-          akunPersediaanBeliId = BigInt(60);
-        } else if (jenisName.includes('obat')) {
-          akunPersediaanBeliId = BigInt(61);
-        } else if (jenisName.includes('tray')) {
-          akunPersediaanBeliId = BigInt(62);
-        }
+        const firstCoa = this.getBarangCoaMapping(barang);
+        akunPersediaanBeliId = firstCoa.akunPersediaanId;
       }
 
       await tx.jurnalDetail.createMany({
@@ -2039,17 +2074,30 @@ export class TransaksiService {
       });
 
       // 3. SINKRONISASI SALDO HUTANG / PIUTANG
+      const oldCurahNet = this.calculateCurahNetTotal(
+        existingTx.details,
+        Number(existingTx.subtotal || 0),
+        Number(existingTx.diskon || 0),
+      );
+      const newCurahNet = this.calculateCurahNetTotal(
+        updatedTx.details,
+        newSubtotal,
+        newDiskon,
+      );
+      const oldNonCurahTotal = Math.max(0, oldTotal - oldCurahNet);
+      const newNonCurahTotal = Math.max(0, newTotal - newCurahNet);
+
       if (existingTx.type === 'PEMBELIAN') {
-        if (oldPaymentMethod === 'KREDIT_BON' && oldClientId) {
+        if (oldPaymentMethod === 'KREDIT_BON' && oldClientId && oldNonCurahTotal > 0) {
           await tx.client.update({
             where: { id: oldClientId },
-            data: { saldoHutang: { decrement: oldTotal } },
+            data: { saldoHutang: { decrement: oldNonCurahTotal } },
           });
         }
-        if (newPaymentMethod === 'KREDIT_BON' && newClientId) {
+        if (newPaymentMethod === 'KREDIT_BON' && newClientId && newNonCurahTotal > 0) {
           await tx.client.update({
             where: { id: newClientId },
-            data: { saldoHutang: { increment: newTotal } },
+            data: { saldoHutang: { increment: newNonCurahTotal } },
           });
         }
       } else if (existingTx.type === 'PENJUALAN') {
@@ -2064,6 +2112,19 @@ export class TransaksiService {
             where: { id: newClientId },
             data: { saldoPiutang: { increment: newTotal } },
           });
+        }
+        // Sinkronisasi Saldo Pak Pri atas perubahan porsi penjualan Pakan Curah (Lunas & Bon)
+        const curahDelta = newCurahNet - oldCurahNet;
+        if (Math.abs(curahDelta) > 0.0001) {
+          const pakPriId = await this.getPakPriClientId(tx);
+          if (pakPriId) {
+            await tx.client.update({
+              where: { id: pakPriId },
+              data: curahDelta > 0
+                ? { saldoHutang: { increment: curahDelta } }
+                : { saldoHutang: { decrement: Math.abs(curahDelta) } },
+            });
+          }
         }
       }
 
@@ -2250,7 +2311,7 @@ export class TransaksiService {
           client: true,
           details: {
             include: {
-              barang: true,
+              barang: { include: { jenis: true } },
               stokBatches: true,
             },
           },
@@ -2264,6 +2325,13 @@ export class TransaksiService {
       if (existingTx.status === 'BATAL') {
         return existingTx;
       }
+
+      const txCurahNet = this.calculateCurahNetTotal(
+        existingTx.details,
+        Number(existingTx.subtotal || 0),
+        Number(existingTx.diskon || 0),
+      );
+      const txNonCurahTotal = Math.max(0, Number(existingTx.total || 0) - txCurahNet);
 
       // Validasi & Rollback Stok jika PEMBELIAN
       if (existingTx.type === 'PEMBELIAN') {
@@ -2284,10 +2352,10 @@ export class TransaksiService {
           where: { detailTransaksiId: { in: detailIds } },
         });
 
-        if (existingTx.paymentMethod === 'KREDIT_BON' && existingTx.clientId) {
+        if (existingTx.paymentMethod === 'KREDIT_BON' && existingTx.clientId && txNonCurahTotal > 0) {
           await tx.client.update({
             where: { id: existingTx.clientId },
-            data: { saldoHutang: { decrement: existingTx.total } },
+            data: { saldoHutang: { decrement: txNonCurahTotal } },
           });
         }
       } else if (existingTx.type === 'PENJUALAN') {
@@ -2312,6 +2380,17 @@ export class TransaksiService {
             where: { id: existingTx.clientId },
             data: { saldoPiutang: { decrement: existingTx.total } },
           });
+        }
+
+        // Rollback Saldo Pak Pri jika transaksi memuat penjualan Pakan Curah
+        if (txCurahNet > 0) {
+          const pakPriId = await this.getPakPriClientId(tx);
+          if (pakPriId) {
+            await tx.client.update({
+              where: { id: pakPriId },
+              data: { saldoHutang: { decrement: txCurahNet } },
+            });
+          }
         }
       } else if (existingTx.type === 'RETUR_PENJUALAN') {
         // Rollback stok batch yang dibuat saat retur penjualan
@@ -2338,6 +2417,17 @@ export class TransaksiService {
             data: { saldoPiutang: { increment: existingTx.total } },
           });
         }
+
+        // Rollback Saldo Pak Pri: pembatalan retur penjualan curah mengembalikan saldo Pak Pri (increment)
+        if (txCurahNet > 0) {
+          const pakPriId = await this.getPakPriClientId(tx);
+          if (pakPriId) {
+            await tx.client.update({
+              where: { id: pakPriId },
+              data: { saldoHutang: { increment: txCurahNet } },
+            });
+          }
+        }
       } else if (existingTx.type === 'RETUR_PEMBELIAN') {
         // Rollback alokasi stok keluar FIFO saat retur ke supplier
         const detailIds = existingTx.details.map((d) => d.id);
@@ -2354,11 +2444,11 @@ export class TransaksiService {
           where: { detailTransaksiId: { in: detailIds } },
         });
 
-        // Rollback hutang: pembatalan retur mengembalikan hutang (increment)
-        if (existingTx.paymentMethod === 'KREDIT_BON' && existingTx.clientId) {
+        // Rollback hutang: pembatalan retur mengembalikan hutang (increment) — kecualikan Pakan Curah
+        if (existingTx.paymentMethod === 'KREDIT_BON' && existingTx.clientId && txNonCurahTotal > 0) {
           await tx.client.update({
             where: { id: existingTx.clientId },
-            data: { saldoHutang: { increment: existingTx.total } },
+            data: { saldoHutang: { increment: txNonCurahTotal } },
           });
         }
       }
@@ -2933,5 +3023,54 @@ export class TransaksiService {
     else if (barangName.includes('arab')) { pId = 4n; hId = 93n; }
     else if (barangName.includes('asin')) { pId = 5n; hId = 94n; }
     return { akunPendapatanId: pId, akunHppId: hId, akunPersediaanId: 59n };
+  }
+
+  /**
+   * Helper: Cek apakah sebuah barang/detail merupakan Pakan Curah (Pak Pri / jenisId = 9)
+   */
+  private isBarangCurah(
+    barang?: { jenisId?: bigint | number | null; name?: string | null; jenis?: { name?: string | null } | null } | null,
+    kategoriId?: bigint | number | null,
+  ): boolean {
+    if (kategoriId !== undefined && kategoriId !== null && (Number(kategoriId) === 8 || Number(kategoriId) === 89)) {
+      return true;
+    }
+    if (!barang) return false;
+    const jenisId = barang.jenisId !== undefined && barang.jenisId !== null ? Number(barang.jenisId) : 0;
+    const jenisName = (barang.jenis?.name || '').toLowerCase();
+    const barangName = (barang.name || '').toLowerCase();
+    return jenisId === 9 || jenisName.includes('curah') || barangName.includes('curah');
+  }
+
+  /**
+   * Helper: Hitung total porsi netto (setelah diskon proporsional) untuk item Pakan Curah
+   */
+  private calculateCurahNetTotal(
+    details: Array<{ subtotal: any; barang?: any; kategoriId?: any }>,
+    txSubtotal: number,
+    txDiskon: number,
+  ): number {
+    let curahNet = 0;
+    for (const d of details) {
+      if (this.isBarangCurah(d.barang, d.kategoriId)) {
+        const sub = Number(d.subtotal || 0);
+        const itemDiskon = txSubtotal > 0 ? (sub / txSubtotal) * txDiskon : 0;
+        curahNet += Math.max(0, sub - itemDiskon);
+      }
+    }
+    return curahNet;
+  }
+
+  /**
+   * Helper: Cari ID Client Bp. Supriyadi (default ID 241)
+   */
+  private async getPakPriClientId(tx: any): Promise<bigint | null> {
+    const client = await tx.client.findFirst({
+      where: {
+        OR: [{ id: 241n }, { name: { contains: 'Supriyadi' } }],
+      },
+      select: { id: true },
+    });
+    return client ? client.id : null;
   }
 }

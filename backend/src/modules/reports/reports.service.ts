@@ -720,6 +720,21 @@ export class ReportsService {
       // Posisi historis per asOfDate:
       // Rekonstruksi saldo dengan memundurkan transaksi yang terjadi SETELAH asOfDate
       // saldo_historis = saldo_kini - delta_setelah_cutoff
+      const allClients = await this.prisma.client.findMany({
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          saldoPiutang: true,
+          saldoHutang: true,
+        },
+      });
+
+      const pakPriClient = allClients.find(
+        (c) => c.id === 241n || c.name.toLowerCase().includes('supriyadi'),
+      );
+      const pakPriIdStr = pakPriClient ? pakPriClient.id.toString() : '241';
+
       const txsAfter = await this.prisma.transaksi.findMany({
         where: {
           status: 'SELESAI',
@@ -730,10 +745,20 @@ export class ReportsService {
           type: true,
           paymentMethod: true,
           clientId: true,
+          subtotal: true,
+          diskon: true,
           total: true,
           details: {
             select: {
               subtotal: true,
+              kategoriId: true,
+              barang: {
+                select: {
+                  jenisId: true,
+                  name: true,
+                  jenis: { select: { name: true } },
+                },
+              },
               kategori: {
                 select: {
                   id: true,
@@ -750,19 +775,56 @@ export class ReportsService {
       const deltaPiutang = new Map<string, number>();
 
       for (const t of txsAfter) {
-        if (!t.clientId) continue;
-        const cId = t.clientId.toString();
+        const cId = t.clientId ? t.clientId.toString() : null;
         const tot = Number(t.total || 0);
+        const txSub = Number(t.subtotal || 0);
+        const txDisc = Number(t.diskon || 0);
 
-        if (t.type === 'PEMBELIAN' && t.paymentMethod === 'KREDIT_BON') {
-          deltaHutang.set(cId, (deltaHutang.get(cId) || 0) + tot);
-        } else if (t.type === 'PENJUALAN' && t.paymentMethod === 'KREDIT_BON') {
-          deltaPiutang.set(cId, (deltaPiutang.get(cId) || 0) + tot);
+        let curahNet = 0;
+        for (const d of t.details) {
+          const kId = d.kategoriId ? Number(d.kategoriId) : 0;
+          const jId = d.barang?.jenisId ? Number(d.barang.jenisId) : 0;
+          const jName = (d.barang?.jenis?.name || '').toLowerCase();
+          const bName = (d.barang?.name || '').toLowerCase();
+          const isCurah =
+            kId === 8 ||
+            kId === 89 ||
+            jId === 9 ||
+            jName.includes('curah') ||
+            bName.includes('curah');
+          if (isCurah) {
+            const sub = Number(d.subtotal || 0);
+            const itemDisc = txSub > 0 ? (sub / txSub) * txDisc : 0;
+            curahNet += Math.max(0, sub - itemDisc);
+          }
+        }
+        const nonCurahTot = Math.max(0, tot - curahNet);
+
+        if (t.type === 'PEMBELIAN') {
+          if (t.paymentMethod === 'KREDIT_BON' && cId && nonCurahTot > 0) {
+            deltaHutang.set(cId, (deltaHutang.get(cId) || 0) + nonCurahTot);
+          }
+        } else if (t.type === 'PENJUALAN') {
+          if (t.paymentMethod === 'KREDIT_BON' && cId) {
+            deltaPiutang.set(cId, (deltaPiutang.get(cId) || 0) + tot);
+          }
+          // Penjualan Pakan Curah (Lunas & Bon) menambah Saldo Pak Pri
+          if (curahNet > 0) {
+            deltaHutang.set(pakPriIdStr, (deltaHutang.get(pakPriIdStr) || 0) + curahNet);
+          }
         } else if (t.type === 'RETUR_PEMBELIAN') {
-          deltaHutang.set(cId, (deltaHutang.get(cId) || 0) - tot);
+          if (t.paymentMethod === 'KREDIT_BON' && cId && nonCurahTot > 0) {
+            deltaHutang.set(cId, (deltaHutang.get(cId) || 0) - nonCurahTot);
+          }
         } else if (t.type === 'RETUR_PENJUALAN') {
-          deltaPiutang.set(cId, (deltaPiutang.get(cId) || 0) - tot);
-        } else if (t.type === 'KAS_KELUAR') {
+          if (t.paymentMethod === 'KREDIT_BON' && cId) {
+            deltaPiutang.set(cId, (deltaPiutang.get(cId) || 0) - tot);
+          }
+          // Retur Penjualan Pakan Curah mengurangi Saldo Pak Pri
+          if (curahNet > 0) {
+            deltaHutang.set(pakPriIdStr, (deltaHutang.get(pakPriIdStr) || 0) - curahNet);
+          }
+        } else if (t.type === 'KAS_KELUAR' && cId) {
           for (const d of t.details) {
             const dType = d.kategori?.detailKategori?.type;
             const sub = Number(d.subtotal || 0);
@@ -781,7 +843,7 @@ export class ReportsService {
               deltaHutang.set(cId, (deltaHutang.get(cId) || 0) - sub);
             }
           }
-        } else if (t.type === 'KAS_MASUK') {
+        } else if (t.type === 'KAS_MASUK' && cId) {
           for (const d of t.details) {
             const dType = d.kategori?.detailKategori?.type;
             const sub = Number(d.subtotal || 0);
@@ -802,16 +864,6 @@ export class ReportsService {
           }
         }
       }
-
-      const allClients = await this.prisma.client.findMany({
-        select: {
-          id: true,
-          name: true,
-          type: true,
-          saldoPiutang: true,
-          saldoHutang: true,
-        },
-      });
 
       clientRows = allClients.map((c) => {
         const cId = c.id.toString();

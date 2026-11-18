@@ -406,6 +406,16 @@ let TransaksiService = class TransaksiService {
                     data: { saldoPiutang: { increment: total } },
                 });
             }
+            const curahNetRevenue = pendapatanMap.get(8n) || 0;
+            if (curahNetRevenue > 0) {
+                const pakPriId = await this.getPakPriClientId(tx);
+                if (pakPriId) {
+                    await tx.client.update({
+                        where: { id: pakPriId },
+                        data: { saldoHutang: { increment: curahNetRevenue } },
+                    });
+                }
+            }
             const jurnal = await tx.jurnalUmum.create({
                 data: {
                     transaksiId: transaksi.id,
@@ -629,10 +639,12 @@ let TransaksiService = class TransaksiService {
                 }
                 persediaanPembelianMap.set(maxK, (persediaanPembelianMap.get(maxK) || 0) + costDiff);
             }
-            if (paymentMethod === 'KREDIT_BON' && clientId) {
+            const curahBuyNet = persediaanPembelianMap.get(89n) || 0;
+            const nonCurahBuyTotal = Math.max(0, total - curahBuyNet);
+            if (paymentMethod === 'KREDIT_BON' && clientId && nonCurahBuyTotal > 0) {
                 await tx.client.update({
                     where: { id: clientId },
-                    data: { saldoHutang: { increment: total } },
+                    data: { saldoHutang: { increment: nonCurahBuyTotal } },
                 });
             }
             const jurnal = await tx.jurnalUmum.create({
@@ -692,12 +704,19 @@ let TransaksiService = class TransaksiService {
                     keterangan: createDto.keterangan || 'Retur Penjualan Barang',
                 },
             });
+            let curahReturNet = 0;
             for (const item of createDto.items) {
                 const itemSubtotal = item.qty * item.hargaSatuan;
+                const barang = await tx.barang.findUnique({
+                    where: { id: BigInt(item.barangId) },
+                    include: { jenis: true },
+                });
+                const coaMapping = this.getBarangCoaMapping(barang);
                 const detail = await tx.detailTransaksi.create({
                     data: {
                         transaksiId: transaksi.id,
                         barangId: BigInt(item.barangId),
+                        kategoriId: coaMapping.akunPendapatanId,
                         qty: item.qty,
                         hargaSatuan: item.hargaSatuan,
                         subtotal: itemSubtotal,
@@ -705,6 +724,10 @@ let TransaksiService = class TransaksiService {
                         totalHpp: itemSubtotal,
                     },
                 });
+                if (coaMapping.akunPendapatanId === 8n) {
+                    const itemDiskon = subtotal > 0 ? (itemSubtotal / subtotal) * diskon : 0;
+                    curahReturNet += Math.max(0, itemSubtotal - itemDiskon);
+                }
                 await tx.stokBatch.create({
                     data: {
                         barangId: BigInt(item.barangId),
@@ -722,6 +745,15 @@ let TransaksiService = class TransaksiService {
                     where: { id: BigInt(createDto.clientId) },
                     data: { saldoPiutang: { decrement: total } },
                 });
+            }
+            if (curahReturNet > 0) {
+                const pakPriId = await this.getPakPriClientId(tx);
+                if (pakPriId) {
+                    await tx.client.update({
+                        where: { id: pakPriId },
+                        data: { saldoHutang: { decrement: curahReturNet } },
+                    });
+                }
             }
             const jurnal = await tx.jurnalUmum.create({
                 data: {
@@ -747,22 +779,10 @@ let TransaksiService = class TransaksiService {
                     where: { id: BigInt(firstItem.barangId) },
                     include: { jenis: true },
                 });
-                const jenisName = barang?.jenis?.name?.toLowerCase() || '';
-                if (jenisName.includes('pakan') || jenisName.includes('sentrat') || jenisName.includes('curah')) {
-                    akunPersediaanId = BigInt(60);
-                    akunReturPenjualanId = BigInt(6);
-                    akunHppId = BigInt(95);
-                }
-                else if (jenisName.includes('obat')) {
-                    akunPersediaanId = BigInt(61);
-                    akunReturPenjualanId = BigInt(9);
-                    akunHppId = BigInt(98);
-                }
-                else if (jenisName.includes('tray')) {
-                    akunPersediaanId = BigInt(62);
-                    akunReturPenjualanId = BigInt(10);
-                    akunHppId = BigInt(99);
-                }
+                const firstCoa = this.getBarangCoaMapping(barang);
+                akunReturPenjualanId = firstCoa.akunPendapatanId;
+                akunPersediaanId = firstCoa.akunPersediaanId;
+                akunHppId = firstCoa.akunHppId;
             }
             await tx.jurnalDetail.createMany({
                 data: [
@@ -799,12 +819,19 @@ let TransaksiService = class TransaksiService {
                     keterangan: createDto.keterangan || 'Retur Pembelian Barang ke Supplier',
                 },
             });
+            let curahReturBuyNet = 0;
             for (const item of createDto.items) {
                 const itemSubtotal = item.qty * item.hargaSatuan;
+                const barang = await tx.barang.findUnique({
+                    where: { id: BigInt(item.barangId) },
+                    include: { jenis: true },
+                });
+                const coaMapping = this.getBarangCoaMapping(barang);
                 const detail = await tx.detailTransaksi.create({
                     data: {
                         transaksiId: transaksi.id,
                         barangId: BigInt(item.barangId),
+                        kategoriId: coaMapping.akunPersediaanId,
                         qty: item.qty,
                         hargaSatuan: item.hargaSatuan,
                         subtotal: itemSubtotal,
@@ -812,6 +839,10 @@ let TransaksiService = class TransaksiService {
                         totalHpp: itemSubtotal,
                     },
                 });
+                if (coaMapping.akunPersediaanId === 89n) {
+                    const itemDiskon = subtotal > 0 ? (itemSubtotal / subtotal) * diskon : 0;
+                    curahReturBuyNet += Math.max(0, itemSubtotal - itemDiskon);
+                }
                 if (item.originalDetailId) {
                     const specificBatch = await tx.stokBatch.findFirst({
                         where: { detailTransaksiId: BigInt(item.originalDetailId) },
@@ -846,10 +877,11 @@ let TransaksiService = class TransaksiService {
                     await this.fifoService.allocateFifoStock(tx, Number(item.barangId), item.qty, detail.id);
                 }
             }
-            if (createDto.paymentMethod === 'KREDIT_BON' && createDto.clientId) {
+            const nonCurahReturTotal = Math.max(0, total - curahReturBuyNet);
+            if (createDto.paymentMethod === 'KREDIT_BON' && createDto.clientId && nonCurahReturTotal > 0) {
                 await tx.client.update({
                     where: { id: BigInt(createDto.clientId) },
-                    data: { saldoHutang: { decrement: total } },
+                    data: { saldoHutang: { decrement: nonCurahReturTotal } },
                 });
             }
             const jurnalBeli = await tx.jurnalUmum.create({
@@ -874,16 +906,8 @@ let TransaksiService = class TransaksiService {
                     where: { id: BigInt(firstItem.barangId) },
                     include: { jenis: true },
                 });
-                const jenisName = barang?.jenis?.name?.toLowerCase() || '';
-                if (jenisName.includes('pakan') || jenisName.includes('sentrat') || jenisName.includes('curah')) {
-                    akunPersediaanBeliId = BigInt(60);
-                }
-                else if (jenisName.includes('obat')) {
-                    akunPersediaanBeliId = BigInt(61);
-                }
-                else if (jenisName.includes('tray')) {
-                    akunPersediaanBeliId = BigInt(62);
-                }
+                const firstCoa = this.getBarangCoaMapping(barang);
+                akunPersediaanBeliId = firstCoa.akunPersediaanId;
             }
             await tx.jurnalDetail.createMany({
                 data: [
@@ -1753,17 +1777,21 @@ let TransaksiService = class TransaksiService {
                     details: { include: { barang: { include: { jenis: true, satuan: true } } } },
                 },
             });
+            const oldCurahNet = this.calculateCurahNetTotal(existingTx.details, Number(existingTx.subtotal || 0), Number(existingTx.diskon || 0));
+            const newCurahNet = this.calculateCurahNetTotal(updatedTx.details, newSubtotal, newDiskon);
+            const oldNonCurahTotal = Math.max(0, oldTotal - oldCurahNet);
+            const newNonCurahTotal = Math.max(0, newTotal - newCurahNet);
             if (existingTx.type === 'PEMBELIAN') {
-                if (oldPaymentMethod === 'KREDIT_BON' && oldClientId) {
+                if (oldPaymentMethod === 'KREDIT_BON' && oldClientId && oldNonCurahTotal > 0) {
                     await tx.client.update({
                         where: { id: oldClientId },
-                        data: { saldoHutang: { decrement: oldTotal } },
+                        data: { saldoHutang: { decrement: oldNonCurahTotal } },
                     });
                 }
-                if (newPaymentMethod === 'KREDIT_BON' && newClientId) {
+                if (newPaymentMethod === 'KREDIT_BON' && newClientId && newNonCurahTotal > 0) {
                     await tx.client.update({
                         where: { id: newClientId },
-                        data: { saldoHutang: { increment: newTotal } },
+                        data: { saldoHutang: { increment: newNonCurahTotal } },
                     });
                 }
             }
@@ -1779,6 +1807,18 @@ let TransaksiService = class TransaksiService {
                         where: { id: newClientId },
                         data: { saldoPiutang: { increment: newTotal } },
                     });
+                }
+                const curahDelta = newCurahNet - oldCurahNet;
+                if (Math.abs(curahDelta) > 0.0001) {
+                    const pakPriId = await this.getPakPriClientId(tx);
+                    if (pakPriId) {
+                        await tx.client.update({
+                            where: { id: pakPriId },
+                            data: curahDelta > 0
+                                ? { saldoHutang: { increment: curahDelta } }
+                                : { saldoHutang: { decrement: Math.abs(curahDelta) } },
+                        });
+                    }
                 }
             }
             const existingJurnal = await tx.jurnalUmum.findFirst({
@@ -1958,7 +1998,7 @@ let TransaksiService = class TransaksiService {
                     client: true,
                     details: {
                         include: {
-                            barang: true,
+                            barang: { include: { jenis: true } },
                             stokBatches: true,
                         },
                     },
@@ -1970,6 +2010,8 @@ let TransaksiService = class TransaksiService {
             if (existingTx.status === 'BATAL') {
                 return existingTx;
             }
+            const txCurahNet = this.calculateCurahNetTotal(existingTx.details, Number(existingTx.subtotal || 0), Number(existingTx.diskon || 0));
+            const txNonCurahTotal = Math.max(0, Number(existingTx.total || 0) - txCurahNet);
             if (existingTx.type === 'PEMBELIAN') {
                 for (const detail of existingTx.details) {
                     for (const batch of detail.stokBatches) {
@@ -1984,10 +2026,10 @@ let TransaksiService = class TransaksiService {
                 await tx.stokBatch.deleteMany({
                     where: { detailTransaksiId: { in: detailIds } },
                 });
-                if (existingTx.paymentMethod === 'KREDIT_BON' && existingTx.clientId) {
+                if (existingTx.paymentMethod === 'KREDIT_BON' && existingTx.clientId && txNonCurahTotal > 0) {
                     await tx.client.update({
                         where: { id: existingTx.clientId },
-                        data: { saldoHutang: { decrement: existingTx.total } },
+                        data: { saldoHutang: { decrement: txNonCurahTotal } },
                     });
                 }
             }
@@ -2011,6 +2053,15 @@ let TransaksiService = class TransaksiService {
                         data: { saldoPiutang: { decrement: existingTx.total } },
                     });
                 }
+                if (txCurahNet > 0) {
+                    const pakPriId = await this.getPakPriClientId(tx);
+                    if (pakPriId) {
+                        await tx.client.update({
+                            where: { id: pakPriId },
+                            data: { saldoHutang: { decrement: txCurahNet } },
+                        });
+                    }
+                }
             }
             else if (existingTx.type === 'RETUR_PENJUALAN') {
                 for (const detail of existingTx.details) {
@@ -2032,6 +2083,15 @@ let TransaksiService = class TransaksiService {
                         data: { saldoPiutang: { increment: existingTx.total } },
                     });
                 }
+                if (txCurahNet > 0) {
+                    const pakPriId = await this.getPakPriClientId(tx);
+                    if (pakPriId) {
+                        await tx.client.update({
+                            where: { id: pakPriId },
+                            data: { saldoHutang: { increment: txCurahNet } },
+                        });
+                    }
+                }
             }
             else if (existingTx.type === 'RETUR_PEMBELIAN') {
                 const detailIds = existingTx.details.map((d) => d.id);
@@ -2047,10 +2107,10 @@ let TransaksiService = class TransaksiService {
                 await tx.stokKeluarBatch.deleteMany({
                     where: { detailTransaksiId: { in: detailIds } },
                 });
-                if (existingTx.paymentMethod === 'KREDIT_BON' && existingTx.clientId) {
+                if (existingTx.paymentMethod === 'KREDIT_BON' && existingTx.clientId && txNonCurahTotal > 0) {
                     await tx.client.update({
                         where: { id: existingTx.clientId },
-                        data: { saldoHutang: { increment: existingTx.total } },
+                        data: { saldoHutang: { increment: txNonCurahTotal } },
                     });
                 }
             }
@@ -2552,6 +2612,37 @@ let TransaksiService = class TransaksiService {
             hId = 94n;
         }
         return { akunPendapatanId: pId, akunHppId: hId, akunPersediaanId: 59n };
+    }
+    isBarangCurah(barang, kategoriId) {
+        if (kategoriId !== undefined && kategoriId !== null && (Number(kategoriId) === 8 || Number(kategoriId) === 89)) {
+            return true;
+        }
+        if (!barang)
+            return false;
+        const jenisId = barang.jenisId !== undefined && barang.jenisId !== null ? Number(barang.jenisId) : 0;
+        const jenisName = (barang.jenis?.name || '').toLowerCase();
+        const barangName = (barang.name || '').toLowerCase();
+        return jenisId === 9 || jenisName.includes('curah') || barangName.includes('curah');
+    }
+    calculateCurahNetTotal(details, txSubtotal, txDiskon) {
+        let curahNet = 0;
+        for (const d of details) {
+            if (this.isBarangCurah(d.barang, d.kategoriId)) {
+                const sub = Number(d.subtotal || 0);
+                const itemDiskon = txSubtotal > 0 ? (sub / txSubtotal) * txDiskon : 0;
+                curahNet += Math.max(0, sub - itemDiskon);
+            }
+        }
+        return curahNet;
+    }
+    async getPakPriClientId(tx) {
+        const client = await tx.client.findFirst({
+            where: {
+                OR: [{ id: 241n }, { name: { contains: 'Supriyadi' } }],
+            },
+            select: { id: true },
+        });
+        return client ? client.id : null;
     }
 };
 TransaksiService = __decorate([
