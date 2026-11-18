@@ -1961,25 +1961,7 @@ export class TransaksiService {
               where: { id: BigInt(item.barangId) },
               include: { jenis: true },
             });
-            const jenisName = barang?.jenis?.name?.toLowerCase() || '';
-            const barangName = barang?.name?.toLowerCase() || '';
-            let itemKategoriId = BigInt(1);
-            const isCurah = barang?.jenisId === 9n || jenisName.includes('curah') || barangName.includes('curah');
-            if (isCurah) {
-              itemKategoriId = BigInt(8); // Penjualan Pakan Curah
-            } else if (jenisName.includes('pakan') || jenisName.includes('sentrat')) {
-              itemKategoriId = (barangName.includes('kucing') || barang?.jenisId === 10n) ? BigInt(7) : BigInt(6);
-            } else if (jenisName.includes('obat')) {
-              itemKategoriId = BigInt(9);
-            } else if (jenisName.includes('tray')) {
-              itemKategoriId = BigInt(10);
-            } else {
-              if (barangName.includes('bebek')) itemKategoriId = BigInt(2);
-              else if (barangName.includes('puyuh')) itemKategoriId = BigInt(3);
-              else if (barangName.includes('arab')) itemKategoriId = BigInt(4);
-              else if (barangName.includes('asin')) itemKategoriId = BigInt(5);
-              else itemKategoriId = BigInt(1);
-            }
+            const itemKategoriId = this.getBarangCoaMapping(barang).akunPendapatanId;
 
             let detailId: bigint;
             let oldDetail = item.detailId
@@ -2199,52 +2181,17 @@ export class TransaksiService {
             ],
           });
         } else if (existingTx.type === 'PENJUALAN') {
-          let akunPersediaanId = BigInt(59); // Stok Telur
-          let akunPendapatanId = BigInt(1);  // Penjualan Telur Horn
-          let akunHppId = BigInt(90);        // HPP Telur Horn
-          let defaultPiutangId = BigInt(48); // Piutang Pedagang
-
-          if (isCurah) {
-            akunPersediaanId = BigInt(89); // Stok Curah
+          let defaultPiutangId = BigInt(48); // Piutang Pedagang (Telur)
+          if (
+            isCurah ||
+            jenisName.includes('pakan') ||
+            jenisName.includes('sentrat') ||
+            jenisName.includes('obat') ||
+            jenisName.includes('vaksin') ||
+            jenisName.includes('tray') ||
+            (firstBarang?.jenisId !== undefined && Number(firstBarang.jenisId) >= 6)
+          ) {
             defaultPiutangId = BigInt(46); // Piutang Peternak
-            akunPendapatanId = BigInt(8);  // Penjualan Pakan Curah
-            akunHppId = BigInt(96);         // HPP Pakan Curah
-          } else if (jenisName.includes('pakan') || jenisName.includes('sentrat')) {
-            akunPersediaanId = BigInt(60);
-            defaultPiutangId = BigInt(46);
-            if (barangName.includes('kucing') || firstBarang?.jenisId === 10n) {
-              akunPendapatanId = BigInt(7);
-              akunHppId = BigInt(97);
-            } else {
-              akunPendapatanId = BigInt(6);
-              akunHppId = BigInt(95);
-            }
-          } else if (jenisName.includes('obat') || jenisName.includes('vaksin')) {
-            akunPersediaanId = BigInt(61);
-            defaultPiutangId = BigInt(46);
-            akunPendapatanId = BigInt(9);
-            akunHppId = BigInt(98);
-          } else if (jenisName.includes('tray')) {
-            akunPersediaanId = BigInt(62);
-            defaultPiutangId = BigInt(46);
-            akunPendapatanId = BigInt(10);
-            akunHppId = BigInt(99);
-          } else {
-            // Telur
-            defaultPiutangId = BigInt(48);
-            if (barangName.includes('bebek')) {
-              akunPendapatanId = BigInt(2);
-              akunHppId = BigInt(91);
-            } else if (barangName.includes('puyuh')) {
-              akunPendapatanId = BigInt(3);
-              akunHppId = BigInt(92);
-            } else if (barangName.includes('arab')) {
-              akunPendapatanId = BigInt(4);
-              akunHppId = BigInt(93);
-            } else if (barangName.includes('asin')) {
-              akunPendapatanId = BigInt(5);
-              akunHppId = BigInt(94);
-            }
           }
 
           let akunDebitId = defaultPiutangId;
@@ -2256,40 +2203,82 @@ export class TransaksiService {
             akunDebitId = BigInt(66); // Bank BCA Masduki
           }
 
-          const currentTotalHpp = updatedTx.details.reduce((sum, d) => sum + Number(d.totalHpp || 0), 0);
+          // Multi-COA Split Journal per komoditas (sama dengan createPenjualan)
+          const pendapatanMap = new Map<bigint, number>();
+          const hppMap = new Map<bigint, number>();
+          const persediaanMap = new Map<bigint, number>();
 
-          await tx.jurnalDetail.createMany({
-            data: [
-              {
+          for (const d of updatedTx.details) {
+            const coaMap = this.getBarangCoaMapping(d.barang);
+            const itemSub = Number(d.subtotal || 0);
+            const itemHpp = Number(d.totalHpp || 0);
+            const itemDisc = newSubtotal > 0 ? (itemSub / newSubtotal) * newDiskon : 0;
+            const netRev = Math.max(0, itemSub - itemDisc);
+
+            pendapatanMap.set(coaMap.akunPendapatanId, (pendapatanMap.get(coaMap.akunPendapatanId) || 0) + netRev);
+            hppMap.set(coaMap.akunHppId, (hppMap.get(coaMap.akunHppId) || 0) + itemHpp);
+            persediaanMap.set(coaMap.akunPersediaanId, (persediaanMap.get(coaMap.akunPersediaanId) || 0) + itemHpp);
+          }
+
+          let sumNetRev = 0;
+          for (const val of pendapatanMap.values()) sumNetRev += val;
+          const revDiff = newTotal - sumNetRev;
+          if (Math.abs(revDiff) > 0.0001 && pendapatanMap.size > 0) {
+            let maxK = Array.from(pendapatanMap.keys())[0];
+            let maxV = -1;
+            for (const [k, v] of pendapatanMap.entries()) {
+              if (v > maxV) { maxV = v; maxK = k; }
+            }
+            pendapatanMap.set(maxK, (pendapatanMap.get(maxK) || 0) + revDiff);
+          }
+
+          const jurnalDetailsData: any[] = [
+            {
+              jurnalId: existingJurnal.id,
+              coaId: akunDebitId,
+              kategoriId: akunDebitId,
+              debit: newTotal,
+              kredit: 0,
+            },
+          ];
+
+          for (const [pId, revAmount] of pendapatanMap.entries()) {
+            if (revAmount > 0 || pendapatanMap.size === 1) {
+              jurnalDetailsData.push({
                 jurnalId: existingJurnal.id,
-                coaId: akunDebitId,
-                kategoriId: akunDebitId,
-                debit: newTotal,
-                kredit: 0,
-              },
-              {
-                jurnalId: existingJurnal.id,
-                coaId: akunPendapatanId,
-                kategoriId: akunPendapatanId,
+                coaId: pId,
+                kategoriId: pId,
                 debit: 0,
-                kredit: newTotal,
-              },
-              {
+                kredit: revAmount,
+              });
+            }
+          }
+
+          for (const [hId, hppAmount] of hppMap.entries()) {
+            if (hppAmount > 0) {
+              jurnalDetailsData.push({
                 jurnalId: existingJurnal.id,
-                coaId: akunHppId,
-                kategoriId: akunHppId,
-                debit: currentTotalHpp,
+                coaId: hId,
+                kategoriId: hId,
+                debit: hppAmount,
                 kredit: 0,
-              },
-              {
+              });
+            }
+          }
+
+          for (const [sId, stokAmount] of persediaanMap.entries()) {
+            if (stokAmount > 0) {
+              jurnalDetailsData.push({
                 jurnalId: existingJurnal.id,
-                coaId: akunPersediaanId,
-                kategoriId: akunPersediaanId,
+                coaId: sId,
+                kategoriId: sId,
                 debit: 0,
-                kredit: currentTotalHpp,
-              },
-            ],
-          });
+                kredit: stokAmount,
+              });
+            }
+          }
+
+          await tx.jurnalDetail.createMany({ data: jurnalDetailsData });
         }
       }
 
@@ -3102,31 +3091,38 @@ export class TransaksiService {
       return { akunPendapatanId: pId, akunHppId: hId, akunPersediaanId: sId };
     }
 
-    // 3. Pakan Pabrikan / Sentrat (Bima Pratama)
-    if (jenisName.includes('pakan') || jenisName.includes('sentrat') || jenisId === 8n) {
-      if (barangName.includes('kucing') || jenisId === 10n) {
-        return { akunPendapatanId: 7n, akunHppId: 97n, akunPersediaanId: 60n };
-      }
+    // 3. Pakan Kucing & Pakan Pabrikan / Sentrat (Bima Pratama)
+    if (jenisId === 10n || jenisName.includes('kucing') || barangName.includes('kucing')) {
+      return { akunPendapatanId: 7n, akunHppId: 97n, akunPersediaanId: 60n };
+    }
+    if (jenisId === 8n || jenisName.includes('pakan') || jenisName.includes('sentrat')) {
       return { akunPendapatanId: 6n, akunHppId: 95n, akunPersediaanId: 60n };
     }
 
-    // 4. Obat-Obatan
-    if (jenisName.includes('obat') || jenisId === 18n) {
+    // 4. Obat-Obatan (jenisId = 7)
+    if (jenisId === 7n || jenisName.includes('obat') || jenisId === 18n) {
       return { akunPendapatanId: 9n, akunHppId: 98n, akunPersediaanId: 61n };
     }
 
-    // 5. Tray Telur
-    if (jenisName.includes('tray') || jenisId === 19n) {
+    // 5. Tray Telur (jenisId = 6) — cek sebelum Telur karena ada Tray bernama "Bebek"
+    if (jenisId === 6n || jenisName.includes('tray') || jenisId === 19n) {
       return { akunPendapatanId: 10n, akunHppId: 99n, akunPersediaanId: 62n };
     }
 
-    // 6. Telur
-    let pId = 1n; // Horn
+    // 6. Telur (prioritaskan jenisId & jenisName, karena Telur Bebek bernama "Golden", "BK", "AB Pth")
+    let pId = 1n; // Default: Telur Horn (jenisId = 2)
     let hId = 90n;
-    if (barangName.includes('bebek')) { pId = 2n; hId = 91n; }
-    else if (barangName.includes('puyuh')) { pId = 3n; hId = 92n; }
-    else if (barangName.includes('arab')) { pId = 4n; hId = 93n; }
-    else if (barangName.includes('asin')) { pId = 5n; hId = 94n; }
+    if (jenisId === 1n || jenisName.includes('bebek') || barangName.includes('bebek')) {
+      pId = 2n; hId = 91n;
+    } else if (jenisId === 3n || jenisName.includes('puyuh') || barangName.includes('puyuh')) {
+      pId = 3n; hId = 92n;
+    } else if (jenisId === 4n || jenisName.includes('arab') || barangName.includes('arab')) {
+      pId = 4n; hId = 93n;
+    } else if (jenisId === 5n || jenisName.includes('asin') || barangName.includes('asin')) {
+      pId = 5n; hId = 94n;
+    } else if (jenisId === 2n || jenisName.includes('horn') || jenisName.includes('horen')) {
+      pId = 1n; hId = 90n;
+    }
     return { akunPendapatanId: pId, akunHppId: hId, akunPersediaanId: 59n };
   }
 
