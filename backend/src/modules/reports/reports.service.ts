@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, ClientType } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service.js';
 
 export const COMMODITY_MAP = [
@@ -380,14 +380,40 @@ export class ReportsService {
   }
 
   /**
-   * Rekapitulasi Bon - Titipan (Saldo Silang Peternak/Mitra)
+   * Rekapitulasi Bon - Titipan (Saldo Silang Peternak/Mitra/Karyawan)
    */
-  async getBonTitipan(search?: string, type?: string) {
+  async getBonTitipan(search?: string, type?: string, status?: string) {
+    let normalizedType: ClientType | undefined = undefined;
+    if (type && type.trim()) {
+      const t = type.trim().toLowerCase();
+      if (t === 'peternak') normalizedType = ClientType.Peternak;
+      else if (t === 'pedagang') normalizedType = ClientType.Pedagang;
+      else if (t === 'karyawan') normalizedType = ClientType.Karyawan;
+      else if (t === 'supplier' || t === 'suplier') normalizedType = ClientType.Supplier;
+      else if (t === 'truk' || t === 'ekspedisi') normalizedType = ClientType.Truk;
+    }
+
+    const andConditions: any[] = [];
+
+    if (normalizedType) {
+      andConditions.push({ type: normalizedType });
+    }
+
+    if (search && search.trim()) {
+      const q = search.trim();
+      andConditions.push({
+        OR: [
+          { name: { contains: q } },
+          { code: { contains: q } },
+          { phone: { contains: q } },
+        ],
+      });
+    }
+
+    const where: any = andConditions.length > 0 ? { AND: andConditions } : {};
+
     const clients = await this.prisma.client.findMany({
-      where: {
-        ...(search && { name: { contains: search } }),
-        ...(type && { type: type as any }),
-      },
+      where,
       select: {
         id: true,
         code: true,
@@ -400,12 +426,12 @@ export class ReportsService {
       orderBy: { name: 'asc' },
     });
 
-    const items = clients.map((c) => {
+    let items = clients.map((c) => {
       const bon = Number(c.saldoPiutang || 0);
       const titipan = Number(c.saldoHutang || 0);
       const sisa = bon - titipan;
       return {
-        id: c.id,
+        id: Number(c.id),
         code: c.code,
         name: c.name,
         type: c.type,
@@ -413,9 +439,25 @@ export class ReportsService {
         bon,
         titipan,
         sisa,
+        saldoPiutang: bon,
+        saldoHutang: titipan,
+        netSaldo: sisa,
         statusSaldo: sisa > 0 ? 'BON_LEBIH_BESAR' : sisa < 0 ? 'TITIPAN_LEBIH_BESAR' : 'LUNAS_SEIMBANG',
       };
     });
+
+    if (status && status.trim()) {
+      const s = status.trim().toUpperCase();
+      if (s === 'HAS_SALDO') {
+        items = items.filter((m) => m.bon !== 0 || m.titipan !== 0);
+      } else if (s === 'BON' || s === 'BON_LEBIH_BESAR') {
+        items = items.filter((m) => m.sisa > 0);
+      } else if (s === 'TITIPAN' || s === 'TITIPAN_LEBIH_BESAR') {
+        items = items.filter((m) => m.sisa < 0);
+      } else if (s === 'LUNAS' || s === 'LUNAS_SEIMBANG') {
+        items = items.filter((m) => m.sisa === 0);
+      }
+    }
 
     const totalPiutang = items.reduce((acc, curr) => acc + curr.bon, 0);
     const totalHutang = items.reduce((acc, curr) => acc + curr.titipan, 0);

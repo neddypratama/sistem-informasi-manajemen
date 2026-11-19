@@ -27,8 +27,9 @@ export class ReportsController {
   async getBonTitipan(
     @Query('search') search?: string,
     @Query('type') type?: string,
+    @Query('status') status?: string,
   ) {
-    return this.reportsService.getBonTitipan(search, type);
+    return this.reportsService.getBonTitipan(search, type, status);
   }
 
   @Get('neraca-saldo')

@@ -70,7 +70,7 @@ export declare class ReportsController {
             marginPersen: number;
         }[];
     }>;
-    getBonTitipan(search?: string, type?: string): Promise<{
+    getBonTitipan(search?: string, type?: string, status?: string): Promise<{
         ringkasan: {
             totalMitra: number;
             totalPiutang: number;
@@ -78,7 +78,7 @@ export declare class ReportsController {
             totalNet: number;
         };
         items: {
-            id: bigint;
+            id: number;
             code: string | null;
             name: string;
             type: import("@prisma/client").$Enums.ClientType;
@@ -86,6 +86,9 @@ export declare class ReportsController {
             bon: number;
             titipan: number;
             sisa: number;
+            saldoPiutang: number;
+            saldoHutang: number;
+            netSaldo: number;
             statusSaldo: string;
         }[];
     }>;

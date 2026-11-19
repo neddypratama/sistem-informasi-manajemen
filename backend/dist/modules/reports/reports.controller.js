@@ -24,8 +24,8 @@ let ReportsController = class ReportsController {
     async getLabaRugiCurah(startDate, endDate) {
         return this.reportsService.getLabaRugiCurah(startDate, endDate);
     }
-    async getBonTitipan(search, type) {
-        return this.reportsService.getBonTitipan(search, type);
+    async getBonTitipan(search, type, status) {
+        return this.reportsService.getBonTitipan(search, type, status);
     }
     async getNeracaSaldo(startDate, endDate, mode) {
         return this.reportsService.getNeracaSaldo(startDate, endDate, mode);
@@ -72,8 +72,9 @@ __decorate([
     Get('bon-titipan'),
     __param(0, Query('search')),
     __param(1, Query('type')),
+    __param(2, Query('status')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:paramtypes", [String, String, String]),
     __metadata("design:returntype", Promise)
 ], ReportsController.prototype, "getBonTitipan", null);
 __decorate([
