@@ -513,10 +513,7 @@ let TransaksiService = class TransaksiService {
         return this.prisma.$transaction(async (tx) => {
             const isFirstItemCurah = firstItemBarang?.jenisId === 9n || firstItemJenisName.includes('curah') || firstItemName.includes('curah');
             let defaultHutangId = 72;
-            if (prefix === 'TKO') {
-                defaultHutangId = 127;
-            }
-            else if (prefix === 'STR') {
+            if (prefix === 'STR' || prefix === 'TKO') {
                 defaultHutangId = ((createDto.clientId && Number(createDto.clientId) === 241) || isFirstItemCurah) ? 76 : 83;
             }
             else if (prefix === 'OBT')
@@ -566,33 +563,8 @@ let TransaksiService = class TransaksiService {
                     where: { id: BigInt(item.barangId) },
                     include: { jenis: true },
                 });
-                const jenisName = barang?.jenis?.name?.toLowerCase() || '';
-                const isCurah = barang?.jenisId === 9n || jenisName.includes('curah') || (barang?.name || '').toLowerCase().includes('curah');
-                let itemKategoriId = BigInt(59);
-                if (isCurah)
-                    itemKategoriId = BigInt(89);
-                else if (jenisName.includes('hijauan') || barang?.jenisId === 11n)
-                    itemKategoriId = BigInt(117);
-                else if (jenisName.includes('konsentrat') || barang?.jenisId === 12n)
-                    itemKategoriId = BigInt(118);
-                else if (jenisName.includes('bahan baku') || barang?.jenisId === 13n)
-                    itemKategoriId = BigInt(119);
-                else if (jenisName.includes('premix') || barang?.jenisId === 14n)
-                    itemKategoriId = BigInt(120);
-                else if (barang?.jenisId === 10n || jenisName.includes('kucing'))
-                    itemKategoriId = BigInt(121);
-                else if (barang?.jenisId === 15n || (jenisName.includes('obat') && jenisName.includes('rmn')))
-                    itemKategoriId = BigInt(122);
-                else if (barang?.jenisId === 17n || (jenisName.includes('obat') && jenisName.includes('unggas')))
-                    itemKategoriId = BigInt(123);
-                else if (jenisName.includes('barang') || barang?.jenisId === 16n)
-                    itemKategoriId = BigInt(124);
-                else if (jenisName.includes('pakan') || jenisName.includes('sentrat'))
-                    itemKategoriId = BigInt(60);
-                else if (jenisName.includes('obat'))
-                    itemKategoriId = BigInt(61);
-                else if (jenisName.includes('tray'))
-                    itemKategoriId = BigInt(62);
+                const coaMapping = this.getBarangCoaMapping(barang);
+                const itemKategoriId = coaMapping.akunPersediaanId;
                 const detail = await tx.detailTransaksi.create({
                     data: {
                         transaksiId: transaksi.id,
@@ -1534,17 +1506,8 @@ let TransaksiService = class TransaksiService {
                             where: { id: BigInt(item.barangId) },
                             include: { jenis: true },
                         });
-                        const jenisName = barang?.jenis?.name?.toLowerCase() || '';
-                        const isCurah = barang?.jenisId === 9n || jenisName.includes('curah') || (barang?.name || '').toLowerCase().includes('curah');
-                        let itemKategoriId = BigInt(59);
-                        if (isCurah)
-                            itemKategoriId = BigInt(89);
-                        else if (jenisName.includes('pakan') || jenisName.includes('sentrat'))
-                            itemKategoriId = BigInt(60);
-                        else if (jenisName.includes('obat'))
-                            itemKategoriId = BigInt(61);
-                        else if (jenisName.includes('tray'))
-                            itemKategoriId = BigInt(62);
+                        const coaMapping = this.getBarangCoaMapping(barang);
+                        const itemKategoriId = coaMapping.akunPersediaanId;
                         let oldDetail = item.detailId
                             ? oldDetails.find((d) => d.id === BigInt(item.detailId))
                             : null;
@@ -2602,56 +2565,16 @@ let TransaksiService = class TransaksiService {
                 akunPersediaanId: 89n,
             };
         }
-        if ((jenisId >= 11n && jenisId <= 17n) ||
-            jenisName.includes('konsentrat') ||
-            jenisName.includes('hijauan') ||
-            jenisName.includes('premix') ||
-            jenisName.includes('bahan baku') ||
-            jenisName.includes('rmn')) {
-            let pId = 107n;
-            let hId = 114n;
-            let sId = 124n;
-            if (jenisName.includes('hijauan') || jenisId === 11n) {
-                pId = 101n;
-                hId = 108n;
-                sId = 117n;
-            }
-            else if (jenisName.includes('konsentrat') || jenisId === 12n) {
-                pId = 102n;
-                hId = 109n;
-                sId = 118n;
-            }
-            else if (jenisName.includes('bahan baku') || jenisId === 13n) {
-                pId = 103n;
-                hId = 110n;
-                sId = 119n;
-            }
-            else if (jenisName.includes('premix') || jenisId === 14n) {
-                pId = 104n;
-                hId = 111n;
-                sId = 120n;
-            }
-            else if (jenisId === 10n || barangName.includes('kucing')) {
-                pId = 7n;
-                hId = 97n;
-                sId = 121n;
-            }
-            else if (jenisName.includes('rmn') || jenisId === 15n) {
-                pId = 105n;
-                hId = 112n;
-                sId = 122n;
-            }
-            else if (jenisId === 17n) {
-                pId = 106n;
-                hId = 113n;
-                sId = 123n;
-            }
-            return { akunPendapatanId: pId, akunHppId: hId, akunPersediaanId: sId };
-        }
         if (jenisId === 10n || jenisName.includes('kucing') || barangName.includes('kucing')) {
             return { akunPendapatanId: 7n, akunHppId: 97n, akunPersediaanId: 60n };
         }
-        if (jenisId === 8n || jenisName.includes('pakan') || jenisName.includes('sentrat')) {
+        if (jenisId === 8n ||
+            jenisName.includes('pakan') ||
+            jenisName.includes('sentrat') ||
+            jenisName.includes('konsentrat') ||
+            jenisName.includes('hijauan') ||
+            jenisName.includes('premix') ||
+            jenisName.includes('bahan baku')) {
             return { akunPendapatanId: 6n, akunHppId: 95n, akunPersediaanId: 60n };
         }
         if (jenisId === 7n || jenisName.includes('obat') || jenisId === 18n) {
